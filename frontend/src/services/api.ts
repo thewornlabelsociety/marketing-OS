@@ -1,4 +1,4 @@
-import type { BrandKit, ContentItem, Entity, PerformanceLog } from '../types';
+import type { BrandKit, Campaign, CampaignSourceType, ContentItem, Entity, Objective, PerformanceLog } from '../types';
 
 const BASE = '/api';
 
@@ -24,6 +24,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Entities / Workspaces
   getEntities: () => request<Entity[]>('/entities'),
   createEntity: (payload: { id: string; name: string; slug: string; brand_kit?: BrandKit }) =>
     request<{ success: boolean; id: string }>('/entities', {
@@ -39,6 +40,60 @@ export const api = {
     request<{ success: boolean; deletedId: string }>(`/entities/${id}`, {
       method: 'DELETE',
     }),
+
+  // Objectives
+  getObjectives: (workspaceId?: string) =>
+    request<Objective[]>(workspaceId ? `/objectives?workspaceId=${encodeURIComponent(workspaceId)}` : '/objectives'),
+  createObjective: (payload: {
+    workspaceId: string;
+    name: string;
+    description?: string;
+    objectiveType: string;
+    primaryKpi: string;
+    supportingKpis?: string[];
+    defaultChannels?: string[];
+  }) =>
+    request<Objective>('/objectives', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  patchObjective: (id: string, patch: Partial<Omit<Objective, 'id' | 'workspaceId' | 'isSystem' | 'createdAt'>>) =>
+    request<Objective>(`/objectives/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  // Campaigns
+  getCampaigns: (workspaceId?: string, status?: string) => {
+    const params = new URLSearchParams();
+    if (workspaceId) params.set('workspaceId', workspaceId);
+    if (status) params.set('status', status);
+    const qs = params.toString();
+    return request<Campaign[]>(`/campaigns${qs ? `?${qs}` : ''}`);
+  },
+  getCampaign: (id: string) => request<Campaign>(`/campaigns/${id}`),
+  createCampaign: (payload: {
+    workspaceId: string;
+    objectiveId: string;
+    name?: string;
+    sourceType: CampaignSourceType;
+    sourceId?: string;
+    sourceTitle: string;
+    sourceDescription?: string;
+    brief?: string;
+    channels?: string[];
+  }) =>
+    request<Campaign>('/campaigns', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  patchCampaign: (id: string, patch: Partial<Campaign>) =>
+    request<Campaign>(`/campaigns/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  // Content
   getContent: (entityId?: string) =>
     request<ContentItem[]>(entityId ? `/content?entityId=${entityId}` : '/content'),
   createContent: (payload: {
@@ -56,6 +111,8 @@ export const api = {
     }),
   deleteContent: (id: string) =>
     request<void>(`/content/${id}`, { method: 'DELETE' }),
+
+  // Performance
   getPerformance: (entityId?: string) =>
     request<PerformanceLog[]>(
       entityId ? `/performance?entityId=${entityId}` : '/performance'

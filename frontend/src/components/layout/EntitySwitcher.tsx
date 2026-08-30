@@ -21,7 +21,7 @@ export function EntitySwitcher() {
       >
         {entities.map((entity) => (
           <option key={entity.id} value={entity.id}>
-            {entity.name} · {entity.archetype}
+            {entity.name}{entity.archetype ? ` · ${entity.archetype}` : ''}
           </option>
         ))}
       </select>

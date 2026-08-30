@@ -2,10 +2,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import { initDatabase } from './db/database';
+import { campaignsRouter } from './routes/campaigns';
 import { contentRouter } from './routes/content';
 import { entitiesRouter } from './routes/entities';
 import { bridgeIntakeRouter, intakeRouter } from './routes/intake';
 import { mediaRouter } from './routes/media';
+import { objectivesRouter } from './routes/objectives';
 import { performanceRouter } from './routes/performance';
 import { sopsRouter } from './routes/sops';
 
@@ -18,6 +20,8 @@ app.use(express.json({ limit: '100mb' }));
 initDatabase();
 
 app.use('/api/entities', entitiesRouter);
+app.use('/api/objectives', objectivesRouter);
+app.use('/api/campaigns', campaignsRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/intake', intakeRouter);
 app.use('/api/bridge/intake', bridgeIntakeRouter);

@@ -109,3 +109,84 @@ export interface PerformanceLog {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ObjectiveRow {
+  id: string;
+  workspace_id: string | null;
+  name: string;
+  description: string | null;
+  objective_type: string;
+  primary_kpi: string;
+  supporting_kpis: string;
+  conversion_event: string | null;
+  success_criteria: string | null;
+  default_channels: string;
+  is_system: number;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Objective {
+  id: string;
+  workspaceId: string | null;
+  name: string;
+  description: string | null;
+  objectiveType: string;
+  primaryKpi: string;
+  supportingKpis: string[];
+  conversionEvent: string | null;
+  successCriteria: string | null;
+  defaultChannels: string[];
+  isSystem: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignRow {
+  id: string;
+  workspace_id: string;
+  objective_id: string;
+  name: string;
+  status: string;
+  source_type: string;
+  source_id: string | null;
+  source_title: string;
+  source_description: string | null;
+  source_metadata: string;
+  brief: string | null;
+  channels: string;
+  cancellation_reason: string | null;
+  scheduled_at: string | null;
+  published_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  // joined
+  objective_name?: string;
+  objective_primary_kpi?: string;
+}
+
+export interface Campaign {
+  id: string;
+  workspaceId: string;
+  objectiveId: string;
+  objectiveName: string | null;
+  objectivePrimaryKpi: string | null;
+  name: string;
+  status: string;
+  sourceType: string;
+  sourceId: string | null;
+  sourceTitle: string;
+  sourceDescription: string | null;
+  sourceMetadata: Record<string, unknown>;
+  brief: string | null;
+  channels: string[];
+  cancellationReason: string | null;
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

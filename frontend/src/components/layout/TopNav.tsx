@@ -1,4 +1,4 @@
-import { Layers, Palette, Plus, Sparkles } from 'lucide-react';
+import { Brain, Layers, Plus, Sparkles } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { EntitySwitcher } from './EntitySwitcher';
 
@@ -8,7 +8,7 @@ interface TopNavProps {
 }
 
 export function TopNav({ showBrandControls, onCreateBrand }: TopNavProps) {
-  const { setBrandKitOpen } = useApp();
+  const { setActiveTab } = useApp();
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#E4E4E7] bg-white px-5">
@@ -28,11 +28,11 @@ export function TopNav({ showBrandControls, onCreateBrand }: TopNavProps) {
             <EntitySwitcher />
             <button
               type="button"
-              onClick={() => setBrandKitOpen(true)}
+              onClick={() => setActiveTab('brand-brain')}
               className="inline-flex items-center gap-2 rounded-lg border border-[#E4E4E7] px-3 py-1.5 text-sm font-medium text-[#09090B] transition hover:bg-[#FAFAFA]"
             >
-              <Palette className="h-4 w-4" />
-              Brand Kit
+              <Brain className="h-4 w-4" />
+              Brand Brain
             </button>
           </>
         ) : (

@@ -17,6 +17,8 @@ interface AppContextValue {
   setActiveEntityId: (id: string) => void;
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
+  activeCampaignId: string | null;
+  setActiveCampaignId: (id: string | null) => void;
   brandKitOpen: boolean;
   setBrandKitOpen: (open: boolean) => void;
   dropDraft: DropDraft;
@@ -41,7 +43,8 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [activeEntityId, setActiveEntityId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<AppTab>('studio');
+  const [activeTab, setActiveTab] = useState<AppTab>('campaigns');
+  const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
   const [brandKitOpen, setBrandKitOpen] = useState(false);
   const [dropDraft, setDropDraft] = useState<DropDraft>(defaultDraft);
   const [loading, setLoading] = useState(true);
@@ -133,6 +136,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveEntityId,
     activeTab,
     setActiveTab,
+    activeCampaignId,
+    setActiveCampaignId,
     brandKitOpen,
     setBrandKitOpen,
     dropDraft,
