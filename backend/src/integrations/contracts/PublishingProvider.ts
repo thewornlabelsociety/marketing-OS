@@ -1,28 +1,10 @@
-export interface PublishingCapabilities {
-  canSchedule: boolean;
-  canPublishNow: boolean;
-  supportedContentTypes: string[];
-  supportedChannels: string[];
-}
-
-export interface PublishPayload {
-  channel: string;
-  contentId: string;
-  body: string;
-  assetUrls: string[];
-  scheduledAt: string | null;
-}
-
-export interface PublishResult {
-  externalId: string;
-  publishedAt: string;
-  url: string | null;
-}
+import type { MarketingChannel } from '../../types/channels';
+import type { DestinationValidationResult, PublishRequest, PublishResult } from '../../types/publishing';
 
 export interface PublishingProvider {
-  readonly provider: string;
-  readonly capabilities: PublishingCapabilities;
-  publish(payload: PublishPayload): Promise<PublishResult>;
-  cancel(externalId: string): Promise<void>;
-  getStatus(externalId: string): Promise<string>;
+  readonly providerKey: string;
+  supports(channel: MarketingChannel): boolean;
+  validateDestination(destinationId: string, channel: MarketingChannel): Promise<DestinationValidationResult>;
+  publish(request: PublishRequest): Promise<PublishResult>;
+  getStatus?(externalPublishId: string): Promise<string>;
 }

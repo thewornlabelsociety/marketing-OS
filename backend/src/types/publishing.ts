@@ -1,17 +1,36 @@
-export type PublishStatus = 'SCHEDULED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED' | 'CANCELLED';
+import type { MarketingChannel } from './channels';
+import type { CreativeContent } from './creativeArtifact';
+import type { PublishableAsset } from './scheduledContent';
 
-export interface PublishRecord {
-  id: string;
+export interface PublishRequest {
   workspaceId: string;
   campaignId: string;
-  contentId: string;
-  channel: string;
-  provider: string;
-  status: PublishStatus;
-  scheduledAt: string | null;
-  publishedAt: string | null;
-  externalId: string | null; // provider's post ID
-  errorMessage: string | null;
-  createdAt: string;
-  updatedAt: string;
+  scheduleId: string;
+  channel: MarketingChannel;
+  destinationId: string;
+  contentKey: string;
+  creativeArtifactId: string;
+  creativeVersion: number;
+  content: CreativeContent;
+  mediaAssets: PublishableAsset[];
+  scheduledFor?: string;
+  idempotencyKey: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PublishResult {
+  success: boolean;
+  externalPublishId?: string;
+  externalUrl?: string;
+  publishedAt?: string;
+  providerKey: string;
+  errorCode?: string;
+  errorMessage?: string;
+  rawMetadata?: Record<string, unknown>;
+}
+
+export interface DestinationValidationResult {
+  valid: boolean;
+  error?: string;
+  code?: string;
 }

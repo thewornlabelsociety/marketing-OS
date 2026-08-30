@@ -1,20 +1,19 @@
-import { Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/api';
 import { useApp } from '../../app/AppContext';
-import type { ContentItem } from '../../types';
+import type { ScheduledContentItem } from '../../types';
 
 export function CampaignCalendarTab() {
   const { activeEntity } = useApp();
-  const [items, setItems] = useState<ContentItem[]>([]);
+  const [items, setItems] = useState<ScheduledContentItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!activeEntity) return;
     setLoading(true);
     try {
-      const data = await api.getContent(activeEntity.id);
-      setItems(data.filter((item) => item.type === 'drop'));
+      const data = await api.getWorkspaceSchedule(activeEntity.id);
+      setItems(data);
     } finally {
       setLoading(false);
     }
@@ -39,7 +38,7 @@ export function CampaignCalendarTab() {
       <div>
         <h1 className="text-xl font-semibold text-[#09090B]">Campaign Calendar</h1>
         <p className="mt-1 text-sm text-[#71717A]">
-          Scheduled campaigns and content for {activeEntity.name}.
+          Scheduled campaign content for {activeEntity.name}.
         </p>
       </div>
 
@@ -48,37 +47,24 @@ export function CampaignCalendarTab() {
 
         <div className="rounded-xl border border-[#E4E4E7] bg-white">
           <div className="border-b border-[#E4E4E7] px-5 py-4">
-            <h2 className="text-sm font-semibold text-[#09090B]">Upcoming campaigns &amp; content</h2>
+            <h2 className="text-sm font-semibold text-[#09090B]">Scheduled content</h2>
           </div>
           <div className="divide-y divide-[#E4E4E7]">
             {loading ? (
               <p className="p-5 text-sm text-[#71717A]">Loading…</p>
             ) : items.length === 0 ? (
-              <p className="p-5 text-sm text-[#71717A]">Nothing scheduled yet.</p>
+              <p className="p-5 text-sm text-[#71717A]">Nothing scheduled yet. Approve creative and schedule from a campaign.</p>
             ) : (
               items.map((item) => (
-                <div key={item.id} className="flex items-start justify-between gap-4 px-5 py-4">
-                  <div>
-                    <p className="font-medium text-[#09090B]">{item.title}</p>
-                    <p className="mt-1 text-xs text-[#71717A]">
-                      {item.scheduledFor
-                        ? new Date(item.scheduledFor).toLocaleString()
-                        : 'Not scheduled'}
-                      {' · '}
-                      <span className="capitalize">{item.status}</span>
-                    </p>
-                    <p className="mt-2 line-clamp-2 text-sm text-[#71717A]">
-                      {item.bodyMarkdown?.replace(/\*\*/g, '') ?? 'No description'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void api.deleteContent(item.id).then(load)}
-                    className="rounded-lg border border-[#E4E4E7] p-2 text-[#71717A] hover:bg-[#FAFAFA]"
-                    aria-label="Remove from calendar"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <div key={item.id} className="px-5 py-4">
+                  <p className="font-medium text-[#09090B]">{item.contentKey}</p>
+                  <p className="mt-1 text-xs text-[#71717A]">
+                    {new Date(item.scheduledFor).toLocaleString()}
+                    {' · '}
+                    {item.channel}
+                    {' · '}
+                    <span className="capitalize">{item.status.replaceAll('_', ' ').toLowerCase()}</span>
+                  </p>
                 </div>
               ))
             )}
@@ -123,7 +109,7 @@ function MiniCalendar({ days }: { days: Array<{ date: Date; count: number; isTod
   );
 }
 
-function buildCalendar(items: ContentItem[]) {
+function buildCalendar(items: ScheduledContentItem[]) {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -132,7 +118,6 @@ function buildCalendar(items: ContentItem[]) {
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const date = new Date(d);
     const count = items.filter((item) => {
-      if (!item.scheduledFor) return false;
       const scheduled = new Date(item.scheduledFor);
       return (
         scheduled.getFullYear() === date.getFullYear() &&

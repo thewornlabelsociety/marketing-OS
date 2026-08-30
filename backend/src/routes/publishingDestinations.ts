@@ -2,14 +2,14 @@ import { Router, Request, Response } from 'express';
 import { db } from '../db/database';
 import { integrationConnectionService } from '../services/integrations/IntegrationConnectionService';
 
-export const integrationsRouter = Router();
+export const publishingDestinationsRouter = Router();
 
 function resolveWorkspaceId(req: Request): string | undefined {
   const query = req.query as Record<string, string | undefined>;
   return query.workspaceId;
 }
 
-integrationsRouter.get('/', (req: Request, res: Response) => {
+publishingDestinationsRouter.get('/', (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
@@ -20,5 +20,6 @@ integrationsRouter.get('/', (req: Request, res: Response) => {
     res.status(404).json({ error: 'Workspace not found' });
     return;
   }
-  res.json(integrationConnectionService.list(workspaceId));
+  const channel = typeof req.query.channel === 'string' ? req.query.channel : undefined;
+  res.json(integrationConnectionService.listDestinations(workspaceId, channel));
 });

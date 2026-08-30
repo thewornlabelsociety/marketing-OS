@@ -7,6 +7,10 @@ import { campaignBriefRouter } from './routes/campaignBrief';
 import { campaignPlansRouter } from './routes/campaignPlans';
 import { contentPlansRouter } from './routes/contentPlans';
 import { campaignCreativeRouter } from './routes/campaignCreative';
+import { campaignScheduleRouter } from './routes/campaignSchedule';
+import { calendarScheduleRouter } from './routes/calendarSchedule';
+import { integrationsRouter } from './routes/integrations';
+import { publishingDestinationsRouter } from './routes/publishingDestinations';
 import { contentRouter } from './routes/content';
 import { entitiesRouter } from './routes/entities';
 import { bridgeIntakeRouter, intakeRouter } from './routes/intake';
@@ -14,6 +18,7 @@ import { mediaRouter } from './routes/media';
 import { objectivesRouter } from './routes/objectives';
 import { performanceRouter } from './routes/performance';
 import { sopsRouter } from './routes/sops';
+import { publishingSchedulerService } from './services/publishing/PublishingSchedulerService';
 
 dotenv.config();
 
@@ -30,6 +35,10 @@ app.use('/api/campaigns/:campaignId/brief', campaignBriefRouter);
 app.use('/api/campaigns/:campaignId/plan', campaignPlansRouter);
 app.use('/api/campaigns/:campaignId/content-plan', contentPlansRouter);
 app.use('/api/campaigns/:campaignId/creative', campaignCreativeRouter);
+app.use('/api/campaigns/:campaignId/schedule', campaignScheduleRouter);
+app.use('/api/calendar/schedule', calendarScheduleRouter);
+app.use('/api/integrations', integrationsRouter);
+app.use('/api/publishing/destinations', publishingDestinationsRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/intake', intakeRouter);
 app.use('/api/bridge/intake', bridgeIntakeRouter);
@@ -44,4 +53,5 @@ app.get('/health', (_req, res) => {
 const PORT = process.env.PORT || 4100;
 app.listen(PORT, () => {
   console.log(`Marketing OS Backend running on http://localhost:${PORT}`);
+  publishingSchedulerService.start();
 });

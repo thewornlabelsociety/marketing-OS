@@ -65,6 +65,23 @@ POST   /api/campaigns/:campaignId/creative/:contentKey/revisions
 POST   /api/campaigns/:campaignId/creative/:contentKey/approval
 GET    /api/campaigns/:campaignId/creative/:contentKey/approval
 
+GET    /api/campaigns/:campaignId/schedule
+GET    /api/campaigns/:campaignId/schedule/summary
+POST   /api/campaigns/:campaignId/schedule
+GET    /api/campaigns/:campaignId/schedule/:scheduleId
+PATCH  /api/campaigns/:campaignId/schedule/:scheduleId
+POST   /api/campaigns/:campaignId/schedule/:scheduleId/cancel
+GET    /api/campaigns/:campaignId/schedule/:scheduleId/preflight
+GET    /api/campaigns/:campaignId/schedule/:scheduleId/export
+GET    /api/campaigns/:campaignId/schedule/:scheduleId/attempts
+POST   /api/campaigns/:campaignId/schedule/:scheduleId/publish
+POST   /api/campaigns/:campaignId/schedule/:scheduleId/retry
+POST   /api/campaigns/:campaignId/schedule/:scheduleId/mark-published
+
+GET    /api/calendar/schedule
+GET    /api/integrations
+GET    /api/publishing/destinations
+
 GET    /api/content/:contentId
 PATCH  /api/content/:contentId
 DELETE /api/content/:contentId

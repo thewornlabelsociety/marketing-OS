@@ -3,6 +3,7 @@ import type {
   Campaign,
   CampaignBrief,
   CampaignCreativeSummary,
+  CampaignPublishingSummary,
   CampaignPlan,
   CampaignSourceType,
   ChannelCapability,
@@ -11,6 +12,9 @@ import type {
   ContentPlanApprovalRecord,
   CreativeApprovalRecord,
   CreativeArtifact,
+  IntegrationConnection,
+  PublishingDestination,
+  ScheduledContentItem,
   Entity,
   Objective,
   PerformanceLog,
@@ -210,6 +214,52 @@ export const api = {
   getCreativeApproval: (campaignId: string, contentKey: string, workspaceId: string) =>
     request<CreativeApprovalRecord>(
       `/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}/approval?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
+
+  // Schedule & Publishing
+  getCampaignScheduleSummary: (campaignId: string, workspaceId: string) =>
+    request<CampaignPublishingSummary>(`/campaigns/${campaignId}/schedule/summary?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getCampaignSchedule: (campaignId: string, workspaceId: string) =>
+    request<ScheduledContentItem[]>(`/campaigns/${campaignId}/schedule?workspaceId=${encodeURIComponent(workspaceId)}`),
+  createSchedule: (campaignId: string, workspaceId: string, payload: {
+    contentKey: string;
+    scheduledFor: string;
+    timezone?: string;
+    publicationMode: 'DIRECT' | 'EXPORT' | 'MANUAL';
+    destinationId?: string;
+    notes?: string;
+  }) =>
+    request<ScheduledContentItem>(`/campaigns/${campaignId}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, workspaceId }),
+    }),
+  cancelSchedule: (campaignId: string, scheduleId: string, workspaceId: string) =>
+    request<ScheduledContentItem>(`/campaigns/${campaignId}/schedule/${scheduleId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  publishSchedule: (campaignId: string, scheduleId: string, workspaceId: string) =>
+    request<{ item: ScheduledContentItem }>(`/campaigns/${campaignId}/schedule/${scheduleId}/publish`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  retrySchedule: (campaignId: string, scheduleId: string, workspaceId: string) =>
+    request<{ item: ScheduledContentItem }>(`/campaigns/${campaignId}/schedule/${scheduleId}/retry`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  markSchedulePublished: (campaignId: string, scheduleId: string, workspaceId: string, payload?: { externalUrl?: string; notes?: string }) =>
+    request<ScheduledContentItem>(`/campaigns/${campaignId}/schedule/${scheduleId}/mark-published`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, ...payload }),
+    }),
+  getWorkspaceSchedule: (workspaceId: string) =>
+    request<ScheduledContentItem[]>(`/calendar/schedule?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getIntegrations: (workspaceId: string) =>
+    request<IntegrationConnection[]>(`/integrations?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getPublishingDestinations: (workspaceId: string, channel?: string) =>
+    request<PublishingDestination[]>(
+      `/publishing/destinations?workspaceId=${encodeURIComponent(workspaceId)}${channel ? `&channel=${encodeURIComponent(channel)}` : ''}`
     ),
 
   // Content

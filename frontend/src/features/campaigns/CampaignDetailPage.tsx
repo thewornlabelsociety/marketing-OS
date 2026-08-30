@@ -2,7 +2,6 @@ import {
   AlertCircle,
   ArrowLeft,
   BarChart3,
-  CalendarDays,
   FileText,
   Loader2,
   MoreHorizontal,
@@ -13,9 +12,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SopDrawerTrigger } from '../../components/drawers/SopDrawer';
 import { PlanReviewDrawer } from '../../components/drawers/PlanReviewDrawer';
 import { ContentPlanTab } from './ContentPlanTab';
+import { CampaignScheduleTab } from './CampaignScheduleTab';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
-import type { Campaign, CampaignBrief, CampaignCreativeSummary, CampaignPlan, CampaignStatus, ContentPlanStatus } from '../../types';
+import type { Campaign, CampaignBrief, CampaignCreativeSummary, CampaignPlan, CampaignPublishingSummary, CampaignStatus, ContentPlanStatus } from '../../types';
 
 interface Props {
   campaignId: string | null;
@@ -485,6 +485,7 @@ function deriveSopSteps(
   hasPlan: boolean,
   contentPlanStatus: ContentPlanStatus | null,
   creativeSummary: CampaignCreativeSummary | null,
+  publishingSummary: CampaignPublishingSummary | null,
 ): { label: string; done: boolean }[] {
   const s = campaign.status as CampaignStatus;
   const past = (statuses: CampaignStatus[]) => statuses.includes(s);
@@ -496,6 +497,11 @@ function deriveSopSteps(
   const creativeGenerated = (creativeSummary?.generated ?? 0) > 0;
   const creativeReviewed = creativeGenerated && (creativeSummary?.needsReview ?? 0) === 0;
   const creativeApproved = creativeSummary?.readyForScheduling ?? false;
+  const contentScheduled = (publishingSummary?.scheduled ?? 0) > 0;
+  const prePublishReady = (publishingSummary?.blocked ?? 0) === 0 && (publishingSummary?.failed ?? 0) === 0 && contentScheduled;
+  const contentPublished = publishingSummary != null
+    && publishingSummary.totalApprovedCreative > 0
+    && publishingSummary.published === publishingSummary.totalApprovedCreative;
 
   return [
     { label: 'Campaign created', done: true },
@@ -509,7 +515,9 @@ function deriveSopSteps(
     { label: 'Creative generated', done: creativeGenerated },
     { label: 'Creative reviewed', done: creativeReviewed },
     { label: 'Creative approved', done: creativeApproved },
-    { label: 'Ready for scheduling', done: creativeApproved },
+    { label: 'Content scheduled', done: contentScheduled },
+    { label: 'Pre-publish checks passed', done: prePublishReady },
+    { label: 'Content published', done: contentPublished },
   ];
 }
 
@@ -526,6 +534,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
   const [hasPlan, setHasPlan] = useState(false);
   const [contentPlanStatus, setContentPlanStatus] = useState<ContentPlanStatus | null>(null);
   const [creativeSummary, setCreativeSummary] = useState<CampaignCreativeSummary | null>(null);
+  const [publishingSummary, setPublishingSummary] = useState<CampaignPublishingSummary | null>(null);
 
   function loadCampaign() {
     if (!campaignId) return;
@@ -553,6 +562,13 @@ export default function CampaignDetailPage({ campaignId }: Props) {
       .then((s) => setContentPlanStatus((s.contentPlanStatus as ContentPlanStatus | null) ?? null))
       .catch(() => {});
   }, [campaignId, campaign?.id, campaign?.workspaceId]);
+
+  useEffect(() => {
+    if (!campaignId || !campaign) return;
+    api.getCampaignScheduleSummary(campaign.id, campaign.workspaceId)
+      .then(setPublishingSummary)
+      .catch(() => setPublishingSummary(null));
+  }, [campaignId, campaign?.id, campaign?.workspaceId, tab]);
 
   useEffect(() => {
     if (tab === 'overview' && campaignId && campaign) {
@@ -614,7 +630,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
         <div className="flex items-center gap-2">
           <SopDrawerTrigger
             context={`Campaign: ${campaign.name}`}
-            steps={deriveSopSteps(campaign, hasPlan, contentPlanStatus, creativeSummary)}
+            steps={deriveSopSteps(campaign, hasPlan, contentPlanStatus, creativeSummary, publishingSummary)}
           />
           <OverflowMenu campaign={campaign} onCancelled={loadCampaign} />
         </div>
@@ -744,7 +760,11 @@ export default function CampaignDetailPage({ campaignId }: Props) {
         )}
 
         {tab === 'schedule' && (
-          <EmptyTabState icon={CalendarDays} message="Not yet scheduled" />
+          <CampaignScheduleTab
+            campaignId={campaign.id}
+            workspaceId={campaign.workspaceId}
+            campaignName={campaign.name}
+          />
         )}
 
         {tab === 'performance' && (

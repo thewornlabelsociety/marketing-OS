@@ -505,6 +505,84 @@ export interface CampaignCreativeSummary {
   }[];
 }
 
+export type ScheduledContentStatus =
+  | 'DRAFT'
+  | 'SCHEDULED'
+  | 'READY'
+  | 'BLOCKED'
+  | 'PUBLISHING'
+  | 'PUBLISHED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export type PublicationMode = 'DIRECT' | 'EXPORT' | 'MANUAL';
+
+export interface ScheduledContentItem {
+  id: string;
+  workspaceId: string;
+  campaignId: string;
+  contentKey: string;
+  sourceCreativeArtifactId: string;
+  sourceCreativeVersion: number;
+  channel: MarketingChannel;
+  destinationId?: string;
+  scheduledFor: string;
+  timezone: string;
+  status: ScheduledContentStatus;
+  publicationMode: PublicationMode;
+  mediaAssets: { id: string; type: string; mimeType?: string }[];
+  notes?: string;
+  publishedAt?: string;
+  externalPublishId?: string;
+  externalUrl?: string;
+  cancelledAt?: string;
+  blockReason?: string;
+  newerRevisionAvailable?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignPublishingSummary {
+  totalApprovedCreative: number;
+  scheduled: number;
+  published: number;
+  failed: number;
+  unscheduled: number;
+  blocked: number;
+  upcoming: ScheduledContentItem[];
+  unscheduledItems: {
+    contentKey: string;
+    title: string;
+    channel: MarketingChannel;
+    contentType: string;
+    format: string;
+    approvedVersion: number;
+    creativeArtifactId: string;
+    suggestedTiming?: string;
+  }[];
+  publishedItems: ScheduledContentItem[];
+  failedItems: ScheduledContentItem[];
+}
+
+export interface IntegrationConnection {
+  id: string;
+  workspaceId: string;
+  providerKey: string;
+  status: 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'REAUTH_REQUIRED';
+  displayName: string;
+  capabilities: string[];
+}
+
+export interface PublishingDestination {
+  id: string;
+  workspaceId: string;
+  connectionId: string;
+  providerKey: string;
+  channel: MarketingChannel;
+  displayName: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'ERROR';
+}
+
 // --- Legacy ---
 
 export interface DropDraft {
