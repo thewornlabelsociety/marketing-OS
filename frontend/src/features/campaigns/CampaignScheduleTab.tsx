@@ -20,7 +20,7 @@ export function CampaignScheduleTab({ campaignId, workspaceId, campaignName }: P
   const [error, setError] = useState('');
   const [summary, setSummary] = useState<CampaignPublishingSummary | null>(null);
   const [selected, setSelected] = useState<ScheduledContentItem | null>(null);
-  const [schedulingKey, setSchedulingKey] = useState<string | null>(null);
+  const [schedulingItem, setSchedulingItem] = useState<CampaignPublishingSummary['unscheduledItems'][number] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,7 +74,7 @@ export function CampaignScheduleTab({ campaignId, workspaceId, campaignName }: P
         {summary.unscheduled > 0 && summary.unscheduledItems[0] && (
           <button
             type="button"
-            onClick={() => setSchedulingKey(summary.unscheduledItems[0].contentKey)}
+            onClick={() => setSchedulingItem(summary.unscheduledItems[0])}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white hover:bg-[#18181B]"
           >
             <Calendar className="h-3.5 w-3.5" />
@@ -96,7 +96,7 @@ export function CampaignScheduleTab({ campaignId, workspaceId, campaignName }: P
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSchedulingKey(item.contentKey)}
+                  onClick={() => setSchedulingItem(item)}
                   className="rounded-md border border-[#E4E4E7] px-2.5 py-1 text-xs text-[#09090B] hover:bg-[#FAFAFA]"
                 >
                   Schedule
@@ -127,15 +127,18 @@ export function CampaignScheduleTab({ campaignId, workspaceId, campaignName }: P
         </div>
       )}
 
-      {schedulingKey && (
+      {schedulingItem && (
         <ScheduleItemDrawer
           mode="create"
           campaignId={campaignId}
           workspaceId={workspaceId}
           campaignName={campaignName}
-          contentKey={schedulingKey}
-          onClose={() => setSchedulingKey(null)}
-          onSaved={() => { setSchedulingKey(null); void load(); }}
+          contentKey={schedulingItem.contentKey}
+          channel={schedulingItem.channel}
+          creativeArtifactId={schedulingItem.creativeArtifactId}
+          creativeVersion={schedulingItem.approvedVersion}
+          onClose={() => setSchedulingItem(null)}
+          onSaved={() => { setSchedulingItem(null); void load(); }}
         />
       )}
 

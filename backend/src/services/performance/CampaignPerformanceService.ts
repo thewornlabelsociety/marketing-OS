@@ -161,6 +161,14 @@ export class CampaignPerformanceService {
     let ingested = 0;
 
     for (const item of result.items) {
+      let mediaAssetId: string | undefined;
+      if (item.scheduleId) {
+        const sched = db.prepare('SELECT media_assets FROM scheduled_content_items WHERE id = ?').get(item.scheduleId) as { media_assets: string } | undefined;
+        if (sched) {
+          const assets = JSON.parse(sched.media_assets) as Array<{ id: string }>;
+          mediaAssetId = assets[0]?.id;
+        }
+      }
       const created = performanceIngestionService.createObservation({
         workspaceId,
         campaignId,
@@ -172,6 +180,7 @@ export class CampaignPerformanceService {
         providerKey: result.providerKey,
         destinationId: item.destinationId,
         externalPublishId: item.externalPublishId,
+        mediaAssetId,
         observedAt: item.observedAt,
         measurementWindow: item.measurementWindow,
         metrics: item.metrics as Record<string, unknown>,

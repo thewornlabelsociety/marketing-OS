@@ -237,21 +237,45 @@ export class IntegrationConnectionService {
     return results;
   }
 
-  listDestinations(workspaceId: string, channel?: string): PublishingDestinationRecord[] {
+  listDestinations(workspaceId: string, channel?: string, options?: { requiredCapability?: string }): PublishingDestinationRecord[] {
     const rows = channel
       ? db.prepare('SELECT * FROM publishing_destinations WHERE workspace_id = ? AND channel = ? ORDER BY display_name').all(workspaceId, channel)
       : db.prepare('SELECT * FROM publishing_destinations WHERE workspace_id = ? ORDER BY display_name').all(workspaceId);
-    return (rows as DestinationRow[]).map((row) => ({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      connectionId: row.connection_id,
-      providerKey: row.provider_key,
-      channel: row.channel,
-      externalDestinationId: row.external_destination_id,
-      displayName: row.display_name,
-      status: row.status as PublishingDestinationRecord['status'],
-      capabilities: JSON.parse(row.capabilities || '[]') as string[],
-    }));
+    return (rows as DestinationRow[]).map((row) => {
+      const caps = JSON.parse(row.capabilities || '[]') as string[];
+      const connection = db.prepare('SELECT status FROM integration_connections WHERE id = ? AND workspace_id = ?')
+        .get(row.connection_id, workspaceId) as { status: string } | undefined;
+      const connectionStatus = (connection?.status ?? 'DISCONNECTED') as PublishingDestinationRecord['connectionStatus'];
+      let unavailableReason: string | undefined;
+      let selectable = row.status === 'ACTIVE';
+      if (connectionStatus === 'REAUTH_REQUIRED' || connectionStatus === 'EXPIRED') {
+        unavailableReason = 'Reconnect required';
+        selectable = false;
+      } else if (connectionStatus !== 'CONNECTED') {
+        unavailableReason = 'Connection unavailable';
+        selectable = false;
+      } else if (row.status !== 'ACTIVE') {
+        unavailableReason = 'Destination inactive';
+        selectable = false;
+      } else if (options?.requiredCapability && caps.length > 0 && !caps.includes(options.requiredCapability)) {
+        unavailableReason = 'Publishing capability missing';
+        selectable = false;
+      }
+      return {
+        id: row.id,
+        workspaceId: row.workspace_id,
+        connectionId: row.connection_id,
+        providerKey: row.provider_key,
+        channel: row.channel,
+        externalDestinationId: row.external_destination_id,
+        displayName: row.display_name,
+        status: row.status as PublishingDestinationRecord['status'],
+        capabilities: caps,
+        connectionStatus,
+        unavailableReason,
+        selectable,
+      };
+    });
   }
 
   verify(connectionId: string, workspaceId: string): IntegrationConnectionRecord | { error: string; code: string } {

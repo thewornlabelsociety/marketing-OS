@@ -23,6 +23,7 @@ export interface PublishableAsset {
   width?: number;
   height?: number;
   duration?: number;
+  checksum?: string;
 }
 
 export interface ScheduledContentItem {
@@ -71,6 +72,8 @@ export interface PublishAttempt {
   errorCode?: string;
   errorMessage?: string;
   errorCategory?: string;
+  mediaAssetIds?: string[];
+  mediaChecksums?: string[];
   startedAt: string;
   completedAt?: string;
 }

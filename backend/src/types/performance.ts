@@ -97,6 +97,7 @@ export interface PerformanceObservation {
   providerKey?: string;
   destinationId?: string;
   externalPublishId?: string;
+  mediaAssetId?: string;
   observedAt: string;
   measurementWindow: MeasurementWindow;
   metrics: PerformanceMetrics;

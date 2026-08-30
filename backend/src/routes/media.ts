@@ -1,17 +1,83 @@
-import { Router } from 'express';
-import path from 'path';
+import { Router, Request, Response } from 'express';
 import { MediaDimensionAdapter } from '../services/MediaDimensionAdapter';
 import { mediaDeliveryService } from '../services/media/MediaDeliveryService';
+import { mediaAssetService } from '../services/media/MediaAssetService';
+import { db } from '../db/database';
 
 export const mediaRouter = Router();
 
 mediaRouter.get('/hosted/:token', (req, res) => {
-  const resolved = mediaDeliveryService.verifyToken(req.params.token);
+  const resolved = mediaDeliveryService.resolveHostedFile(req.params.token);
   if (!resolved) {
     res.status(404).json({ error: 'Hosted asset not found or expired' });
     return;
   }
-  res.sendFile(path.resolve(resolved.localPath));
+  res.setHeader('Content-Type', resolved.mimeType);
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.sendFile(resolved.absolutePath);
+});
+
+mediaRouter.post('/assets', (req: Request, res: Response) => {
+  const body = req.body as {
+    workspaceId?: string;
+    fileBase64?: string;
+    mimeType?: string;
+    filename?: string;
+    campaignId?: string;
+    contentKey?: string;
+    creativeArtifactId?: string;
+    creativeVersion?: number;
+  };
+  const workspaceId = body.workspaceId;
+  if (!workspaceId) {
+    res.status(400).json({ error: 'workspaceId is required' });
+    return;
+  }
+  const workspace = db.prepare('SELECT id FROM entities WHERE id = ?').get(workspaceId);
+  if (!workspace) {
+    res.status(404).json({ error: 'Workspace not found' });
+    return;
+  }
+  if (!body.fileBase64) {
+    res.status(400).json({ error: 'fileBase64 is required' });
+    return;
+  }
+  try {
+    const buffer = Buffer.from(body.fileBase64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+    const record = mediaAssetService.registerFromBuffer({
+      workspaceId,
+      buffer,
+      mimeType: body.mimeType,
+      originalFilename: body.filename,
+      campaignId: body.campaignId,
+      contentKey: body.contentKey,
+      creativeArtifactId: body.creativeArtifactId,
+      creativeVersion: body.creativeVersion,
+    });
+    res.status(201).json({
+      asset: mediaAssetService.toPublishableAsset(record),
+      checksum: record.checksum,
+      creativeArtifactId: record.creativeArtifactId,
+      creativeVersion: record.creativeVersion,
+    });
+  } catch (err) {
+    res.status(422).json({ error: err instanceof Error ? err.message : 'Upload failed' });
+  }
+});
+
+mediaRouter.get('/assets/:assetId', (req: Request, res: Response) => {
+  const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined;
+  if (!workspaceId) {
+    res.status(400).json({ error: 'workspaceId is required' });
+    return;
+  }
+  const record = mediaAssetService.getById(req.params.assetId, workspaceId);
+  if (!record) {
+    res.status(404).json({ error: 'Asset not found' });
+    return;
+  }
+  res.json({ asset: mediaAssetService.toPublishableAsset(record), checksum: record.checksum, status: record.status });
 });
 
 // Image → multi-ratio renditions (4:5, 1:1, 9:16, 16:9)
@@ -23,7 +89,7 @@ mediaRouter.post('/adapt-dimensions', async (req, res) => {
     };
     const buffer = Buffer.from(
       imageBase64.replace(/^data:image\/\w+;base64,/, ''),
-      'base64'
+      'base64',
     );
     const renditions = await MediaDimensionAdapter.adaptImage(buffer, backgroundColorHex);
     res.json({ success: true, renditions });
@@ -31,7 +97,3 @@ mediaRouter.post('/adapt-dimensions', async (req, res) => {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
-
-// Note: Photoroom background-removal endpoint is intentionally not registered here.
-// Marketing OS accepts externally processed images directly. PhotoroomService.ts
-// is retained in services/ for reference only.

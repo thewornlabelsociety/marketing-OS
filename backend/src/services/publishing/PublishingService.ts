@@ -1,11 +1,12 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
 import { PublishingProviderRegistry } from '../../integrations/adapters/PublishingProviderRegistry';
-import type { PublishAttempt, ScheduledContentItem } from '../../types/scheduledContent';
+import type { PublishAttempt, PublishableAsset, ScheduledContentItem } from '../../types/scheduledContent';
 import { creativeGeneratorService } from '../creative/CreativeGeneratorService';
 import { prePublishCheckService } from './PrePublishCheckService';
 import { schedulingService, type SchedulingServiceError } from './SchedulingService';
 import { buildIdempotencyKey } from './publishingUtils';
+import { tokenTtlSeconds } from '../media/MediaDeliveryService';
 
 export type PublishingServiceError = { error: string; code: string };
 
@@ -28,6 +29,9 @@ interface AttemptRow {
   error_code: string | null;
   error_message: string | null;
   error_category: string | null;
+  media_asset_ids: string | null;
+  media_checksums: string | null;
+  media_delivery_metadata: string | null;
   started_at: string;
   completed_at: string | null;
 }
@@ -52,6 +56,8 @@ function mapAttempt(row: AttemptRow): PublishAttempt {
     errorCode: row.error_code ?? undefined,
     errorMessage: row.error_message ?? undefined,
     errorCategory: row.error_category ?? undefined,
+    mediaAssetIds: row.media_asset_ids ? JSON.parse(row.media_asset_ids) as string[] : undefined,
+    mediaChecksums: row.media_checksums ? JSON.parse(row.media_checksums) as string[] : undefined,
     startedAt: row.started_at,
     completedAt: row.completed_at ?? undefined,
   };
@@ -107,9 +113,14 @@ export class PublishingService {
     const preflight = prePublishCheckService.run(schedule, artifact, { manualPublish: options?.manualPublish ?? true });
     if (!preflight.ready) {
       const code = preflight.blockers[0] ?? 'PUBLISH_VALIDATION_FAILED';
-      if (code === 'ASSET_MISSING') {
+      if (code === 'ASSET_MISSING' || code === 'MEDIA_INVALID' || code === 'MEDIA_NOT_PUBLICLY_ACCESSIBLE') {
+        const reason = code === 'MEDIA_NOT_PUBLICLY_ACCESSIBLE'
+          ? 'Media is not publicly accessible for provider publishing.'
+          : code === 'MEDIA_INVALID'
+            ? 'Scheduled media failed validation.'
+            : 'Visual asset required before direct publishing.';
         db.prepare(`UPDATE scheduled_content_items SET status = 'BLOCKED', block_reason = ?, updated_at = ? WHERE id = ?`)
-          .run('Visual asset required before direct publishing.', new Date().toISOString(), scheduleId);
+          .run(reason, new Date().toISOString(), scheduleId);
       }
       return { error: preflight.blockers.join('; '), code };
     }
@@ -139,6 +150,9 @@ export class PublishingService {
         idempotencyKey: buildIdempotencyKey(schedule.id, schedule.sourceCreativeArtifactId, schedule.sourceCreativeVersion),
       });
       if (!pubValidation.valid) {
+        const failedAt = new Date().toISOString();
+        db.prepare(`UPDATE scheduled_content_items SET status = 'FAILED', updated_at = ? WHERE id = ?`)
+          .run(failedAt, scheduleId);
         return { error: pubValidation.error ?? 'Provider validation failed', code: pubValidation.code ?? 'PUBLISH_VALIDATION_FAILED' };
       }
     }
@@ -158,12 +172,21 @@ export class PublishingService {
       UPDATE scheduled_content_items SET status = 'PUBLISHING', updated_at = ? WHERE id = ?
     `).run(startedAt, scheduleId);
 
+    const mediaAssetIds = schedule.mediaAssets.map((a) => a.id);
+    const mediaChecksums = schedule.mediaAssets.map((a) => (a as PublishableAsset & { checksum?: string }).checksum ?? '');
+    const deliveryMetadata = JSON.stringify({
+      assetIds: mediaAssetIds,
+      checksums: mediaChecksums.filter(Boolean),
+      deliveryUrlGeneratedAt: startedAt,
+      tokenTtlSeconds: tokenTtlSeconds(),
+    });
+
     db.prepare(`
       INSERT INTO publish_attempts
         (id, workspace_id, campaign_id, schedule_id, attempt_number, provider_key,
          source_creative_artifact_id, source_creative_version, idempotency_key, status,
-         destination_id, connection_id, started_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)
+         destination_id, connection_id, media_asset_ids, media_checksums, media_delivery_metadata, started_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?)
     `).run(
       attemptId,
       schedule.workspaceId,
@@ -176,6 +199,9 @@ export class PublishingService {
       idempotencyKey,
       schedule.destinationId ?? null,
       destination?.connection_id ?? null,
+      JSON.stringify(mediaAssetIds),
+      JSON.stringify(mediaChecksums),
+      deliveryMetadata,
       startedAt,
     );
 

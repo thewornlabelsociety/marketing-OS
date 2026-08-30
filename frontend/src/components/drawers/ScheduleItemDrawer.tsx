@@ -1,7 +1,7 @@
-import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Image, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/api';
-import type { PublicationMode, PublishingDestination, ScheduledContentItem } from '../../types';
+import type { MarketingChannel, PublicationMode, PublishingDestination, ScheduledContentItem } from '../../types';
 
 interface BaseProps {
   campaignId: string;
@@ -14,6 +14,9 @@ interface BaseProps {
 interface CreateProps extends BaseProps {
   mode: 'create';
   contentKey: string;
+  channel: MarketingChannel;
+  creativeArtifactId: string;
+  creativeVersion: number;
   item?: never;
 }
 
@@ -21,19 +24,30 @@ interface ViewProps extends BaseProps {
   mode: 'view';
   item: ScheduledContentItem;
   contentKey?: never;
+  channel?: never;
+  creativeArtifactId?: never;
+  creativeVersion?: never;
 }
 
 type Props = CreateProps | ViewProps;
 
+type PinnedMedia = { id: string; type: string; mimeType?: string; storageKey?: string; checksum?: string };
+
 export function ScheduleItemDrawer(props: Props) {
   const { campaignId, workspaceId, campaignName, onClose, onSaved, mode } = props;
   const contentKey = mode === 'create' ? props.contentKey : props.item.contentKey;
+  const channel = mode === 'create' ? props.channel : props.item.channel;
+  const creativeVersion = mode === 'create' ? props.creativeVersion : props.item.sourceCreativeVersion;
+  const creativeArtifactId = mode === 'create' ? props.creativeArtifactId : props.item.sourceCreativeArtifactId;
+
   const [date, setDate] = useState('');
   const [time, setTime] = useState('09:00');
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [publicationMode, setPublicationMode] = useState<PublicationMode>('MANUAL');
   const [destinationId, setDestinationId] = useState('');
   const [destinations, setDestinations] = useState<PublishingDestination[]>([]);
+  const [pinnedMedia, setPinnedMedia] = useState<PinnedMedia | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -45,28 +59,72 @@ export function ScheduleItemDrawer(props: Props) {
       setTimezone(props.item.timezone);
       setPublicationMode(props.item.publicationMode);
       setDestinationId(props.item.destinationId ?? '');
+      const asset = props.item.mediaAssets[0];
+      if (asset) setPinnedMedia({ id: asset.id, type: asset.type, mimeType: asset.mimeType, storageKey: asset.storageKey });
     } else {
       setDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
     }
   }, [mode, props]);
 
   useEffect(() => {
-    api.getPublishingDestinations(workspaceId)
+    api.getPublishingDestinations(workspaceId, channel)
       .then(setDestinations)
       .catch(() => setDestinations([]));
-  }, [workspaceId]);
+  }, [workspaceId, channel]);
+
+  const selectedDestination = useMemo(
+    () => destinations.find((d) => d.id === destinationId),
+    [destinations, destinationId],
+  );
+
+  const compatibleDestinations = useMemo(
+    () => destinations.filter((d) => d.channel === channel),
+    [destinations, channel],
+  );
+
+  async function onMediaSelected(file: File) {
+    setError('');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = String(reader.result ?? '');
+        const uploaded = await api.uploadMediaAsset({
+          workspaceId,
+          campaignId,
+          contentKey,
+          creativeArtifactId,
+          creativeVersion,
+          fileBase64: base64,
+          mimeType: file.type,
+          filename: file.name,
+        });
+        setPinnedMedia(uploaded.asset);
+        setMediaPreview(base64.startsWith('data:') ? base64 : `data:${file.type};base64,${base64.split(',').pop()}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to upload media');
+      }
+    };
+    reader.readAsDataURL(file);
+  }
 
   async function saveSchedule() {
     setSaving(true);
     setError('');
     try {
       const scheduledFor = new Date(`${date}T${time}:00`).toISOString();
+      if (publicationMode === 'DIRECT' && !destinationId) {
+        throw new Error('Select a destination for direct publishing.');
+      }
+      if (publicationMode === 'DIRECT' && !pinnedMedia) {
+        throw new Error('Attach the image that will publish with this schedule.');
+      }
       await api.createSchedule(campaignId, workspaceId, {
         contentKey,
         scheduledFor,
         timezone,
         publicationMode,
         destinationId: publicationMode === 'DIRECT' && destinationId ? destinationId : undefined,
+        mediaAssets: pinnedMedia ? [pinnedMedia] : undefined,
       });
       onSaved();
     } catch (err) {
@@ -125,7 +183,8 @@ export function ScheduleItemDrawer(props: Props) {
           <div>
             <h2 className="text-sm font-semibold text-[#09090B]">{mode === 'create' ? 'Schedule Content' : 'Schedule Item'}</h2>
             <p className="text-xs text-[#71717A]">{campaignName} · {contentKey}</p>
-            {item && <p className="text-xs text-[#71717A]">Approved V{item.sourceCreativeVersion} · {item.status.replaceAll('_', ' ').toLowerCase()}</p>}
+            <p className="text-xs text-[#71717A]">{channel} · Approved V{creativeVersion}</p>
+            {item && <p className="text-xs text-[#71717A]">{item.status.replaceAll('_', ' ').toLowerCase()}</p>}
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]"><X className="h-4 w-4" /></button>
         </div>
@@ -145,22 +204,50 @@ export function ScheduleItemDrawer(props: Props) {
                   <option value="DIRECT">Direct Publish</option>
                 </select>
               </Field>
+
+              <Field label="Media">
+                <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#E4E4E7] px-3 py-3 hover:bg-[#FAFAFA]">
+                  <Image className="h-4 w-4 text-[#71717A]" />
+                  <span className="text-sm text-[#71717A]">{pinnedMedia ? `Pinned · ${pinnedMedia.id}` : 'Attach image for this creative version'}</span>
+                  <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onMediaSelected(f); }} />
+                </label>
+              </Field>
+
               {publicationMode === 'DIRECT' && (
                 <Field label="Destination">
                   <select value={destinationId} onChange={(e) => setDestinationId(e.target.value)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2">
                     <option value="">Select destination</option>
-                    {destinations.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
+                    {compatibleDestinations.map((d) => (
+                      <option key={d.id} value={d.id} disabled={d.selectable === false}>
+                        {d.displayName}{d.unavailableReason ? ` — ${d.unavailableReason}` : ''}
+                      </option>
+                    ))}
                   </select>
-                  {destinations.length === 0 && (
-                    <p className="mt-1 text-xs text-[#71717A]">No direct publishing destinations connected. Use manual or export mode.</p>
+                  {compatibleDestinations.length === 0 && (
+                    <p className="mt-1 text-xs text-[#71717A]">No {channel.toLowerCase()} destinations connected. Use manual or export mode.</p>
                   )}
                 </Field>
               )}
+
+              <section className="rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#A1A1AA]">Publish preview</p>
+                <p className="mt-2 text-sm text-[#09090B]">{selectedDestination?.displayName ?? (publicationMode === 'DIRECT' ? 'No destination selected' : publicationMode.toLowerCase())}</p>
+                <p className="text-xs text-[#71717A]">Creative V{creativeVersion} · {channel} · {publicationMode}</p>
+                {mediaPreview && <img src={mediaPreview} alt="Scheduled media preview" className="mt-3 max-h-40 rounded-md border border-[#E4E4E7]" />}
+                {!pinnedMedia && publicationMode === 'DIRECT' && (
+                  <p className="mt-2 text-xs text-amber-700">Direct publish requires a pinned media asset.</p>
+                )}
+                {selectedDestination?.unavailableReason && (
+                  <p className="mt-2 text-xs text-amber-700">{selectedDestination.unavailableReason}</p>
+                )}
+              </section>
             </>
           ) : item && (
             <>
               <Field label="Scheduled">{new Date(item.scheduledFor).toLocaleString()} ({item.timezone})</Field>
               <Field label="Mode">{item.publicationMode}</Field>
+              <Field label="Creative version">V{item.sourceCreativeVersion}</Field>
+              {item.mediaAssets[0] && <Field label="Pinned media">{item.mediaAssets[0].id}</Field>}
               {item.blockReason && <Field label="Blocked">{item.blockReason}</Field>}
               {item.publishedAt && <Field label="Published">{new Date(item.publishedAt).toLocaleString()}</Field>}
               {item.externalUrl && <Field label="URL">{item.externalUrl}</Field>}

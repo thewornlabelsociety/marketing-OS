@@ -588,6 +588,9 @@ export interface PublishingDestination {
   displayName: string;
   status: 'ACTIVE' | 'INACTIVE' | 'ERROR';
   capabilities?: string[];
+  connectionStatus?: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'EXPIRED' | 'REAUTH_REQUIRED' | 'ERROR';
+  unavailableReason?: string;
+  selectable?: boolean;
 }
 
 // --- Performance (Phase 3F) ---

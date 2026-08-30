@@ -48,6 +48,9 @@ export interface PublishingDestinationRecord {
   displayName: string;
   status: 'ACTIVE' | 'INACTIVE' | 'ERROR';
   capabilities: string[];
+  connectionStatus?: IntegrationConnectionStatus;
+  unavailableReason?: string;
+  selectable?: boolean;
 }
 
 export interface ProviderDestinationDiscovery {

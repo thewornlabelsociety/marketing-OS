@@ -3,6 +3,8 @@ import { PublishingProviderRegistry } from '../../integrations/adapters/Publishi
 import type { CreativeArtifact } from '../../types/creativeArtifact';
 import type { PrePublishCheckResult, PublishableAsset, ScheduledContentItem } from '../../types/scheduledContent';
 import { creativeGeneratorService } from '../creative/CreativeGeneratorService';
+import { mediaValidationService } from '../media/MediaValidationService';
+import { isMetaMockMode } from '../../integrations/meta/MetaGraphClient';
 import { buildIdempotencyKey, hasRequiredPublishableMedia } from './publishingUtils';
 
 interface DestinationRow {
@@ -111,8 +113,16 @@ export class PrePublishCheckService {
           } else {
             checks.push({ key: 'provider', status: 'PASS' });
             const caps = JSON.parse((destination as DestinationRow & { capabilities?: string }).capabilities || '[]') as string[];
-            const needed = schedule.channel === 'FACEBOOK' ? 'publish_facebook_page_photo' : 'publish_image_feed';
-            if (caps.length > 0 && !caps.includes(needed)) {
+            // Only enforce channel-specific capability when the destination already declares
+            // granular publish_* capabilities (e.g. from Phase 3K meta destinations).
+            // Legacy destinations with generic ["publish"] are accepted for backward compat.
+            const hasGranularCaps = caps.some((c) => c.startsWith('publish_'));
+            const needed = schedule.channel === 'FACEBOOK'
+              ? 'publish_facebook_page_photo'
+              : schedule.channel === 'INSTAGRAM'
+                ? 'publish_image_feed'
+                : null;
+            if (needed && hasGranularCaps && !caps.includes(needed)) {
               checks.push({ key: 'destination_capability', status: 'FAIL', message: 'Destination does not support this publish operation' });
               blockers.push('PUBLISH_VALIDATION_FAILED');
             } else {
@@ -127,7 +137,25 @@ export class PrePublishCheckService {
       checks.push({ key: 'assets', status: 'FAIL', message: 'Visual asset required before direct publishing' });
       blockers.push('ASSET_MISSING');
     } else {
-      checks.push({ key: 'assets', status: 'PASS' });
+      const mediaResult = mediaValidationService.validateForSchedule(schedule, artifact, {
+        requirePublicUrl: !isMetaMockMode() && process.env.META_MOCK_MODE !== '1',
+      });
+      for (const check of mediaResult.checks) {
+        checks.push({
+          key: `media_${check.key}`,
+          status: check.status === 'PASS' ? 'PASS' : check.status === 'WARNING' ? 'WARNING' : 'FAIL',
+          message: check.message,
+        });
+      }
+      for (const code of mediaResult.blockers) {
+        if (code === 'MEDIA_NOT_PUBLICLY_ACCESSIBLE') blockers.push('MEDIA_NOT_PUBLICLY_ACCESSIBLE');
+        else if (code === 'MEDIA_MISSING' || code === 'MEDIA_UNAVAILABLE') blockers.push('ASSET_MISSING');
+        else blockers.push('MEDIA_INVALID');
+      }
+      warnings.push(...mediaResult.warnings);
+      if (mediaResult.valid) {
+        checks.push({ key: 'assets', status: 'PASS' });
+      }
     }
 
     if (!options?.manualPublish) {

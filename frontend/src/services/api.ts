@@ -239,10 +239,25 @@ export const api = {
     publicationMode: 'DIRECT' | 'EXPORT' | 'MANUAL';
     destinationId?: string;
     notes?: string;
+    mediaAssets?: Array<{ id: string; type: string; mimeType?: string; storageKey?: string; checksum?: string }>;
   }) =>
     request<ScheduledContentItem>(`/campaigns/${campaignId}/schedule`, {
       method: 'POST',
       body: JSON.stringify({ ...payload, workspaceId }),
+    }),
+  uploadMediaAsset: (payload: {
+    workspaceId: string;
+    fileBase64: string;
+    mimeType?: string;
+    filename?: string;
+    campaignId?: string;
+    contentKey?: string;
+    creativeArtifactId?: string;
+    creativeVersion?: number;
+  }) =>
+    request<{ asset: { id: string; type: string; mimeType?: string; storageKey?: string }; checksum: string }>('/media/assets', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
   cancelSchedule: (campaignId: string, scheduleId: string, workspaceId: string) =>
     request<ScheduledContentItem>(`/campaigns/${campaignId}/schedule/${scheduleId}/cancel`, {

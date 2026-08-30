@@ -24,6 +24,7 @@ interface ObservationRow {
   provider_key: string | null;
   destination_id: string | null;
   external_publish_id: string | null;
+  media_asset_id: string | null;
   observed_at: string;
   measurement_window: string;
   metrics: string;
@@ -62,6 +63,7 @@ export interface CreateObservationInput {
   providerKey?: string;
   destinationId?: string;
   externalPublishId?: string;
+  mediaAssetId?: string;
   observedAt?: string;
   measurementWindow: MeasurementWindow;
   metrics: Record<string, unknown>;
@@ -97,6 +99,7 @@ function mapObservationRow(row: ObservationRow): PerformanceObservation {
     providerKey: row.provider_key ?? undefined,
     destinationId: row.destination_id ?? undefined,
     externalPublishId: row.external_publish_id ?? undefined,
+    mediaAssetId: row.media_asset_id ?? undefined,
     observedAt: row.observed_at,
     measurementWindow: row.measurement_window as MeasurementWindow,
     metrics: JSON.parse(row.metrics) as PerformanceMetrics,
@@ -147,9 +150,9 @@ export class PerformanceIngestionService {
       INSERT INTO performance_observations
         (id, workspace_id, campaign_id, schedule_id, content_key,
          source_creative_artifact_id, source_creative_version, channel,
-         provider_key, destination_id, external_publish_id, observed_at,
+         provider_key, destination_id, external_publish_id, media_asset_id, observed_at,
          measurement_window, metrics, source, raw_metadata, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.workspaceId,
@@ -162,6 +165,7 @@ export class PerformanceIngestionService {
       input.providerKey ?? null,
       input.destinationId ?? null,
       input.externalPublishId ?? null,
+      input.mediaAssetId ?? null,
       input.observedAt ?? now,
       input.measurementWindow,
       JSON.stringify(metrics),

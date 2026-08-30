@@ -3,6 +3,7 @@ import type { MarketingChannel } from '../../types/channels';
 import type { DestinationValidationResult, PublishRequest, PublishResult } from '../../types/publishing';
 import type { PublishingProvider } from '../contracts/PublishingProvider';
 import { mediaDeliveryService } from '../../services/media/MediaDeliveryService';
+import { mediaValidationService } from '../../services/media/MediaValidationService';
 import { metaGraphClient, isMetaMockMode } from './MetaGraphClient';
 
 interface DestinationRow {
@@ -29,6 +30,7 @@ function mapErrorCategory(code?: string): PublishResult['errorCategory'] {
     case 'PERMISSION_DENIED': return 'PERMISSION_DENIED';
     case 'VALIDATION_FAILED': return 'VALIDATION_FAILED';
     case 'MEDIA_INVALID': return 'MEDIA_INVALID';
+    case 'MEDIA_NOT_PUBLICLY_ACCESSIBLE': return 'MEDIA_INVALID';
     case 'RATE_LIMITED': return 'RATE_LIMITED';
     case 'UNKNOWN_RESULT': return 'UNKNOWN_RESULT';
     case 'PROVIDER_REJECTED': return 'PROVIDER_REJECTED';
@@ -43,10 +45,9 @@ function extractCaption(content: PublishRequest['content']): string {
   return '';
 }
 
-function requiredCapability(channel: MarketingChannel, contentKind: string): string {
-  if (channel === 'FACEBOOK') return 'publish_facebook_page_photo';
-  if (contentKind === 'STATIC_POST') return 'publish_image_feed';
-  return 'publish_image_feed';
+function isImageAsset(asset: PublishRequest['mediaAssets'][number]): boolean {
+  return asset.mimeType?.startsWith('image/') === true
+    || asset.type?.toUpperCase() === 'IMAGE';
 }
 
 export class MetaPublishingProvider implements PublishingProvider {
@@ -73,29 +74,54 @@ export class MetaPublishingProvider implements PublishingProvider {
     return { valid: true };
   }
 
+  private validateInstagramPublication(request: PublishRequest): DestinationValidationResult {
+    const kind = request.content.kind;
+    if (kind === 'STORY' || kind === 'SHORT_VIDEO' || kind === 'CAROUSEL' || kind === 'LONG_VIDEO') {
+      return { valid: false, error: `${kind} publishing is not supported for Instagram`, code: 'VALIDATION_FAILED' };
+    }
+    if (kind !== 'STATIC_POST') {
+      return { valid: false, error: 'Only static image feed posts are supported for Instagram', code: 'VALIDATION_FAILED' };
+    }
+    const imageAsset = request.mediaAssets.find(isImageAsset);
+    if (!imageAsset) {
+      return { valid: false, error: 'Image asset required for Instagram feed publishing', code: 'MEDIA_INVALID' };
+    }
+    return { valid: true };
+  }
+
+  private validateFacebookPublication(request: PublishRequest): DestinationValidationResult {
+    const kind = request.content.kind;
+    if (kind === 'STORY' || kind === 'SHORT_VIDEO' || kind === 'CAROUSEL' || kind === 'LONG_VIDEO') {
+      return { valid: false, error: `${kind} publishing is not supported for Facebook Page photo posts`, code: 'VALIDATION_FAILED' };
+    }
+    const imageAsset = request.mediaAssets.find(isImageAsset);
+    if (!imageAsset) {
+      return { valid: false, error: 'Image asset required for Facebook Page photo publishing', code: 'MEDIA_INVALID' };
+    }
+    return { valid: true };
+  }
+
   async validatePublication(request: PublishRequest): Promise<DestinationValidationResult> {
     const destCheck = await this.validateDestination(request.destinationId, request.channel);
     if (!destCheck.valid) return destCheck;
 
-    const kind = request.content.kind;
-    if (kind === 'STORY' || kind === 'SHORT_VIDEO' || kind === 'CAROUSEL') {
-      return {
-        valid: false,
-        error: `${kind} publishing is not supported in Phase 3J Meta integration`,
-        code: 'VALIDATION_FAILED',
-      };
-    }
-    if (kind !== 'STATIC_POST' && request.channel === 'INSTAGRAM') {
-      return { valid: false, error: 'Only static image feed posts are supported for Instagram in Phase 3J', code: 'VALIDATION_FAILED' };
+    const channelValidation = request.channel === 'FACEBOOK'
+      ? this.validateFacebookPublication(request)
+      : this.validateInstagramPublication(request);
+    if (!channelValidation.valid) return channelValidation;
+
+    const imageAsset = request.mediaAssets.find(isImageAsset)!;
+    const publicCheck = mediaValidationService.validatePublicBaseUrl();
+    if (!isMetaMockMode() && process.env.META_MOCK_MODE !== '1' && !publicCheck.valid) {
+      return { valid: false, error: 'Media base URL is not publicly accessible', code: 'MEDIA_NOT_PUBLICLY_ACCESSIBLE' };
     }
 
-    const imageAsset = request.mediaAssets.find((a) => a.mimeType?.startsWith('image/') || a.type === 'image');
-    if (!imageAsset) {
-      return { valid: false, error: 'Image asset required for Meta publishing', code: 'MEDIA_INVALID' };
-    }
     const publicUrl = mediaDeliveryService.resolvePublicUrl(imageAsset, request.workspaceId);
     if (!publicUrl) {
       return { valid: false, error: 'Media must be accessible via hosted delivery URL', code: 'MEDIA_INVALID' };
+    }
+    if (publicUrl.includes('\\') || /[a-z]:\\/i.test(publicUrl)) {
+      return { valid: false, error: 'Media delivery URL must not expose local filesystem paths', code: 'MEDIA_INVALID' };
     }
 
     return { valid: true };
@@ -125,7 +151,7 @@ export class MetaPublishingProvider implements PublishingProvider {
       return { success: false, providerKey: this.providerKey, errorCode: 'AUTH_EXPIRED', errorMessage: 'Meta token expired', errorCategory: 'AUTH_EXPIRED' };
     }
 
-    const imageAsset = request.mediaAssets.find((a) => a.mimeType?.startsWith('image/') || a.type === 'image')!;
+    const imageAsset = request.mediaAssets.find(isImageAsset)!;
     const imageUrl = mediaDeliveryService.resolvePublicUrl(imageAsset, request.workspaceId)!;
 
     try {
@@ -156,12 +182,13 @@ export class MetaPublishingProvider implements PublishingProvider {
           unknownOutcome: true,
         };
       }
+      const mediaFetch = /media|image|url|download|curl/i.test(message);
       return {
         success: false,
         providerKey: this.providerKey,
-        errorCode: code,
+        errorCode: mediaFetch ? 'MEDIA_INVALID' : code,
         errorMessage: message,
-        errorCategory: mapErrorCategory(code),
+        errorCategory: mapErrorCategory(mediaFetch ? 'MEDIA_INVALID' : code),
       };
     }
   }

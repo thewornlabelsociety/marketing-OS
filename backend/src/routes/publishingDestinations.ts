@@ -21,5 +21,6 @@ publishingDestinationsRouter.get('/', (req: Request, res: Response) => {
     return;
   }
   const channel = typeof req.query.channel === 'string' ? req.query.channel : undefined;
-  res.json(integrationConnectionService.listDestinations(workspaceId, channel));
+  const capability = channel === 'FACEBOOK' ? 'publish_facebook_page_photo' : channel === 'INSTAGRAM' ? 'publish_image_feed' : undefined;
+  res.json(integrationConnectionService.listDestinations(workspaceId, channel, { requiredCapability: capability }));
 });

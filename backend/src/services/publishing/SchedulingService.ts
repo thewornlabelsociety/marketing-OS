@@ -13,6 +13,7 @@ import type {
 } from '../../types/scheduledContent';
 import { contentPlannerService } from '../campaigns/ContentPlannerService';
 import { creativeGeneratorService } from '../creative/CreativeGeneratorService';
+import { mediaAssetService } from '../media/MediaAssetService';
 import { prePublishCheckService } from './PrePublishCheckService';
 import { hasRequiredPublishableMedia } from './publishingUtils';
 
@@ -183,7 +184,22 @@ export class SchedulingService {
     }
 
     const timezone = input.timezone?.trim() || DEFAULT_SCHEDULE_TIMEZONE;
-    const mediaAssets = input.mediaAssets ?? [];
+    let mediaAssets: PublishableAsset[] = input.mediaAssets ?? [];
+    if (mediaAssets.length > 0) {
+      try {
+        mediaAssets = mediaAssetService.pinForSchedule(mediaAssets, workspaceId, {
+          campaignId,
+          contentKey: input.contentKey,
+          creativeArtifactId: approved.artifactId,
+          creativeVersion: approved.version,
+        });
+      } catch (err) {
+        const code = err instanceof Error && err.message === 'MEDIA_VERSION_MISMATCH'
+          ? 'MEDIA_VERSION_MISMATCH'
+          : 'MEDIA_MISSING';
+        return { error: 'Media asset could not be pinned to this creative version.', code };
+      }
+    }
 
     if (input.publicationMode === 'DIRECT' && input.destinationId) {
       const dest = db.prepare('SELECT channel, workspace_id FROM publishing_destinations WHERE id = ?').get(input.destinationId) as
@@ -246,7 +262,20 @@ export class SchedulingService {
     const scheduledFor = input.scheduledFor ? new Date(input.scheduledFor).toISOString() : existing.scheduledFor;
     const timezone = input.timezone ?? existing.timezone;
     const destinationId = input.destinationId === undefined ? existing.destinationId : input.destinationId ?? undefined;
-    const mediaAssets = input.mediaAssets ?? existing.mediaAssets;
+    const mediaAssets = input.mediaAssets !== undefined
+      ? (() => {
+        try {
+          return mediaAssetService.pinForSchedule(input.mediaAssets!, existing.workspaceId, {
+            campaignId,
+            contentKey: existing.contentKey,
+            creativeArtifactId: existing.sourceCreativeArtifactId,
+            creativeVersion: existing.sourceCreativeVersion,
+          });
+        } catch {
+          return input.mediaAssets!;
+        }
+      })()
+      : existing.mediaAssets;
     const notes = input.notes ?? existing.notes;
     const now = new Date().toISOString();
 

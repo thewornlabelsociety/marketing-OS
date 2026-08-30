@@ -481,6 +481,24 @@ export class AttentionSignalService {
         dismissible: false,
       });
     }
+
+    for (const blocked of summary.upcoming.filter((u) => u.status === 'BLOCKED')) {
+      this.push(workspaceId, signals, {
+        signalType: 'PUBLISHING_FAILED',
+        severity: 'HIGH',
+        entityType: 'SCHEDULE',
+        entityId: blocked.id,
+        campaignId: campaign.id,
+        sourceType: 'schedule_blocked',
+        sourceId: blocked.id,
+        sourceVersion: blocked.updatedAt,
+        title: `Media issue — ${blocked.contentKey}`,
+        summary: blocked.blockReason ?? 'Scheduled publication blocked due to media',
+        actionLabel: 'Review',
+        actionTarget: `campaign:${campaign.id}:schedule:${blocked.id}`,
+        dismissible: false,
+      });
+    }
   }
 
   private derivePerformanceSignals(
