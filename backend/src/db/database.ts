@@ -3,7 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { LOCAL_TENANT_ID } from '../config/constants';
 
-const dbPath = path.resolve(__dirname, '../../app_data.db');
+const dbPath = process.env.SQLITE_PATH
+  ? path.resolve(process.env.SQLITE_PATH)
+  : path.resolve(__dirname, '../../app_data.db');
 export const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');

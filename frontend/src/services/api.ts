@@ -1,4 +1,4 @@
-import type { BrandKit, Campaign, CampaignBrief, CampaignPlan, CampaignSourceType, ContentItem, Entity, Objective, PerformanceLog } from '../types';
+import type { BrandKit, Campaign, CampaignBrief, CampaignPlan, CampaignSourceType, ChannelCapability, ContentItem, ContentPlan, ContentPlanApprovalRecord, Entity, Objective, PerformanceLog } from '../types';
 
 const BASE = '/api';
 
@@ -123,6 +123,42 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ planId, workspaceId }),
     }),
+  getCampaignPlanApproval: (campaignId: string, workspaceId: string) =>
+    request<{ approvedPlanId: string; approvedVersion: number; approvedAt: string }>(
+      `/campaigns/${campaignId}/plan/approval?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
+
+  // Content Plans (workspaceId enforces workspace isolation)
+  getContentPlan: (campaignId: string, workspaceId: string) =>
+    request<ContentPlan>(`/campaigns/${campaignId}/content-plan?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getContentPlanStatus: (campaignId: string, workspaceId: string) =>
+    request<{
+      aiConfigured: boolean;
+      aiProvider: string | null;
+      hasContentPlan: boolean;
+      contentPlanStatus: string | null;
+      strategyApproved: boolean;
+      contentPlanApproved: boolean;
+      capabilities: ChannelCapability[];
+    }>(`/campaigns/${campaignId}/content-plan/status?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getContentPlanVersions: (campaignId: string, workspaceId: string) =>
+    request<ContentPlan[]>(`/campaigns/${campaignId}/content-plan/versions?workspaceId=${encodeURIComponent(workspaceId)}`),
+  generateContentPlan: (campaignId: string, workspaceId: string) =>
+    request<ContentPlan>(`/campaigns/${campaignId}/content-plan?workspaceId=${encodeURIComponent(workspaceId)}`, { method: 'POST' }),
+  requestContentPlanRevision: (campaignId: string, workspaceId: string, requestText: string) =>
+    request<ContentPlan>(`/campaigns/${campaignId}/content-plan/revisions`, {
+      method: 'POST',
+      body: JSON.stringify({ requestText, workspaceId }),
+    }),
+  approveContentPlan: (campaignId: string, workspaceId: string, contentPlanId: string) =>
+    request<{ approved: boolean }>(`/campaigns/${campaignId}/content-plan/approval`, {
+      method: 'POST',
+      body: JSON.stringify({ contentPlanId, workspaceId }),
+    }),
+  getContentPlanApproval: (campaignId: string, workspaceId: string) =>
+    request<ContentPlanApprovalRecord>(
+      `/campaigns/${campaignId}/content-plan/approval?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
 
   // Content
   getContent: (entityId?: string) =>

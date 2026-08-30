@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ts-node src/server.ts",
     "build": "tsc",
+    "verify:phase-3c": "node scripts/run-verify-phase-3c.cjs",
     "postbuild": "node -e \"const fs=require('fs');const p='dist/db';fs.mkdirSync(p,{recursive:true});fs.copyFileSync('src/db/schema.sql',p+'/schema.sql')\"",
     "start": "node dist/server.js"
   },

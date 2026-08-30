@@ -47,6 +47,14 @@ PATCH  /api/campaigns/:campaignId/approval
 POST   /api/campaigns/:campaignId/schedule
 GET    /api/campaigns/:campaignId/performance
 
+GET    /api/campaigns/:campaignId/content-plan
+POST   /api/campaigns/:campaignId/content-plan
+GET    /api/campaigns/:campaignId/content-plan/versions
+GET    /api/campaigns/:campaignId/content-plan/status
+POST   /api/campaigns/:campaignId/content-plan/revisions
+POST   /api/campaigns/:campaignId/content-plan/approval
+GET    /api/campaigns/:campaignId/content-plan/approval
+
 GET    /api/content/:contentId
 PATCH  /api/content/:contentId
 DELETE /api/content/:contentId

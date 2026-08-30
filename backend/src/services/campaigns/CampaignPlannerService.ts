@@ -417,6 +417,22 @@ class CampaignPlannerService {
     return rows.map(mapPlanRow);
   }
 
+  getPlanById(planId: string, campaignId: string): CampaignPlan | null {
+    const row = db
+      .prepare('SELECT * FROM campaign_plans WHERE id = ? AND campaign_id = ?')
+      .get(planId, campaignId) as PlanRow | undefined;
+    return row ? mapPlanRow(row) : null;
+  }
+
+  getApprovedPlan(campaignId: string): CampaignPlan | null {
+    const approval = this.getApproval(campaignId);
+    if (!approval) return null;
+    const plan = this.getPlanById(approval.approvedPlanId, campaignId);
+    if (!plan) return null;
+    if (plan.version !== approval.approvedVersion) return null;
+    return plan;
+  }
+
   async generate(campaignId: string): Promise<{ plan: CampaignPlan } | { error: string }> {
     const ai = getAIProvider();
     if (!ai) {

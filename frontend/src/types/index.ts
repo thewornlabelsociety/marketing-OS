@@ -281,6 +281,148 @@ export interface PreviewDescriptor {
   device: PreviewDevice;
 }
 
+export type MarketingChannel =
+  | 'INSTAGRAM'
+  | 'FACEBOOK'
+  | 'TIKTOK'
+  | 'LINKEDIN'
+  | 'EMAIL'
+  | 'WEBSITE';
+
+export type PlannedContentType =
+  | 'STATIC_POST'
+  | 'CAROUSEL'
+  | 'STORY'
+  | 'SHORT_VIDEO'
+  | 'LONG_VIDEO'
+  | 'NEWSLETTER'
+  | 'EMAIL'
+  | 'ARTICLE'
+  | 'LANDING_PAGE'
+  | 'DOCUMENT'
+  | 'OTHER';
+
+export type ContentFormat =
+  | 'SQUARE_1_1'
+  | 'PORTRAIT_4_5'
+  | 'VERTICAL_9_16'
+  | 'LANDSCAPE_16_9'
+  | 'NEWSLETTER'
+  | 'DOCUMENT_CAROUSEL'
+  | 'TEXT_POST'
+  | 'ARTICLE'
+  | 'LANDING_PAGE';
+
+export interface ChannelCapability {
+  channel: MarketingChannel;
+  supportedContentTypes: PlannedContentType[];
+  supportedFormats: ContentFormat[];
+  supportedDevices: PreviewDevice[];
+  preferredAspectRatios?: string[];
+  maxMediaItems?: number;
+  supportsCarousel: boolean;
+  supportsVideo: boolean;
+  supportsLongForm: boolean;
+  supportsLinks: boolean;
+  supportsStories: boolean;
+}
+
+export type ContentPlanStatus =
+  | 'GENERATING'
+  | 'READY_FOR_REVIEW'
+  | 'CHANGES_REQUESTED'
+  | 'REVISING'
+  | 'APPROVED';
+
+export interface AssetRequirement {
+  id?: string;
+  type: string;
+  description: string;
+  required: boolean;
+  quantity?: number;
+}
+
+export interface ContentConcept {
+  id: string;
+  contentKey: string;
+  name: string;
+  strategicPurpose: string;
+  coreMessage: string;
+  audienceNeed?: string;
+  desiredResponse?: string;
+  proofPoints: string[];
+  hookDirection?: string;
+  ctaDirection?: string;
+  creativeIdea?: string;
+  sequenceRole?: string;
+}
+
+export interface ContentDeliverable {
+  id: string;
+  contentKey: string;
+  title: string;
+  purpose: string;
+  campaignRole: string;
+  journeyStage?: string;
+  channel: MarketingChannel;
+  contentType: PlannedContentType;
+  format: ContentFormat;
+  deviceTargets?: PreviewDevice[];
+  objectiveRole: string;
+  primaryMessage: string;
+  supportingMessages: string[];
+  hookDirection?: string;
+  ctaRole?: string;
+  proofPoints: string[];
+  creativeDirection: string;
+  assetRequirements: AssetRequirement[];
+  sourceConceptId?: string;
+  adaptationOf?: string;
+  adaptationNotes?: string;
+  sequence?: number;
+  timing?: {
+    phase?: string;
+    relativeOrder?: number;
+    preferredDate?: string;
+  };
+  status?: string;
+}
+
+export interface ContentPlan {
+  id: string;
+  workspaceId: string;
+  campaignId: string;
+  sourcePlanId: string;
+  sourcePlanVersion: number;
+  version: number;
+  summary: {
+    campaignNarrative: string;
+    customerJourney?: string;
+    contentStrategy: string;
+  };
+  concepts: ContentConcept[];
+  deliverables: ContentDeliverable[];
+  cadence: {
+    startDate?: string;
+    endDate?: string;
+    phases: { key: string; name: string; order: number; purpose?: string }[];
+    notes?: string;
+  };
+  status: ContentPlanStatus;
+  isCurrent: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentPlanApprovalRecord {
+  campaignId: string;
+  contentPlanId: string;
+  contentPlanVersion: number;
+  approvedAt: string;
+}
+
+// --- Legacy ---
+
 // --- Legacy ---
 
 export interface DropDraft {

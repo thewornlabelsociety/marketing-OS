@@ -9,6 +9,7 @@ interface PlanReviewDrawerProps {
   onRequestChanges: (requestText: string) => Promise<void>;
   approving?: boolean;
   requesting?: boolean;
+  locked?: boolean;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -51,6 +52,7 @@ export function PlanReviewDrawer({
   onRequestChanges,
   approving,
   requesting,
+  locked,
 }: PlanReviewDrawerProps) {
   const [mode, setMode] = useState<'review' | 'changes'>('review');
   const [changesText, setChangesText] = useState('');
@@ -210,6 +212,7 @@ export function PlanReviewDrawer({
         </div>
 
         {/* Footer */}
+        {!locked && (
         <div className="shrink-0 border-t border-[#E4E4E7] bg-white px-5 py-4">
           {mode === 'review' ? (
             <div className="flex gap-2">
@@ -264,6 +267,7 @@ export function PlanReviewDrawer({
             </div>
           )}
         </div>
+        )}
       </div>
     </>
   );

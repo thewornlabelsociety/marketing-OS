@@ -12,9 +12,10 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SopDrawerTrigger } from '../../components/drawers/SopDrawer';
 import { PlanReviewDrawer } from '../../components/drawers/PlanReviewDrawer';
+import { ContentPlanTab } from './ContentPlanTab';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
-import type { Campaign, CampaignBrief, CampaignPlan, CampaignStatus } from '../../types';
+import type { Campaign, CampaignBrief, CampaignPlan, CampaignStatus, ContentPlanStatus } from '../../types';
 
 interface Props {
   campaignId: string | null;
@@ -470,6 +471,7 @@ function PlanSection({ campaignId, workspaceId, canPlan, brief, onCampaignUpdate
           onRequestChanges={requestChanges}
           approving={approving}
           requesting={requesting}
+          locked={plan.status === 'APPROVED'}
         />
       )}
     </>
@@ -478,22 +480,28 @@ function PlanSection({ campaignId, workspaceId, canPlan, brief, onCampaignUpdate
 
 // --- SOP step derivation ---
 
-function deriveSopSteps(campaign: Campaign, hasPlan: boolean): { label: string; done: boolean }[] {
+function deriveSopSteps(
+  campaign: Campaign,
+  hasPlan: boolean,
+  contentPlanStatus: ContentPlanStatus | null,
+): { label: string; done: boolean }[] {
   const s = campaign.status as CampaignStatus;
   const past = (statuses: CampaignStatus[]) => statuses.includes(s);
 
-  const created = true;
-  const briefAssembled = !past(['DRAFTING']) || hasPlan;
-  const planGenerated = hasPlan;
-  const planApproved = past(['APPROVED', 'SCHEDULED', 'PUBLISHED', 'MEASURING', 'COMPLETE']);
-  const scheduled = past(['SCHEDULED', 'PUBLISHED', 'MEASURING', 'COMPLETE']);
+  const strategyApproved = past(['APPROVED', 'SCHEDULED', 'PUBLISHED', 'MEASURING', 'COMPLETE']);
+  const contentCreated = contentPlanStatus !== null;
+  const contentReviewed = contentCreated && contentPlanStatus !== 'GENERATING';
+  const contentApproved = contentPlanStatus === 'APPROVED';
 
   return [
-    { label: 'Create campaign', done: created },
-    { label: 'Assemble campaign brief', done: briefAssembled },
-    { label: 'Generate campaign plan', done: planGenerated },
-    { label: 'Approve campaign plan', done: planApproved },
-    { label: 'Schedule campaign', done: scheduled },
+    { label: 'Campaign created', done: true },
+    { label: 'Objective confirmed', done: Boolean(campaign.objectiveId) },
+    { label: 'Campaign brief ready', done: !past(['DRAFTING']) || hasPlan },
+    { label: 'Campaign strategy created', done: hasPlan },
+    { label: 'Campaign strategy approved', done: strategyApproved },
+    { label: 'Content plan created', done: contentCreated },
+    { label: 'Content plan reviewed', done: contentReviewed },
+    { label: 'Content plan approved', done: contentApproved },
   ];
 }
 
@@ -508,6 +516,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
   const [brief, setBrief] = useState<CampaignBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [hasPlan, setHasPlan] = useState(false);
+  const [contentPlanStatus, setContentPlanStatus] = useState<ContentPlanStatus | null>(null);
 
   function loadCampaign() {
     if (!campaignId) return;
@@ -528,6 +537,13 @@ export default function CampaignDetailPage({ campaignId }: Props) {
   }
 
   useEffect(() => { loadCampaign(); }, [campaignId]);
+
+  useEffect(() => {
+    if (!campaignId || !campaign) return;
+    api.getContentPlanStatus(campaign.id, campaign.workspaceId)
+      .then((s) => setContentPlanStatus((s.contentPlanStatus as ContentPlanStatus | null) ?? null))
+      .catch(() => {});
+  }, [campaignId, campaign?.id, campaign?.workspaceId]);
 
   useEffect(() => {
     if (tab === 'overview' && campaignId && campaign) {
@@ -561,7 +577,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
 
   const sourceLabel = SOURCE_LABELS[campaign.sourceType] ?? campaign.sourceType;
   const statusLabel = STATUS_LABELS[campaign.status] ?? campaign.status;
-  const canPlan = PLANNABLE.has(campaign.status as CampaignStatus);
+  const canPlan = PLANNABLE.has(campaign.status as CampaignStatus) || campaign.status === 'APPROVED';
 
   return (
     <div className="flex h-full flex-col">
@@ -589,7 +605,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
         <div className="flex items-center gap-2">
           <SopDrawerTrigger
             context={`Campaign: ${campaign.name}`}
-            steps={deriveSopSteps(campaign, hasPlan)}
+            steps={deriveSopSteps(campaign, hasPlan, contentPlanStatus)}
           />
           <OverflowMenu campaign={campaign} onCancelled={loadCampaign} />
         </div>
@@ -709,7 +725,12 @@ export default function CampaignDetailPage({ campaignId }: Props) {
         )}
 
         {tab === 'content' && (
-          <EmptyTabState icon={FileText} message="No content yet" />
+          <ContentPlanTab
+            campaignId={campaign.id}
+            workspaceId={campaign.workspaceId}
+            onReviewStrategy={() => setTab('overview')}
+            onStatusChange={setContentPlanStatus}
+          />
         )}
 
         {tab === 'schedule' && (

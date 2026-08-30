@@ -38,6 +38,19 @@ ARCHIVED              — Campaign moved to Campaign Library
 | Any | CANCELLED | User cancels (reason required) |
 | COMPLETE | ARCHIVED | User archives or auto-archive |
 
+## Artifact status vs campaign lifecycle
+
+Campaign-level `APPROVED` means the **Campaign Plan (strategy)** has been approved.
+
+Content Plan is a separate artifact with its own status:
+
+```
+GENERATING → READY_FOR_REVIEW → CHANGES_REQUESTED → REVISING → APPROVED
+```
+
+Approving a Campaign Plan does **not** approve the Content Plan or future creative.
+Approving a Content Plan does **not** start creative generation (Phase 3D).
+
 ## Invariants
 
 - Cancellation requires a reason string.
