@@ -183,7 +183,6 @@ export interface DropDraft {
 
 export type AppTab =
   | 'campaigns'
-  | 'create'
   | 'campaign-detail'
   | 'calendar'
   | 'performance'

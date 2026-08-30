@@ -3,7 +3,6 @@ import {
   CalendarDays,
   LayoutDashboard,
   Library,
-  PenSquare,
   Rocket,
 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
@@ -15,21 +14,10 @@ interface NavItem {
   icon: typeof Rocket;
 }
 
-interface PlaceholderItem {
-  label: string;
-  icon: typeof Rocket;
-}
-
 const PRIMARY_NAV: NavItem[] = [
   { id: 'campaigns', label: 'Campaigns', icon: Rocket },
-  { id: 'create', label: 'Create', icon: PenSquare },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
   { id: 'performance', label: 'Performance', icon: BarChart3 },
-];
-
-const PLACEHOLDER_NAV: PlaceholderItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard },
-  { label: 'Library', icon: Library },
 ];
 
 export function SidebarNav() {

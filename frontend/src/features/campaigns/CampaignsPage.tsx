@@ -1,6 +1,7 @@
 import { Plus, Rocket } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useApp } from '../../app/AppContext';
+import { CampaignCreateDrawer } from './CampaignCreateDrawer';
 import { api } from '../../services/api';
 import type { Campaign, CampaignStatus } from '../../types';
 
@@ -57,19 +58,22 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 export default function CampaignsPage() {
-  const { activeEntity, setActiveTab, setActiveCampaignId } = useApp();
+  const { activeEntity, setActiveCampaignId, setActiveTab } = useApp();
   const [tab, setTab] = useState<Tab>('active');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
 
-  useEffect(() => {
+  function loadCampaigns() {
     if (!activeEntity) return;
     setLoading(true);
     api.getCampaigns(activeEntity.id)
       .then(setCampaigns)
       .catch(() => setCampaigns([]))
       .finally(() => setLoading(false));
-  }, [activeEntity?.id]);
+  }
+
+  useEffect(() => { loadCampaigns(); }, [activeEntity?.id]);
 
   const filtered = campaigns.filter((c) => TAB_STATUSES[tab].includes(c.status as CampaignStatus));
 
@@ -83,6 +87,7 @@ export default function CampaignsPage() {
   }
 
   return (
+    <>
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-[#E4E4E7] bg-white px-6 py-4">
@@ -92,7 +97,7 @@ export default function CampaignsPage() {
         </div>
         <button
           type="button"
-          onClick={() => setActiveTab('create')}
+          onClick={() => setShowCreate(true)}
           className="inline-flex items-center gap-2 rounded-lg bg-[#09090B] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#27272A]"
         >
           <Plus className="h-4 w-4" />
@@ -139,7 +144,7 @@ export default function CampaignsPage() {
             {tab === 'active' && (
               <button
                 type="button"
-                onClick={() => setActiveTab('create')}
+                onClick={() => setShowCreate(true)}
                 className="mt-1 inline-flex items-center gap-2 rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white hover:bg-[#27272A]"
               >
                 <Plus className="h-4 w-4" />
@@ -177,5 +182,10 @@ export default function CampaignsPage() {
         )}
       </div>
     </div>
+
+      {showCreate && (
+        <CampaignCreateDrawer onClose={() => setShowCreate(false)} />
+      )}
+    </>
   );
 }

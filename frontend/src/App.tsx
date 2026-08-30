@@ -12,7 +12,6 @@ import BrandSetupWizard from './features/brands/BrandSetupWizard';
 import BrandBrainPage from './features/brands/BrandBrainPage';
 import ObjectiveLibraryPage from './features/objectives/ObjectiveLibraryPage';
 import CampaignsPage from './features/campaigns/CampaignsPage';
-import CampaignCreatePage from './features/campaigns/CampaignCreatePage';
 import CampaignDetailPage from './features/campaigns/CampaignDetailPage';
 
 function AppShell() {
@@ -54,7 +53,6 @@ function AppShell() {
           {!loading && !error && hasEntities && (
             <>
               {activeTab === 'campaigns' && <CampaignsPage />}
-              {activeTab === 'create' && <CampaignCreatePage />}
               {activeTab === 'campaign-detail' && <CampaignDetailPage campaignId={activeCampaignId} />}
               {activeTab === 'brand-brain' && <BrandBrainPage />}
               {activeTab === 'objectives' && <ObjectiveLibraryPage />}
