@@ -15,6 +15,7 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'campaigns', label: 'Campaigns', icon: Rocket },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
   { id: 'performance', label: 'Performance', icon: BarChart3 },
@@ -27,15 +28,6 @@ export function SidebarNav() {
   return (
     <nav className="flex w-48 shrink-0 flex-col border-r border-[#E4E4E7] bg-white">
       <div className="space-y-0.5 p-3 pt-4">
-        {/* Disabled placeholder — Dashboard (not yet built) */}
-        <div
-          title="Coming soon"
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-[#A1A1AA] cursor-not-allowed select-none"
-        >
-          <LayoutDashboard className="h-4 w-4 shrink-0" />
-          Dashboard
-        </div>
-
         {PRIMARY_NAV.map(({ id, label, icon: Icon }) => {
           const active = activeTab === id || (id === 'campaigns' && activeTab === 'campaign-detail');
           return (
@@ -54,7 +46,6 @@ export function SidebarNav() {
             </button>
           );
         })}
-
       </div>
     </nav>
   );

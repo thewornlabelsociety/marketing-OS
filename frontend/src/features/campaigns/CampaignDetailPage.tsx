@@ -518,7 +518,18 @@ export default function CampaignDetailPage({ campaignId }: Props) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const [tab, setTab] = useState<DetailTab>(() => {
+    const stored = sessionStorage.getItem('campaignDetailTab') as DetailTab | null;
+    return stored ?? 'overview';
+  });
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem('campaignDetailTab') as DetailTab | null;
+    if (stored) {
+      setTab(stored);
+      sessionStorage.removeItem('campaignDetailTab');
+    }
+  }, [campaignId]);
   const [brief, setBrief] = useState<CampaignBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [hasPlan, setHasPlan] = useState(false);

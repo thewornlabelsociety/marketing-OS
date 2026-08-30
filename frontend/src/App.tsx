@@ -14,6 +14,7 @@ import ObjectiveLibraryPage from './features/objectives/ObjectiveLibraryPage';
 import CampaignsPage from './features/campaigns/CampaignsPage';
 import CampaignLibraryPage from './features/archive/CampaignLibraryPage';
 import CampaignDetailPage from './features/campaigns/CampaignDetailPage';
+import DashboardPage from './features/dashboard/DashboardPage';
 
 function AppShell() {
   const { activeTab, activeCampaignId, entities, loading, error } = useApp();
@@ -53,6 +54,7 @@ function AppShell() {
 
           {!loading && !error && hasEntities && (
             <>
+              {activeTab === 'dashboard' && <DashboardPage />}
               {activeTab === 'campaigns' && <CampaignsPage />}
               {activeTab === 'campaign-detail' && <CampaignDetailPage campaignId={activeCampaignId} />}
               {activeTab === 'brand-brain' && <BrandBrainPage />}

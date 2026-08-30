@@ -24,6 +24,7 @@ import { performanceRouter } from './routes/performance';
 import { sopsRouter } from './routes/sops';
 import { archiveRouter } from './routes/archive';
 import { campaignExperimentsRouter } from './routes/campaignExperiments';
+import { dashboardRouter, attentionRouter } from './routes/dashboard';
 import { publishingSchedulerService } from './services/publishing/PublishingSchedulerService';
 
 dotenv.config();
@@ -55,6 +56,8 @@ app.use('/api/performance', performanceRouter);
 app.use('/api/learnings', learningsRouter);
 app.use('/api/library', libraryRouter);
 app.use('/api/blueprints', blueprintsRouter);
+app.use('/api/dashboard', dashboardRouter);
+app.use('/api/attention', attentionRouter);
 app.use('/api/media', mediaRouter);
 
 app.get('/health', (_req, res) => {

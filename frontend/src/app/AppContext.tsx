@@ -43,7 +43,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [activeEntityId, setActiveEntityId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<AppTab>('campaigns');
+  const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
   const [brandKitOpen, setBrandKitOpen] = useState(false);
   const [dropDraft, setDropDraft] = useState<DropDraft>(defaultDraft);

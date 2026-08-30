@@ -425,6 +425,16 @@ export const api = {
       body: JSON.stringify({ workspaceId, measurementWindow }),
     }),
 
+  getDashboard: (workspaceId: string) =>
+    request<import('../types/dashboard').DashboardSnapshot>(`/dashboard?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getAttentionSignals: (workspaceId: string, status: 'OPEN' | 'ALL' = 'OPEN') =>
+    request<import('../types/dashboard').AttentionSignal[]>(`/attention?workspaceId=${encodeURIComponent(workspaceId)}&status=${status}`),
+  dismissAttentionSignal: (signalId: string, workspaceId: string) =>
+    request<import('../types/dashboard').AttentionSignal>(`/attention/${signalId}/dismiss`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+
   getLibrarySummary: (workspaceId: string) =>
     request<LibrarySummary>(`/library/summary?workspaceId=${encodeURIComponent(workspaceId)}`),
   getLibraryCampaigns: (workspaceId: string, opts?: { classification?: string; search?: string; includeArchived?: boolean }) => {

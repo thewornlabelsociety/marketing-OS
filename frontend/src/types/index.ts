@@ -727,6 +727,7 @@ export interface DropDraft {
 }
 
 export type AppTab =
+  | 'dashboard'
   | 'campaigns'
   | 'campaign-detail'
   | 'calendar'
