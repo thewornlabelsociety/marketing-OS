@@ -55,6 +55,16 @@ POST   /api/campaigns/:campaignId/content-plan/revisions
 POST   /api/campaigns/:campaignId/content-plan/approval
 GET    /api/campaigns/:campaignId/content-plan/approval
 
+GET    /api/campaigns/:campaignId/creative
+GET    /api/campaigns/:campaignId/creative/status
+POST   /api/campaigns/:campaignId/creative/generate
+GET    /api/campaigns/:campaignId/creative/:contentKey
+GET    /api/campaigns/:campaignId/creative/:contentKey/versions
+POST   /api/campaigns/:campaignId/creative/:contentKey/generate
+POST   /api/campaigns/:campaignId/creative/:contentKey/revisions
+POST   /api/campaigns/:campaignId/creative/:contentKey/approval
+GET    /api/campaigns/:campaignId/creative/:contentKey/approval
+
 GET    /api/content/:contentId
 PATCH  /api/content/:contentId
 DELETE /api/content/:contentId

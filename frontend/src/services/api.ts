@@ -1,4 +1,20 @@
-import type { BrandKit, Campaign, CampaignBrief, CampaignPlan, CampaignSourceType, ChannelCapability, ContentItem, ContentPlan, ContentPlanApprovalRecord, Entity, Objective, PerformanceLog } from '../types';
+import type {
+  BrandKit,
+  Campaign,
+  CampaignBrief,
+  CampaignCreativeSummary,
+  CampaignPlan,
+  CampaignSourceType,
+  ChannelCapability,
+  ContentItem,
+  ContentPlan,
+  ContentPlanApprovalRecord,
+  CreativeApprovalRecord,
+  CreativeArtifact,
+  Entity,
+  Objective,
+  PerformanceLog,
+} from '../types';
 
 const BASE = '/api';
 
@@ -158,6 +174,42 @@ export const api = {
   getContentPlanApproval: (campaignId: string, workspaceId: string) =>
     request<ContentPlanApprovalRecord>(
       `/campaigns/${campaignId}/content-plan/approval?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
+
+  // Creative (workspaceId enforces workspace isolation)
+  getCampaignCreative: (campaignId: string, workspaceId: string) =>
+    request<CampaignCreativeSummary>(`/campaigns/${campaignId}/creative?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getCampaignCreativeStatus: (campaignId: string, workspaceId: string) =>
+    request<{ aiConfigured: boolean; aiProvider: string | null; contentPlanApproved: boolean; summary: CampaignCreativeSummary | null }>(
+      `/campaigns/${campaignId}/creative/status?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
+  generateAllCreative: (campaignId: string, workspaceId: string) =>
+    request<{ artifacts: CreativeArtifact[]; failures: { contentKey: string; error: string; code?: string }[] }>(
+      `/campaigns/${campaignId}/creative/generate`,
+      { method: 'POST', body: JSON.stringify({ workspaceId }) },
+    ),
+  generateCreative: (campaignId: string, contentKey: string, workspaceId: string) =>
+    request<CreativeArtifact>(`/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}/generate`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  getCreative: (campaignId: string, contentKey: string, workspaceId: string) =>
+    request<CreativeArtifact>(`/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getCreativeVersions: (campaignId: string, contentKey: string, workspaceId: string) =>
+    request<CreativeArtifact[]>(`/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}/versions?workspaceId=${encodeURIComponent(workspaceId)}`),
+  requestCreativeRevision: (campaignId: string, contentKey: string, workspaceId: string, requestText: string, targetHint?: string) =>
+    request<CreativeArtifact>(`/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}/revisions`, {
+      method: 'POST',
+      body: JSON.stringify({ requestText, targetHint, workspaceId }),
+    }),
+  approveCreative: (campaignId: string, contentKey: string, workspaceId: string, creativeArtifactId: string) =>
+    request<{ approved: boolean }>(`/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}/approval`, {
+      method: 'POST',
+      body: JSON.stringify({ creativeArtifactId, workspaceId }),
+    }),
+  getCreativeApproval: (campaignId: string, contentKey: string, workspaceId: string) =>
+    request<CreativeApprovalRecord>(
+      `/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}/approval?workspaceId=${encodeURIComponent(workspaceId)}`
     ),
 
   // Content

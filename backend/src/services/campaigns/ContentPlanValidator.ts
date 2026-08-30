@@ -113,6 +113,19 @@ function normalizeDeliverable(
   };
 }
 
+export function ensureContentPlanBodyIds(
+  body: Pick<ContentPlan, 'concepts' | 'deliverables'>,
+): Pick<ContentPlan, 'concepts' | 'deliverables'> {
+  return {
+    concepts: (body.concepts ?? []).map((concept, index) =>
+      normalizeConcept(concept as Partial<ContentConcept> & Record<string, unknown>, index),
+    ),
+    deliverables: (body.deliverables ?? []).map((deliverable, index) =>
+      normalizeDeliverable(deliverable as Partial<ContentDeliverable> & Record<string, unknown>, index),
+    ),
+  };
+}
+
 export function validateAndNormalizeContentPlan(input: {
   body: IncomingContentPlanBody;
   expectedSourcePlanId: string;

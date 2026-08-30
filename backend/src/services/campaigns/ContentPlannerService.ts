@@ -8,6 +8,7 @@ import { campaignPlannerService, type CampaignPlan } from './CampaignPlannerServ
 import { contentPlanningContextBuilder, type ContentPlanningContext } from './ContentPlanningContextBuilder';
 import {
   type IncomingContentPlanBody,
+  ensureContentPlanBodyIds,
   validateAndNormalizeContentPlan,
 } from './ContentPlanValidator';
 
@@ -27,10 +28,14 @@ interface ContentPlanRow {
 
 function parseBody(row: ContentPlanRow): Pick<ContentPlan, 'summary' | 'concepts' | 'deliverables' | 'cadence'> {
   const body = JSON.parse(row.body) as Pick<ContentPlan, 'summary' | 'concepts' | 'deliverables' | 'cadence'>;
-  return {
-    summary: body.summary,
+  const withIds = ensureContentPlanBodyIds({
     concepts: body.concepts ?? [],
     deliverables: body.deliverables ?? [],
+  });
+  return {
+    summary: body.summary,
+    concepts: withIds.concepts,
+    deliverables: withIds.deliverables,
     cadence: body.cadence ?? { phases: [] },
   };
 }
@@ -236,6 +241,23 @@ class ContentPlannerService {
     const approved = campaignPlannerService.getApprovedPlan(campaignId);
     if (!approved) {
       return { error: 'Approve the campaign strategy before creating the content plan.', code: 'STRATEGY_NOT_APPROVED' };
+    }
+    return { plan: approved };
+  }
+
+  getApprovedContentPlan(campaignId: string): ContentPlan | null {
+    const approval = this.getApproval(campaignId);
+    if (!approval) return null;
+    const plan = this.getById(approval.contentPlanId, campaignId);
+    if (!plan) return null;
+    if (plan.version !== approval.contentPlanVersion) return null;
+    return plan;
+  }
+
+  resolveApprovedContentPlan(campaignId: string): { plan: ContentPlan } | ContentPlanServiceError {
+    const approved = this.getApprovedContentPlan(campaignId);
+    if (!approved) {
+      return { error: 'Approve the Content Plan before generating creative.', code: 'CONTENT_PLAN_NOT_APPROVED' };
     }
     return { plan: approved };
   }

@@ -1,0 +1,164 @@
+import { Router, Request, Response } from 'express';
+import { aiEnv } from '../config/aiEnvironment';
+import { db } from '../db/database';
+import { creativeGeneratorService } from '../services/creative/CreativeGeneratorService';
+import { contentPlannerService } from '../services/campaigns/ContentPlannerService';
+
+type CreativeReq = Request<{ campaignId: string; contentKey?: string }>;
+
+interface CampaignRecord { id: string; workspace_id: string }
+
+function resolveWorkspaceId(req: CreativeReq): string | undefined {
+  const query = req.query as Record<string, string | undefined>;
+  const body = req.body as { workspaceId?: string } | undefined;
+  return query.workspaceId || body?.workspaceId;
+}
+
+function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): CampaignRecord | null {
+  if (!workspaceId) {
+    res.status(400).json({ error: 'workspaceId is required' });
+    return null;
+  }
+  const campaign = db.prepare('SELECT id, workspace_id FROM campaigns WHERE id = ?').get(campaignId) as CampaignRecord | undefined;
+  if (!campaign) {
+    res.status(404).json({ error: 'Campaign not found' });
+    return null;
+  }
+  if (campaign.workspace_id !== workspaceId) {
+    res.status(403).json({ error: 'Campaign does not belong to the specified workspace' });
+    return null;
+  }
+  return campaign;
+}
+
+function statusFor(code?: string): number {
+  if (code === 'AI_UNAVAILABLE') return 503;
+  if (code === 'CONTENT_PLAN_NOT_APPROVED') return 409;
+  if (code === 'PLANNING_CHANGE_REQUIRED') return 409;
+  if (code === 'VALIDATION_FAILED' || code === 'QUALITY_FAILED') return 422;
+  if (code === 'INVALID_CONTENT_KEY' || code === 'NOT_FOUND') return 404;
+  return 400;
+}
+
+export const campaignCreativeRouter = Router({ mergeParams: true });
+
+campaignCreativeRouter.get('/', (req: CreativeReq, res: Response) => {
+  const { campaignId } = req.params;
+  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+
+  const summary = creativeGeneratorService.getSummary(campaignId);
+  if ('error' in summary) {
+    res.status(statusFor(summary.code)).json({ error: summary.error, code: summary.code });
+    return;
+  }
+  res.json(summary);
+});
+
+campaignCreativeRouter.get('/status', (req: CreativeReq, res: Response) => {
+  const { campaignId } = req.params;
+  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+
+  const approval = contentPlannerService.getApproval(campaignId);
+  res.json({
+    aiConfigured: aiEnv.isConfigured,
+    aiProvider: aiEnv.provider,
+    contentPlanApproved: approval !== null,
+    summary: 'error' in (creativeGeneratorService.getSummary(campaignId) ?? {})
+      ? null
+      : creativeGeneratorService.getSummary(campaignId),
+  });
+});
+
+campaignCreativeRouter.post('/generate', async (req: CreativeReq, res: Response) => {
+  const { campaignId } = req.params;
+  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+
+  const result = await creativeGeneratorService.generateAllMissing(campaignId);
+  if ('error' in result) {
+    res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
+    return;
+  }
+  res.status(201).json(result);
+});
+
+campaignCreativeRouter.get('/:contentKey', (req: CreativeReq, res: Response) => {
+  const { campaignId, contentKey } = req.params;
+  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+
+  const artifact = creativeGeneratorService.getCurrent(campaignId, contentKey!);
+  if (!artifact) {
+    res.status(404).json({ error: 'No creative exists for this deliverable' });
+    return;
+  }
+  res.json(artifact);
+});
+
+campaignCreativeRouter.get('/:contentKey/versions', (req: CreativeReq, res: Response) => {
+  const { campaignId, contentKey } = req.params;
+  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  res.json(creativeGeneratorService.getAllVersions(campaignId, contentKey!));
+});
+
+campaignCreativeRouter.post('/:contentKey/generate', async (req: CreativeReq, res: Response) => {
+  const { campaignId, contentKey } = req.params;
+  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+
+  const result = await creativeGeneratorService.generateOne(campaignId, contentKey!);
+  if ('error' in result) {
+    res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
+    return;
+  }
+  res.status(201).json(result.artifact);
+});
+
+campaignCreativeRouter.post('/:contentKey/revisions', async (req: CreativeReq, res: Response) => {
+  const { campaignId, contentKey } = req.params;
+  const { requestText, targetHint, workspaceId } = req.body as {
+    requestText?: string;
+    targetHint?: string;
+    workspaceId?: string;
+  };
+
+  if (!requestText?.trim()) {
+    res.status(400).json({ error: 'requestText is required' });
+    return;
+  }
+  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+
+  const result = await creativeGeneratorService.revise(campaignId, contentKey!, requestText.trim(), targetHint);
+  if ('error' in result) {
+    res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
+    return;
+  }
+  res.status(201).json(result.artifact);
+});
+
+campaignCreativeRouter.post('/:contentKey/approval', (req: CreativeReq, res: Response) => {
+  const { campaignId, contentKey } = req.params;
+  const { creativeArtifactId, workspaceId } = req.body as { creativeArtifactId?: string; workspaceId?: string };
+
+  if (!creativeArtifactId) {
+    res.status(400).json({ error: 'creativeArtifactId is required' });
+    return;
+  }
+  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+
+  const result = creativeGeneratorService.approve(campaignId, contentKey!, creativeArtifactId);
+  if (result.error) {
+    res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
+    return;
+  }
+  res.json({ approved: true });
+});
+
+campaignCreativeRouter.get('/:contentKey/approval', (req: CreativeReq, res: Response) => {
+  const { campaignId, contentKey } = req.params;
+  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+
+  const approval = creativeGeneratorService.getApproval(campaignId, contentKey!);
+  if (!approval) {
+    res.status(404).json({ error: 'No creative approval record found' });
+    return;
+  }
+  res.json(approval);
+});
