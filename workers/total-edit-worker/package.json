@@ -1,0 +1,14 @@
+{
+  "name": "@marketing-os/total-edit-worker",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Local render worker for total-edit-core jobs",
+  "main": "src/worker.ts",
+  "scripts": {
+    "dev": "ts-node src/worker.ts"
+  },
+  "dependencies": {
+    "@marketing-os/total-edit-adapter-local": "*",
+    "@marketing-os/total-edit-core": "*"
+  }
+}

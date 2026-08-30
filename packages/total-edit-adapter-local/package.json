@@ -1,0 +1,13 @@
+{
+  "name": "@marketing-os/total-edit-adapter-local",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Local filesystem/ffmpeg adapter for total-edit-core",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@marketing-os/total-edit-core": "*"
+  }
+}

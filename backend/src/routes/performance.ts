@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { LOCAL_TENANT_ID } from '../config/constants';
 import { db } from '../db/database';
-import { BrandMemoryService } from '../services/BrandMemoryService';
+import { BrandMemoryService } from '../services/brand/BrandMemoryService';
 import type { PerformanceRow } from '../types';
 import { mapPerformanceRow } from '../utils/mappers';
 import { queryEntityId } from '../utils/params';
