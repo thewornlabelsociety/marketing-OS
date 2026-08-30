@@ -1,0 +1,90 @@
+-- Migration 002: Campaign Brief, Campaign Plans, Revision Requests, Plan Approvals
+
+CREATE TABLE IF NOT EXISTS campaign_briefs (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL UNIQUE,
+  workspace_id TEXT NOT NULL,
+  source_summary TEXT,
+  objective_summary TEXT,
+  audience_description TEXT,
+  audience_segment TEXT,
+  audience_problem TEXT,
+  audience_desire TEXT,
+  proposition TEXT,
+  key_details TEXT NOT NULL DEFAULT '[]',
+  offer_description TEXT,
+  offer_value TEXT,
+  offer_urgency TEXT,
+  offer_constraints TEXT NOT NULL DEFAULT '[]',
+  timing_start_date TEXT,
+  timing_end_date TEXT,
+  timing_important_dates TEXT NOT NULL DEFAULT '[]',
+  constraints TEXT NOT NULL DEFAULT '[]',
+  additional_context TEXT,
+  completeness_status TEXT NOT NULL DEFAULT 'NEEDS_INPUT',
+  completeness_missing_fields TEXT NOT NULL DEFAULT '[]',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+  FOREIGN KEY (workspace_id) REFERENCES entities(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS campaign_plans (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  is_current INTEGER NOT NULL DEFAULT 1,
+  strategy_campaign_angle TEXT,
+  strategy_core_message TEXT,
+  strategy_proposition TEXT,
+  strategy_audience_focus TEXT,
+  hooks TEXT NOT NULL DEFAULT '{"primary":"","supporting":[]}',
+  proof_points TEXT NOT NULL DEFAULT '[]',
+  cta_primary TEXT,
+  cta_alternatives TEXT NOT NULL DEFAULT '[]',
+  channels TEXT NOT NULL DEFAULT '[]',
+  content_mix TEXT NOT NULL DEFAULT '[]',
+  cadence_summary TEXT,
+  cadence_duration TEXT,
+  creative_visual_direction TEXT,
+  creative_photography_direction TEXT,
+  creative_video_direction TEXT,
+  creative_copy_direction TEXT,
+  measurement_objective TEXT,
+  measurement_primary_kpi TEXT,
+  measurement_supporting_kpis TEXT NOT NULL DEFAULT '[]',
+  measurement_conversion_event TEXT,
+  rationale_summary TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+  FOREIGN KEY (workspace_id) REFERENCES entities(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS revision_requests (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  from_plan_id TEXT NOT NULL,
+  from_plan_version INTEGER NOT NULL,
+  request_text TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+  FOREIGN KEY (workspace_id) REFERENCES entities(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS plan_approvals (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL UNIQUE,
+  workspace_id TEXT NOT NULL,
+  approved_plan_id TEXT NOT NULL,
+  approved_version INTEGER NOT NULL,
+  approved_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+  FOREIGN KEY (workspace_id) REFERENCES entities(id) ON DELETE CASCADE
+);

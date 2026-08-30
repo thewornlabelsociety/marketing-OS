@@ -1,16 +1,20 @@
 import {
+  AlertCircle,
   ArrowLeft,
   BarChart3,
   CalendarDays,
   FileText,
+  Loader2,
   MoreHorizontal,
+  Sparkles,
   Target,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SopDrawerTrigger } from '../../components/drawers/SopDrawer';
+import { PlanReviewDrawer } from '../../components/drawers/PlanReviewDrawer';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
-import type { Campaign, CampaignStatus } from '../../types';
+import type { Campaign, CampaignBrief, CampaignPlan, CampaignStatus } from '../../types';
 
 interface Props {
   campaignId: string | null;
@@ -46,10 +50,13 @@ const SOURCE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 };
 
-// Statuses where cancellation makes sense
 const CANCELLABLE = new Set<CampaignStatus>([
   'DRAFTING', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED', 'REVISING',
   'READY_FOR_APPROVAL', 'APPROVED', 'SCHEDULED',
+]);
+
+const PLANNABLE = new Set<CampaignStatus>([
+  'DRAFTING', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED', 'REVISING', 'READY_FOR_APPROVAL',
 ]);
 
 function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -179,14 +186,328 @@ function OverflowMenu({ campaign, onCancelled }: { campaign: Campaign; onCancell
   );
 }
 
+// --- Brief completeness notice ---
+
+interface BriefMissingProps {
+  brief: CampaignBrief;
+  onSaved: (updated: CampaignBrief) => void;
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  timingStartDate: 'Event start date',
+  offerDescription: 'Offer description',
+  additionalContext: 'Additional context',
+  sourceSummary: 'Source summary',
+};
+
+function BriefCompletenessNotice({ brief, onSaved }: BriefMissingProps) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  if (brief.completenessStatus === 'COMPLETE') return null;
+
+  const missing = brief.completenessMissingFields;
+
+  async function save() {
+    setSaving(true);
+    try {
+      const updated = await api.patchCampaignBrief(brief.campaignId, values);
+      onSaved(updated);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasValues = Object.values(values).some((v) => v.trim());
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <div className="flex items-start gap-2">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="flex-1 space-y-3">
+          <p className="text-sm font-medium text-amber-900">
+            A few more details will improve the campaign plan
+          </p>
+          {missing.map((field) => (
+            <div key={field}>
+              <label className="mb-1 block text-xs font-medium text-amber-800">
+                {FIELD_LABELS[field] ?? field}
+              </label>
+              <input
+                type={field === 'timingStartDate' ? 'date' : 'text'}
+                value={values[field] ?? ''}
+                onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
+                className="w-full rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-amber-400"
+              />
+            </div>
+          ))}
+          {hasValues && (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void save()}
+              className="rounded-lg bg-amber-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Brief summary ---
+
+function BriefSummary({ brief }: { brief: CampaignBrief }) {
+  const rows: { label: string; value: string | null }[] = [
+    { label: 'Audience', value: brief.audienceDescription },
+    { label: 'Problem', value: brief.audienceProblem },
+    { label: 'Desire', value: brief.audienceDesire },
+    { label: 'Proposition', value: brief.proposition },
+    { label: 'Offer', value: brief.offerDescription },
+    { label: 'Event start', value: brief.timingStartDate },
+    { label: 'Additional context', value: brief.additionalContext },
+  ].filter((r) => r.value);
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-[#E4E4E7] px-4 py-3">
+        <p className="text-sm text-[#A1A1AA]">Brief will be assembled from your campaign and brand data.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-[#F4F4F5] rounded-xl border border-[#E4E4E7] bg-white px-4">
+      {rows.map((r) => (
+        <MetaRow key={r.label} label={r.label} value={r.value} />
+      ))}
+    </div>
+  );
+}
+
+// --- Campaign Plan section ---
+
+interface PlanSectionProps {
+  campaignId: string;
+  canPlan: boolean;
+  brief: CampaignBrief | null;
+  onCampaignUpdate: () => void;
+  onHasPlanChange: (hasPlan: boolean) => void;
+}
+
+function PlanSection({ campaignId, canPlan, brief, onCampaignUpdate, onHasPlanChange }: PlanSectionProps) {
+  const [planStatus, setPlanStatus] = useState<{ aiConfigured: boolean; hasPlan: boolean } | null>(null);
+  const [plan, setPlan] = useState<CampaignPlan | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [planError, setPlanError] = useState('');
+  const [loadingPlan, setLoadingPlan] = useState(true);
+
+  const loadStatus = useCallback(() => {
+    api.getCampaignPlanStatus(campaignId)
+      .then((s) => {
+        setPlanStatus(s);
+        onHasPlanChange(s.hasPlan);
+        if (s.hasPlan) {
+          return api.getCampaignPlan(campaignId).then(setPlan);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPlan(false));
+  }, [campaignId, onHasPlanChange]);
+
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  async function generate() {
+    setGenerating(true);
+    setPlanError('');
+    try {
+      const created = await api.generateCampaignPlan(campaignId);
+      setPlan(created);
+      setPlanStatus((s) => s ? { ...s, hasPlan: true } : s);
+      onHasPlanChange(true);
+      setShowReview(true);
+      onCampaignUpdate();
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : 'Failed to generate plan');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function approve(planId: string) {
+    setApproving(true);
+    try {
+      await api.approveCampaignPlan(campaignId, planId);
+      setShowReview(false);
+      onCampaignUpdate();
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : 'Failed to approve plan');
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  async function requestChanges(requestText: string) {
+    setRequesting(true);
+    try {
+      const revised = await api.requestPlanRevision(campaignId, requestText);
+      setPlan(revised);
+      onCampaignUpdate();
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : 'Failed to submit revision');
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  if (loadingPlan) {
+    return (
+      <div className="flex items-center gap-2 py-4 text-sm text-[#71717A]">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Loading plan…
+      </div>
+    );
+  }
+
+  const briefComplete = brief?.completenessStatus === 'COMPLETE';
+  const aiOk = planStatus?.aiConfigured ?? false;
+
+  return (
+    <>
+      {planError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {planError}
+        </div>
+      )}
+
+      {plan ? (
+        <div className="rounded-xl border border-[#E4E4E7] bg-white p-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm font-medium text-[#09090B]">
+                {plan.strategy.campaignAngle}
+              </p>
+              <p className="mt-0.5 text-xs text-[#71717A]">
+                {plan.strategy.coreMessage}
+              </p>
+              <p className="mt-2 text-xs text-[#A1A1AA]">
+                Version {plan.version} · {plan.channels.length} channel{plan.channels.length !== 1 ? 's' : ''} · {plan.contentMix.reduce((n, c) => n + c.quantity, 0)} pieces
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowReview(true)}
+              className="shrink-0 rounded-lg border border-[#E4E4E7] px-3 py-1.5 text-sm font-medium text-[#09090B] hover:bg-[#FAFAFA]"
+            >
+              Review Plan
+            </button>
+          </div>
+        </div>
+      ) : canPlan ? (
+        <div className="rounded-xl border border-dashed border-[#E4E4E7] px-4 py-6">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <Sparkles className="h-6 w-6 text-[#A1A1AA]" />
+            <div>
+              <p className="text-sm font-medium text-[#09090B]">No campaign plan yet</p>
+              {!aiOk ? (
+                <p className="mt-1 text-xs text-[#71717A]">
+                  AI provider is not configured. Set{' '}
+                  <code className="rounded bg-[#F4F4F5] px-1 py-0.5 font-mono text-[10px]">
+                    AI_PROVIDER
+                  </code>{' '}
+                  and the corresponding API key in your{' '}
+                  <code className="rounded bg-[#F4F4F5] px-1 py-0.5 font-mono text-[10px]">
+                    .env
+                  </code>{' '}
+                  file.
+                </p>
+              ) : !briefComplete ? (
+                <p className="mt-1 text-xs text-[#71717A]">
+                  Complete the missing brief details above to get the best plan, or generate now.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-[#71717A]">
+                  Ready to generate a structured campaign plan.
+                </p>
+              )}
+            </div>
+            {aiOk && (
+              <button
+                type="button"
+                disabled={generating}
+                onClick={() => void generate()}
+                className="flex items-center gap-1.5 rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#18181B] disabled:opacity-50"
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Generating…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Create Campaign Plan
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {showReview && plan && (
+        <PlanReviewDrawer
+          plan={plan}
+          onClose={() => setShowReview(false)}
+          onApprove={approve}
+          onRequestChanges={requestChanges}
+          approving={approving}
+          requesting={requesting}
+        />
+      )}
+    </>
+  );
+}
+
+// --- SOP step derivation ---
+
+function deriveSopSteps(campaign: Campaign, hasPlan: boolean): { label: string; done: boolean }[] {
+  const s = campaign.status as CampaignStatus;
+  const past = (statuses: CampaignStatus[]) => statuses.includes(s);
+
+  const created = true;
+  const briefAssembled = !past(['DRAFTING']) || hasPlan;
+  const planGenerated = hasPlan;
+  const planApproved = past(['APPROVED', 'SCHEDULED', 'PUBLISHED', 'MEASURING', 'COMPLETE']);
+  const scheduled = past(['SCHEDULED', 'PUBLISHED', 'MEASURING', 'COMPLETE']);
+
+  return [
+    { label: 'Create campaign', done: created },
+    { label: 'Assemble campaign brief', done: briefAssembled },
+    { label: 'Generate campaign plan', done: planGenerated },
+    { label: 'Approve campaign plan', done: planApproved },
+    { label: 'Schedule campaign', done: scheduled },
+  ];
+}
+
+// --- Main page ---
+
 export default function CampaignDetailPage({ campaignId }: Props) {
   const { setActiveTab } = useApp();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<DetailTab>('overview');
+  const [brief, setBrief] = useState<CampaignBrief | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [hasPlan, setHasPlan] = useState(false);
 
-  function load() {
+  function loadCampaign() {
     if (!campaignId) return;
     setLoading(true);
     setError('');
@@ -196,7 +517,22 @@ export default function CampaignDetailPage({ campaignId }: Props) {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, [campaignId]);
+  function loadBrief() {
+    if (!campaignId) return;
+    setBriefLoading(true);
+    api.getCampaignBrief(campaignId)
+      .then(setBrief)
+      .catch(() => {})
+      .finally(() => setBriefLoading(false));
+  }
+
+  useEffect(() => { loadCampaign(); }, [campaignId]);
+
+  useEffect(() => {
+    if (tab === 'overview' && campaignId) {
+      loadBrief();
+    }
+  }, [tab, campaignId]);
 
   if (!campaignId) {
     return (
@@ -224,10 +560,11 @@ export default function CampaignDetailPage({ campaignId }: Props) {
 
   const sourceLabel = SOURCE_LABELS[campaign.sourceType] ?? campaign.sourceType;
   const statusLabel = STATUS_LABELS[campaign.status] ?? campaign.status;
+  const canPlan = PLANNABLE.has(campaign.status as CampaignStatus);
 
   return (
     <div className="flex h-full flex-col">
-      {/* Simplified header */}
+      {/* Header */}
       <div className="flex shrink-0 items-start justify-between border-b border-[#E4E4E7] bg-white px-6 py-4">
         <div className="flex items-start gap-3">
           <button
@@ -249,12 +586,15 @@ export default function CampaignDetailPage({ campaignId }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <SopDrawerTrigger context={`Campaign: ${campaign.name}`} />
-          <OverflowMenu campaign={campaign} onCancelled={load} />
+          <SopDrawerTrigger
+            context={`Campaign: ${campaign.name}`}
+            steps={deriveSopSteps(campaign, hasPlan)}
+          />
+          <OverflowMenu campaign={campaign} onCancelled={loadCampaign} />
         </div>
       </div>
 
-      {/* 4 canonical tabs */}
+      {/* Tabs */}
       <div className="shrink-0 border-b border-[#E4E4E7] bg-white px-6">
         <div className="flex">
           {(['overview', 'content', 'schedule', 'performance'] as DetailTab[]).map((t) => (
@@ -298,7 +638,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
               </div>
             </section>
 
-            {/* Campaign details — compact rows */}
+            {/* What we're marketing */}
             <section>
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
                 What we're marketing
@@ -315,21 +655,43 @@ export default function CampaignDetailPage({ campaignId }: Props) {
               </div>
             </section>
 
-            {/* Brief */}
+            {/* Campaign brief */}
             <section>
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
                 Campaign brief
               </p>
-              {campaign.brief ? (
-                <div className="rounded-xl border border-[#E4E4E7] bg-white px-4 py-3">
-                  <p className="text-sm text-[#09090B] whitespace-pre-wrap">{campaign.brief}</p>
+              {briefLoading ? (
+                <div className="flex items-center gap-2 py-3 text-sm text-[#71717A]">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Assembling brief…
+                </div>
+              ) : brief ? (
+                <div className="space-y-3">
+                  <BriefCompletenessNotice brief={brief} onSaved={setBrief} />
+                  <BriefSummary brief={brief} />
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-[#E4E4E7] px-4 py-3">
-                  <p className="text-sm text-[#A1A1AA]">No brief yet.</p>
+                  <p className="text-sm text-[#A1A1AA]">Brief could not be assembled.</p>
                 </div>
               )}
             </section>
+
+            {/* Campaign plan */}
+            {canPlan && (
+              <section>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
+                  Campaign plan
+                </p>
+                <PlanSection
+                  campaignId={campaign.id}
+                  canPlan={canPlan}
+                  brief={brief}
+                  onCampaignUpdate={loadCampaign}
+                  onHasPlanChange={setHasPlan}
+                />
+              </section>
+            )}
 
             {/* Timestamps */}
             <section>

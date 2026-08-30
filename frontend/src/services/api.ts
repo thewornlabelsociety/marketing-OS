@@ -1,4 +1,4 @@
-import type { BrandKit, Campaign, CampaignSourceType, ContentItem, Entity, Objective, PerformanceLog } from '../types';
+import type { BrandKit, Campaign, CampaignBrief, CampaignPlan, CampaignSourceType, ContentItem, Entity, Objective, PerformanceLog } from '../types';
 
 const BASE = '/api';
 
@@ -91,6 +91,37 @@ export const api = {
     request<Campaign>(`/campaigns/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    }),
+
+  // Campaign Brief
+  getCampaignBrief: (campaignId: string) =>
+    request<CampaignBrief>(`/campaigns/${campaignId}/brief`),
+  patchCampaignBrief: (campaignId: string, patch: Partial<CampaignBrief>) =>
+    request<CampaignBrief>(`/campaigns/${campaignId}/brief`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  // Campaign Plans
+  getCampaignPlan: (campaignId: string) =>
+    request<CampaignPlan>(`/campaigns/${campaignId}/plan`),
+  getCampaignPlanStatus: (campaignId: string) =>
+    request<{ aiConfigured: boolean; aiProvider: string | null; hasPlan: boolean }>(
+      `/campaigns/${campaignId}/plan/status`
+    ),
+  getCampaignPlanVersions: (campaignId: string) =>
+    request<CampaignPlan[]>(`/campaigns/${campaignId}/plan/versions`),
+  generateCampaignPlan: (campaignId: string) =>
+    request<CampaignPlan>(`/campaigns/${campaignId}/plan`, { method: 'POST' }),
+  requestPlanRevision: (campaignId: string, requestText: string) =>
+    request<CampaignPlan>(`/campaigns/${campaignId}/plan/revisions`, {
+      method: 'POST',
+      body: JSON.stringify({ requestText }),
+    }),
+  approveCampaignPlan: (campaignId: string, planId: string) =>
+    request<{ approved: boolean }>(`/campaigns/${campaignId}/plan/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ planId }),
     }),
 
   // Content

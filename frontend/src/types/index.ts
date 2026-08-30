@@ -171,6 +171,118 @@ export interface PerformanceLog {
   updatedAt: string;
 }
 
+// --- Campaign Brief ---
+
+export interface CampaignBrief {
+  id: string;
+  campaignId: string;
+  workspaceId: string;
+  sourceSummary: string | null;
+  objectiveSummary: string | null;
+  audienceDescription: string | null;
+  audienceSegment: string | null;
+  audienceProblem: string | null;
+  audienceDesire: string | null;
+  proposition: string | null;
+  keyDetails: string[];
+  offerDescription: string | null;
+  offerValue: string | null;
+  offerUrgency: string | null;
+  offerConstraints: string[];
+  timingStartDate: string | null;
+  timingEndDate: string | null;
+  timingImportantDates: string[];
+  constraints: string[];
+  additionalContext: string | null;
+  completenessStatus: 'COMPLETE' | 'NEEDS_INPUT';
+  completenessMissingFields: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Campaign Plan ---
+
+export interface CampaignChannelRecommendation {
+  channel: string;
+  role: string;
+  rationale: string;
+}
+
+export interface CampaignContentRecommendation {
+  contentType: string;
+  channel: string;
+  format: string;
+  quantity: number;
+  purpose: string;
+}
+
+export interface CampaignPlan {
+  id: string;
+  campaignId: string;
+  workspaceId: string;
+  version: number;
+  status: string;
+  isCurrent: boolean;
+  strategy: {
+    campaignAngle: string;
+    coreMessage: string;
+    proposition: string;
+    audienceFocus: string;
+  };
+  hooks: {
+    primary: string;
+    supporting: string[];
+  };
+  proofPoints: string[];
+  callToAction: {
+    primary: string;
+    alternatives: string[];
+  };
+  channels: CampaignChannelRecommendation[];
+  contentMix: CampaignContentRecommendation[];
+  cadence: {
+    summary: string;
+    duration: string | null;
+  };
+  creativeDirection: {
+    visualDirection: string;
+    photographyDirection: string | null;
+    videoDirection: string | null;
+    copyDirection: string;
+  };
+  measurement: {
+    objective: string;
+    primaryKpi: string;
+    supportingKpis: string[];
+    conversionEvent: string | null;
+  };
+  rationale: {
+    summary: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Preview ---
+
+export type PreviewChannel =
+  | 'instagram'
+  | 'facebook'
+  | 'tiktok'
+  | 'linkedin'
+  | 'email'
+  | 'website';
+
+export type PreviewDevice = 'mobile' | 'desktop';
+
+export interface PreviewDescriptor {
+  channel: PreviewChannel;
+  format: string;  // e.g. 'feed', 'story', 'reel', 'newsletter'
+  device: PreviewDevice;
+}
+
+// --- Legacy ---
+
 export interface DropDraft {
   brand: string;
   title: string;
