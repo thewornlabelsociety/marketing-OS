@@ -12,6 +12,7 @@ import BrandSetupWizard from './features/brands/BrandSetupWizard';
 import BrandBrainPage from './features/brands/BrandBrainPage';
 import ObjectiveLibraryPage from './features/objectives/ObjectiveLibraryPage';
 import CampaignsPage from './features/campaigns/CampaignsPage';
+import CampaignLibraryPage from './features/archive/CampaignLibraryPage';
 import CampaignDetailPage from './features/campaigns/CampaignDetailPage';
 
 function AppShell() {
@@ -58,6 +59,7 @@ function AppShell() {
               {activeTab === 'objectives' && <ObjectiveLibraryPage />}
               {activeTab === 'calendar' && <CampaignCalendarTab />}
               {activeTab === 'performance' && <PerformancePage />}
+              {activeTab === 'library' && <CampaignLibraryPage />}
               {activeTab === 'studio' && <StudioTab />}
             </>
           )}

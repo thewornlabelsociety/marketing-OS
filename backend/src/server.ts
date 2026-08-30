@@ -17,9 +17,12 @@ import { bridgeIntakeRouter, intakeRouter } from './routes/intake';
 import { mediaRouter } from './routes/media';
 import { objectivesRouter } from './routes/objectives';
 import { campaignPerformanceRouter } from './routes/campaignPerformance';
+import { libraryRouter } from './routes/library';
+import { blueprintsRouter } from './routes/blueprints';
 import { learningsRouter } from './routes/learnings';
 import { performanceRouter } from './routes/performance';
 import { sopsRouter } from './routes/sops';
+import { archiveRouter } from './routes/archive';
 import { publishingSchedulerService } from './services/publishing/PublishingSchedulerService';
 
 dotenv.config();
@@ -48,6 +51,8 @@ app.use('/api/bridge/intake', bridgeIntakeRouter);
 app.use('/api/sops', sopsRouter);
 app.use('/api/performance', performanceRouter);
 app.use('/api/learnings', learningsRouter);
+app.use('/api/library', libraryRouter);
+app.use('/api/blueprints', blueprintsRouter);
 app.use('/api/media', mediaRouter);
 
 app.get('/health', (_req, res) => {

@@ -18,6 +18,7 @@ const PRIMARY_NAV: NavItem[] = [
   { id: 'campaigns', label: 'Campaigns', icon: Rocket },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
   { id: 'performance', label: 'Performance', icon: BarChart3 },
+  { id: 'library', label: 'Library', icon: Library },
 ];
 
 export function SidebarNav() {
@@ -54,14 +55,6 @@ export function SidebarNav() {
           );
         })}
 
-        {/* Disabled placeholder — Library (not yet built) */}
-        <div
-          title="Coming soon"
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-[#A1A1AA] cursor-not-allowed select-none"
-        >
-          <Library className="h-4 w-4 shrink-0" />
-          Library
-        </div>
       </div>
     </nav>
   );

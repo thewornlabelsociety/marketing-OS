@@ -19,6 +19,9 @@ import type {
   Objective,
   CampaignPerformanceSummary,
   WorkspacePerformanceSummary,
+  LibraryCampaignSummary,
+  LibrarySummary,
+  CampaignBlueprint,
   PerformanceLog,
 } from '../types';
 
@@ -329,4 +332,30 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
     }),
+
+  getLibrarySummary: (workspaceId: string) =>
+    request<LibrarySummary>(`/library/summary?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getLibraryCampaigns: (workspaceId: string, opts?: { classification?: string; search?: string; includeArchived?: boolean }) => {
+    const params = new URLSearchParams({ workspaceId });
+    if (opts?.classification) params.set('classification', opts.classification);
+    if (opts?.search) params.set('search', opts.search);
+    if (opts?.includeArchived) params.set('includeArchived', 'true');
+    return request<LibraryCampaignSummary[]>(`/library/campaigns?${params}`);
+  },
+  archiveLibraryCampaign: (campaignId: string, workspaceId: string) =>
+    request<unknown>(`/library/campaigns/${campaignId}/archive`, { method: 'POST', body: JSON.stringify({ workspaceId }) }),
+  markLibraryEvergreen: (campaignId: string, workspaceId: string, notes?: string) =>
+    request<unknown>(`/library/campaigns/${campaignId}/evergreen`, { method: 'POST', body: JSON.stringify({ workspaceId, notes }) }),
+  markLibrarySeasonal: (campaignId: string, workspaceId: string, payload: { season?: string; recurringWindow?: string; notes?: string }) =>
+    request<unknown>(`/library/campaigns/${campaignId}/seasonal`, { method: 'POST', body: JSON.stringify({ workspaceId, ...payload }) }),
+  createBlueprintFromCampaign: (campaignId: string, workspaceId: string, name?: string) =>
+    request<CampaignBlueprint>(`/library/campaigns/${campaignId}/blueprint`, { method: 'POST', body: JSON.stringify({ workspaceId, name }) }),
+  getBlueprints: (workspaceId: string, status?: string) =>
+    request<CampaignBlueprint[]>(`/blueprints?workspaceId=${encodeURIComponent(workspaceId)}${status ? `&status=${status}` : ''}`),
+  activateBlueprint: (blueprintId: string, workspaceId: string) =>
+    request<CampaignBlueprint>(`/blueprints/${blueprintId}/activate`, { method: 'POST', body: JSON.stringify({ workspaceId }) }),
+  useBlueprint: (blueprintId: string, workspaceId: string, payload: { sourceType: string; sourceTitle: string; sourceDescription?: string; objectiveId?: string; name?: string }) =>
+    request<{ campaignId: string; usageId: string }>(`/blueprints/${blueprintId}/use`, { method: 'POST', body: JSON.stringify({ workspaceId, ...payload }) }),
+  suggestBlueprints: (workspaceId: string, opts?: { objectiveType?: string; channels?: string }) =>
+    request<CampaignBlueprint[]>(`/blueprints/suggest?workspaceId=${encodeURIComponent(workspaceId)}${opts?.objectiveType ? `&objectiveType=${opts.objectiveType}` : ''}`),
 };

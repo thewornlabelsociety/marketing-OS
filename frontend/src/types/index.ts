@@ -649,6 +649,71 @@ export interface WorkspacePerformanceSummary {
   }>;
 }
 
+// --- Campaign Library (Phase 3G) ---
+
+export type CampaignLibraryClassification =
+  | 'HIGH_PERFORMING' | 'LOW_PERFORMING' | 'EVERGREEN' | 'SEASONAL'
+  | 'COMPLETED' | 'CANCELLED' | 'ARCHIVED' | 'BLUEPRINT_CANDIDATE' | 'BLUEPRINT';
+
+export interface CampaignLibraryRecord {
+  id: string;
+  workspaceId: string;
+  campaignId: string;
+  classifications: CampaignLibraryClassification[];
+  archivedAt?: string;
+  cancellationReasonType?: string;
+  cancellationNotes?: string;
+  evergreen: boolean;
+  seasonal?: { season?: string; recurringWindow?: string; notes?: string };
+  blueprintCandidate: boolean;
+  blueprintId?: string;
+  notes?: string;
+}
+
+export interface LibraryCampaignSummary {
+  libraryRecord: CampaignLibraryRecord;
+  campaignId: string;
+  campaignName: string;
+  objectiveType: string;
+  objectiveName: string;
+  primaryKpi: string;
+  lifecycleStatus: string;
+  primaryKpiValue?: number | null;
+  performanceClassification?: string;
+  channels: string[];
+  sourceTitle: string;
+  sourceType: string;
+}
+
+export interface LibrarySummary {
+  total: number;
+  highPerforming: number;
+  lowPerforming: number;
+  evergreen: number;
+  seasonal: number;
+  blueprints: number;
+  cancelled: number;
+  archived: number;
+}
+
+export interface CampaignBlueprint {
+  id: string;
+  workspaceId: string;
+  sourceCampaignId: string;
+  name: string;
+  description?: string;
+  objectiveType: string;
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  currentVersion: number;
+  strategicPattern: Record<string, unknown>;
+  contentPattern: Array<Record<string, unknown>>;
+  channelPattern: string[];
+  cadencePattern?: string;
+  evidenceSummary: Record<string, unknown>;
+  sourceExamples: Array<Record<string, unknown>>;
+  learnedWhy: string[];
+}
+
 // --- Legacy ---
 
 export interface DropDraft {
@@ -666,6 +731,7 @@ export type AppTab =
   | 'campaign-detail'
   | 'calendar'
   | 'performance'
+  | 'library'
   | 'brand-brain'
   | 'objectives'
   | 'studio';

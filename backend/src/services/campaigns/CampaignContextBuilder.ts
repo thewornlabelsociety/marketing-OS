@@ -1,5 +1,6 @@
 import { db } from '../../db/database';
 import { learningService } from '../performance/LearningService';
+import { blueprintService } from '../library/BlueprintService';
 import type { CampaignRow, EntityRow, ObjectiveRow } from '../../types';
 
 export interface CampaignContext {
@@ -89,6 +90,17 @@ export interface CampaignContext {
     marketPerformance: string[];
     userPreferences: string[];
   };
+  blueprint?: {
+    id: string;
+    version: number;
+    name: string;
+    strategicPattern: Record<string, unknown>;
+    contentPattern: unknown[];
+    channelPattern: string[];
+    cadencePattern?: string;
+    evidenceSummary: Record<string, unknown>;
+    learnedWhy: string[];
+  };
 }
 
 interface BriefRow {
@@ -175,6 +187,31 @@ export class CampaignContextBuilder {
         }
       : null;
 
+    let blueprint: CampaignContext['blueprint'];
+    try {
+      const meta = JSON.parse(campaign.source_metadata || '{}') as { blueprintContext?: CampaignContext['blueprint'] };
+      if (meta.blueprintContext) blueprint = meta.blueprintContext;
+    } catch { /* ignore */ }
+
+    if (!blueprint && (campaign as CampaignRow & { source_blueprint_id?: string }).source_blueprint_id) {
+      const bpId = (campaign as CampaignRow & { source_blueprint_id?: string; source_blueprint_version?: number }).source_blueprint_id!;
+      const bpVer = (campaign as CampaignRow & { source_blueprint_version?: number }).source_blueprint_version;
+      const loaded = blueprintService.get(bpId, entity.id, bpVer);
+      if (loaded && !('error' in loaded)) {
+        blueprint = {
+          id: loaded.id,
+          version: bpVer ?? loaded.currentVersion,
+          name: loaded.name,
+          strategicPattern: loaded.strategicPattern as Record<string, unknown>,
+          contentPattern: loaded.contentPattern,
+          channelPattern: loaded.channelPattern,
+          cadencePattern: loaded.cadencePattern,
+          evidenceSummary: loaded.evidenceSummary as unknown as Record<string, unknown>,
+          learnedWhy: loaded.learnedWhy,
+        };
+      }
+    }
+
     return {
       workspace: {
         id: entity.id,
@@ -241,6 +278,7 @@ export class CampaignContextBuilder {
         marketPerformance: activeLearnings.marketPerformance,
         userPreferences: activeLearnings.userPreferences,
       },
+      blueprint,
     };
   }
 }
