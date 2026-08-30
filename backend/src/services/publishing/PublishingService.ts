@@ -20,10 +20,14 @@ interface AttemptRow {
   source_creative_version: number;
   idempotency_key: string;
   status: string;
+  destination_id: string | null;
+  connection_id: string | null;
   external_publish_id: string | null;
   external_url: string | null;
+  provider_status: string | null;
   error_code: string | null;
   error_message: string | null;
+  error_category: string | null;
   started_at: string;
   completed_at: string | null;
 }
@@ -40,10 +44,14 @@ function mapAttempt(row: AttemptRow): PublishAttempt {
     sourceCreativeVersion: row.source_creative_version,
     idempotencyKey: row.idempotency_key,
     status: row.status as PublishAttempt['status'],
+    destinationId: row.destination_id ?? undefined,
+    connectionId: row.connection_id ?? undefined,
     externalPublishId: row.external_publish_id ?? undefined,
     externalUrl: row.external_url ?? undefined,
+    providerStatus: row.provider_status ?? undefined,
     errorCode: row.error_code ?? undefined,
     errorMessage: row.error_message ?? undefined,
+    errorCategory: row.error_category ?? undefined,
     startedAt: row.started_at,
     completedAt: row.completed_at ?? undefined,
   };
@@ -71,11 +79,21 @@ export class PublishingService {
     return Boolean(row);
   }
 
+  private hasUnknownAttempt(scheduleId: string): boolean {
+    const row = db.prepare(`
+      SELECT id FROM publish_attempts WHERE schedule_id = ? AND status = 'UNKNOWN' LIMIT 1
+    `).get(scheduleId);
+    return Boolean(row);
+  }
+
   async publishSchedule(
     scheduleId: string,
     campaignId: string,
     options?: { manualPublish?: boolean },
   ): Promise<{ item: ScheduledContentItem; attempt?: PublishAttempt } | PublishingServiceError> {
+    if (this.hasUnknownAttempt(scheduleId)) {
+      return { error: 'Previous publish outcome is unknown. Reconcile before retrying.', code: 'RECONCILIATION_REQUIRED' };
+    }
     const schedule = schedulingService.getById(scheduleId, campaignId);
     if (!schedule) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
     if (schedule.status === 'CANCELLED') return { error: 'Schedule is cancelled.', code: 'SCHEDULE_CANCELLED' };
@@ -100,10 +118,30 @@ export class PublishingService {
       return { error: 'Direct publish is not available for manual/export schedules.', code: 'PUBLISH_VALIDATION_FAILED' };
     }
 
-    const destination = db.prepare('SELECT provider_key FROM publishing_destinations WHERE id = ?').get(schedule.destinationId!) as
-      { provider_key: string } | undefined;
+    const destination = db.prepare('SELECT provider_key, connection_id FROM publishing_destinations WHERE id = ?').get(schedule.destinationId!) as
+      { provider_key: string; connection_id: string } | undefined;
     const provider = destination ? PublishingProviderRegistry.get(destination.provider_key) : null;
     if (!provider) return { error: 'Publishing provider unavailable.', code: 'PROVIDER_UNAVAILABLE' };
+
+    if (provider.validatePublication) {
+      const pubValidation = await provider.validatePublication({
+        workspaceId: schedule.workspaceId,
+        campaignId: schedule.campaignId,
+        scheduleId: schedule.id,
+        channel: schedule.channel,
+        destinationId: schedule.destinationId!,
+        contentKey: schedule.contentKey,
+        creativeArtifactId: schedule.sourceCreativeArtifactId,
+        creativeVersion: schedule.sourceCreativeVersion,
+        content: artifact.content,
+        mediaAssets: schedule.mediaAssets,
+        scheduledFor: schedule.scheduledFor,
+        idempotencyKey: buildIdempotencyKey(schedule.id, schedule.sourceCreativeArtifactId, schedule.sourceCreativeVersion),
+      });
+      if (!pubValidation.valid) {
+        return { error: pubValidation.error ?? 'Provider validation failed', code: pubValidation.code ?? 'PUBLISH_VALIDATION_FAILED' };
+      }
+    }
 
     const idempotencyKey = buildIdempotencyKey(schedule.id, schedule.sourceCreativeArtifactId, schedule.sourceCreativeVersion);
     const existingSuccess = db.prepare(`
@@ -123,8 +161,9 @@ export class PublishingService {
     db.prepare(`
       INSERT INTO publish_attempts
         (id, workspace_id, campaign_id, schedule_id, attempt_number, provider_key,
-         source_creative_artifact_id, source_creative_version, idempotency_key, status, started_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+         source_creative_artifact_id, source_creative_version, idempotency_key, status,
+         destination_id, connection_id, started_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)
     `).run(
       attemptId,
       schedule.workspaceId,
@@ -135,6 +174,8 @@ export class PublishingService {
       schedule.sourceCreativeArtifactId,
       schedule.sourceCreativeVersion,
       idempotencyKey,
+      schedule.destinationId ?? null,
+      destination?.connection_id ?? null,
       startedAt,
     );
 
@@ -157,20 +198,29 @@ export class PublishingService {
     if (result.success) {
       db.prepare(`
         UPDATE publish_attempts
-        SET status = 'SUCCEEDED', external_publish_id = ?, external_url = ?, completed_at = ?
+        SET status = 'SUCCEEDED', external_publish_id = ?, external_url = ?, provider_status = ?, completed_at = ?
         WHERE id = ?
-      `).run(result.externalPublishId ?? null, result.externalUrl ?? null, completedAt, attemptId);
+      `).run(result.externalPublishId ?? null, result.externalUrl ?? null, result.providerStatus ?? 'PUBLISHED', completedAt, attemptId);
       db.prepare(`
         UPDATE scheduled_content_items
         SET status = 'PUBLISHED', published_at = ?, external_publish_id = ?, external_url = ?, updated_at = ?
         WHERE id = ?
       `).run(result.publishedAt ?? completedAt, result.externalPublishId ?? null, result.externalUrl ?? null, completedAt, scheduleId);
+    } else if (result.unknownOutcome) {
+      db.prepare(`
+        UPDATE publish_attempts
+        SET status = 'UNKNOWN', error_code = ?, error_message = ?, error_category = ?, provider_status = ?, completed_at = ?
+        WHERE id = ?
+      `).run(result.errorCode ?? 'UNKNOWN_RESULT', result.errorMessage ?? 'Unknown publish outcome', result.errorCategory ?? 'UNKNOWN_RESULT', 'UNKNOWN', completedAt, attemptId);
+      db.prepare(`
+        UPDATE scheduled_content_items SET status = 'FAILED', block_reason = ?, updated_at = ? WHERE id = ?
+      `).run('Publish outcome unknown — reconcile before retrying.', completedAt, scheduleId);
     } else {
       db.prepare(`
         UPDATE publish_attempts
-        SET status = 'FAILED', error_code = ?, error_message = ?, completed_at = ?
+        SET status = 'FAILED', error_code = ?, error_message = ?, error_category = ?, provider_status = ?, completed_at = ?
         WHERE id = ?
-      `).run(result.errorCode ?? 'PUBLISH_FAILED', result.errorMessage ?? 'Publish failed', completedAt, attemptId);
+      `).run(result.errorCode ?? 'PUBLISH_FAILED', result.errorMessage ?? 'Publish failed', result.errorCategory ?? null, result.providerStatus ?? 'FAILED', completedAt, attemptId);
       db.prepare(`
         UPDATE scheduled_content_items SET status = 'FAILED', updated_at = ? WHERE id = ?
       `).run(completedAt, scheduleId);
@@ -183,6 +233,9 @@ export class PublishingService {
   }
 
   async retry(scheduleId: string, campaignId: string) {
+    if (this.hasUnknownAttempt(scheduleId)) {
+      return { error: 'Previous publish outcome is unknown. Reconcile before retrying.', code: 'RECONCILIATION_REQUIRED' };
+    }
     return this.publishSchedule(scheduleId, campaignId, { manualPublish: true });
   }
 

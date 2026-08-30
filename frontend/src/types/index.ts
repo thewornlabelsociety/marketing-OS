@@ -568,9 +568,14 @@ export interface IntegrationConnection {
   id: string;
   workspaceId: string;
   providerKey: string;
-  status: 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'REAUTH_REQUIRED';
+  status: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING' | 'EXPIRED' | 'REAUTH_REQUIRED' | 'ERROR';
   displayName: string;
   capabilities: string[];
+  scopes?: string[];
+  expiresAt?: string;
+  lastVerifiedAt?: string;
+  lastErrorCode?: string;
+  lastErrorSummary?: string;
 }
 
 export interface PublishingDestination {
@@ -579,8 +584,10 @@ export interface PublishingDestination {
   connectionId: string;
   providerKey: string;
   channel: MarketingChannel;
+  externalDestinationId?: string;
   displayName: string;
   status: 'ACTIVE' | 'INACTIVE' | 'ERROR';
+  capabilities?: string[];
 }
 
 // --- Performance (Phase 3F) ---
@@ -735,6 +742,7 @@ export type AppTab =
   | 'library'
   | 'brand-brain'
   | 'objectives'
+  | 'integrations'
   | 'studio';
 
 export interface DeepLinkParams {

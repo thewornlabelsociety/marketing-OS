@@ -12,6 +12,7 @@ interface DestinationRow {
   provider_key: string;
   channel: string;
   status: string;
+  capabilities?: string;
 }
 
 interface ConnectionRow {
@@ -94,8 +95,13 @@ export class PrePublishCheckService {
         checks.push({ key: 'destination', status: 'PASS' });
         const connection = db.prepare('SELECT * FROM integration_connections WHERE id = ?').get(destination.connection_id) as ConnectionRow | undefined;
         if (!connection || connection.status !== 'CONNECTED') {
-          checks.push({ key: 'connection', status: 'FAIL', message: 'Publishing connection not available' });
-          blockers.push('CONNECTION_REQUIRED');
+          if (connection?.status === 'REAUTH_REQUIRED' || connection?.status === 'EXPIRED') {
+            checks.push({ key: 'connection', status: 'FAIL', message: 'Publishing connection requires reauthorization' });
+            blockers.push('AUTH_EXPIRED');
+          } else {
+            checks.push({ key: 'connection', status: 'FAIL', message: 'Publishing connection not available' });
+            blockers.push('CONNECTION_REQUIRED');
+          }
         } else {
           checks.push({ key: 'connection', status: 'PASS' });
           const provider = PublishingProviderRegistry.get(destination.provider_key);
@@ -104,6 +110,14 @@ export class PrePublishCheckService {
             blockers.push('PROVIDER_UNAVAILABLE');
           } else {
             checks.push({ key: 'provider', status: 'PASS' });
+            const caps = JSON.parse((destination as DestinationRow & { capabilities?: string }).capabilities || '[]') as string[];
+            const needed = schedule.channel === 'FACEBOOK' ? 'publish_facebook_page_photo' : 'publish_image_feed';
+            if (caps.length > 0 && !caps.includes(needed)) {
+              checks.push({ key: 'destination_capability', status: 'FAIL', message: 'Destination does not support this publish operation' });
+              blockers.push('PUBLISH_VALIDATION_FAILED');
+            } else {
+              checks.push({ key: 'destination_capability', status: 'PASS' });
+            }
           }
         }
       }

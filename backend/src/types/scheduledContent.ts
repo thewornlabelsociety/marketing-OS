@@ -50,7 +50,7 @@ export interface ScheduledContentItem {
   updatedAt: string;
 }
 
-export type PublishAttemptStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED';
+export type PublishAttemptStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN';
 
 export interface PublishAttempt {
   id: string;
@@ -63,10 +63,14 @@ export interface PublishAttempt {
   sourceCreativeVersion: number;
   idempotencyKey: string;
   status: PublishAttemptStatus;
+  destinationId?: string;
+  connectionId?: string;
   externalPublishId?: string;
   externalUrl?: string;
+  providerStatus?: string;
   errorCode?: string;
   errorMessage?: string;
+  errorCategory?: string;
   startedAt: string;
   completedAt?: string;
 }
@@ -120,7 +124,13 @@ export interface PublicationExportBundle {
   instructions: string;
 }
 
-export type IntegrationConnectionStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'REAUTH_REQUIRED';
+export type IntegrationConnectionStatus =
+  | 'DISCONNECTED'
+  | 'CONNECTING'
+  | 'CONNECTED'
+  | 'EXPIRED'
+  | 'REAUTH_REQUIRED'
+  | 'ERROR';
 
 export interface IntegrationConnection {
   id: string;
@@ -128,7 +138,14 @@ export interface IntegrationConnection {
   providerKey: string;
   status: IntegrationConnectionStatus;
   displayName: string;
+  providerAccountId?: string;
+  providerAccountName?: string;
+  scopes?: string[];
   capabilities: string[];
+  expiresAt?: string;
+  lastVerifiedAt?: string;
+  lastErrorCode?: string;
+  lastErrorSummary?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -144,4 +161,5 @@ export interface PublishingDestination {
   externalDestinationId: string;
   displayName: string;
   status: PublishingDestinationStatus;
+  capabilities?: string[];
 }

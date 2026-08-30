@@ -13,6 +13,7 @@
     "verify:phase-3g": "node scripts/run-verify-phase-3g.cjs",
     "verify:phase-3h": "node scripts/run-verify-phase-3h.cjs",
     "verify:phase-3i": "node scripts/run-verify-phase-3i.cjs",
+    "verify:phase-3j": "node scripts/run-verify-phase-3j.cjs",
     "postbuild": "node -e \"const fs=require('fs');const p='dist/db';fs.mkdirSync(p,{recursive:true});fs.copyFileSync('src/db/schema.sql',p+'/schema.sql')\"",
     "start": "node dist/server.js"
   },

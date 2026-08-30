@@ -15,6 +15,7 @@ import CampaignsPage from './features/campaigns/CampaignsPage';
 import CampaignLibraryPage from './features/archive/CampaignLibraryPage';
 import CampaignDetailPage from './features/campaigns/CampaignDetailPage';
 import DashboardPage from './features/dashboard/DashboardPage';
+import IntegrationsPage from './features/integrations/IntegrationsPage';
 
 function AppShell() {
   const { activeTab, activeCampaignId, entities, loading, error } = useApp();
@@ -62,6 +63,7 @@ function AppShell() {
               {activeTab === 'calendar' && <CampaignCalendarTab />}
               {activeTab === 'performance' && <PerformancePage />}
               {activeTab === 'library' && <CampaignLibraryPage />}
+              {activeTab === 'integrations' && <IntegrationsPage />}
               {activeTab === 'studio' && <StudioTab />}
             </>
           )}

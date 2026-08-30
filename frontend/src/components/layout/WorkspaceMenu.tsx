@@ -1,4 +1,4 @@
-import { Brain, Check, ChevronDown, Plus, Target } from 'lucide-react';
+import { Brain, Check, ChevronDown, Plug, Plus, Target } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../app/AppContext';
 
@@ -77,6 +77,14 @@ export function WorkspaceMenu({ onCreateWorkspace }: Props) {
                 <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
                   Configuration
                 </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('integrations')}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-[#09090B] hover:bg-[#FAFAFA]"
+                >
+                  <Plug className="h-4 w-4 shrink-0 text-[#71717A]" />
+                  Integrations
+                </button>
                 <button
                   type="button"
                   onClick={() => navigate('brand-brain')}

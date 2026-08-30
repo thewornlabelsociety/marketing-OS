@@ -5,6 +5,7 @@ export interface PublishingProvider {
   readonly providerKey: string;
   supports(channel: MarketingChannel): boolean;
   validateDestination(destinationId: string, channel: MarketingChannel): Promise<DestinationValidationResult>;
+  validatePublication?(request: PublishRequest): Promise<DestinationValidationResult>;
   publish(request: PublishRequest): Promise<PublishResult>;
-  getStatus?(externalPublishId: string): Promise<string>;
+  getPublicationStatus?(externalPublishId: string, workspaceId: string): Promise<{ status: string; externalUrl?: string }>;
 }

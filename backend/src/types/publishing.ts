@@ -26,6 +26,9 @@ export interface PublishResult {
   providerKey: string;
   errorCode?: string;
   errorMessage?: string;
+  errorCategory?: string;
+  unknownOutcome?: boolean;
+  providerStatus?: string;
   rawMetadata?: Record<string, unknown>;
 }
 

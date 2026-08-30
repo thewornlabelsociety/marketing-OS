@@ -169,6 +169,7 @@ export class CampaignPerformanceService {
         sourceCreativeArtifactId: item.sourceCreativeArtifactId,
         sourceCreativeVersion: item.sourceCreativeVersion,
         channel: item.channel,
+        providerKey: result.providerKey,
         destinationId: item.destinationId,
         externalPublishId: item.externalPublishId,
         observedAt: item.observedAt,

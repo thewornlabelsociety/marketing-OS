@@ -268,6 +268,20 @@ export const api = {
     request<ScheduledContentItem[]>(`/calendar/schedule?workspaceId=${encodeURIComponent(workspaceId)}`),
   getIntegrations: (workspaceId: string) =>
     request<IntegrationConnection[]>(`/integrations?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getMetaIntegrationStatus: () =>
+    request<{ providerKey: string; mockMode: boolean; configured: boolean; apiVersion: string }>('/integrations/meta/status'),
+  connectMeta: (workspaceId: string) =>
+    request<{ authUrl: string; state: string }>('/integrations/meta/connect', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  disconnectIntegration: (connectionId: string, workspaceId: string) =>
+    request<IntegrationConnection>(`/integrations/${connectionId}/disconnect`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  getIntegrationDestinations: (connectionId: string, workspaceId: string) =>
+    request<PublishingDestination[]>(`/integrations/${connectionId}/destinations?workspaceId=${encodeURIComponent(workspaceId)}`),
   getPublishingDestinations: (workspaceId: string, channel?: string) =>
     request<PublishingDestination[]>(
       `/publishing/destinations?workspaceId=${encodeURIComponent(workspaceId)}${channel ? `&channel=${encodeURIComponent(channel)}` : ''}`
