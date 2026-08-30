@@ -177,6 +177,11 @@ campaignsRouter.patch('/:id', (req, res) => {
   }
 
   const body = req.body as Record<string, unknown>;
+
+  if ('workspaceId' in body && body.workspaceId !== existing.workspace_id) {
+    res.status(403).json({ error: 'Campaign does not belong to this workspace' });
+    return;
+  }
   const sets: string[] = [];
   const vals: unknown[] = [];
 

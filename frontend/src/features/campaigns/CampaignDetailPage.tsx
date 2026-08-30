@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SopDrawerTrigger } from '../../components/drawers/SopDrawer';
 import { PlanReviewDrawer } from '../../components/drawers/PlanReviewDrawer';
+import { CampaignEditDrawer } from './CampaignEditDrawer';
 import { ContentPlanTab } from './ContentPlanTab';
 import { CampaignScheduleTab } from './CampaignScheduleTab';
 import { CampaignPerformanceTab } from './CampaignPerformanceTab';
@@ -56,6 +57,11 @@ const CANCELLABLE = new Set<CampaignStatus>([
   'READY_FOR_APPROVAL', 'APPROVED', 'SCHEDULED',
 ]);
 
+const EDITABLE = new Set<CampaignStatus>([
+  'DRAFTING', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED', 'REVISING',
+  'READY_FOR_APPROVAL', 'APPROVED', 'SCHEDULED', 'PUBLISHED', 'MEASURING',
+]);
+
 const PLANNABLE = new Set<CampaignStatus>([
   'DRAFTING', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED', 'REVISING', 'READY_FOR_APPROVAL',
 ]);
@@ -71,7 +77,7 @@ function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function OverflowMenu({ campaign, onCancelled }: { campaign: Campaign; onCancelled: () => void }) {
+function OverflowMenu({ campaign, onCancelled, onEdit }: { campaign: Campaign; onCancelled: () => void; onEdit: () => void }) {
   const [open, setOpen] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [reason, setReason] = useState('');
@@ -88,6 +94,7 @@ function OverflowMenu({ campaign, onCancelled }: { campaign: Campaign; onCancell
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const canEdit = EDITABLE.has(campaign.status as CampaignStatus);
   const canCancel = CANCELLABLE.has(campaign.status as CampaignStatus);
 
   async function handleCancel() {
@@ -106,7 +113,7 @@ function OverflowMenu({ campaign, onCancelled }: { campaign: Campaign; onCancell
     }
   }
 
-  if (!canCancel) return null;
+  if (!canEdit && !canCancel) return null;
 
   return (
     <div ref={ref} className="relative">
@@ -122,13 +129,24 @@ function OverflowMenu({ campaign, onCancelled }: { campaign: Campaign; onCancell
 
       {open && !showCancel && (
         <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-xl border border-[#E4E4E7] bg-white shadow-lg">
-          <button
-            type="button"
-            onClick={() => { setShowCancel(true); setOpen(false); }}
-            className="flex w-full items-center px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
-          >
-            Cancel Campaign
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onEdit(); }}
+              className="flex w-full items-center px-4 py-2.5 text-sm text-[#09090B] hover:bg-[#FAFAFA]"
+            >
+              Edit Campaign
+            </button>
+          )}
+          {canCancel && (
+            <button
+              type="button"
+              onClick={() => { setShowCancel(true); setOpen(false); }}
+              className="flex w-full items-center px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+            >
+              Cancel Campaign
+            </button>
+          )}
         </div>
       )}
 
@@ -518,6 +536,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showEdit, setShowEdit] = useState(false);
   const [tab, setTab] = useState<DetailTab>(() => {
     const stored = sessionStorage.getItem('campaignDetailTab') as DetailTab | null;
     return stored ?? 'overview';
@@ -633,7 +652,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
             context={`Campaign: ${campaign.name}`}
             steps={deriveSopSteps(campaign, hasPlan, contentPlanStatus, creativeSummary, publishingSummary)}
           />
-          <OverflowMenu campaign={campaign} onCancelled={loadCampaign} />
+          <OverflowMenu campaign={campaign} onCancelled={loadCampaign} onEdit={() => setShowEdit(true)} />
         </div>
       </div>
 
@@ -780,6 +799,14 @@ export default function CampaignDetailPage({ campaignId }: Props) {
           />
         )}
       </div>
+
+      {showEdit && (
+        <CampaignEditDrawer
+          campaign={campaign}
+          onClose={() => setShowEdit(false)}
+          onSaved={(updated) => { setCampaign(updated); setShowEdit(false); }}
+        />
+      )}
     </div>
   );
 }
