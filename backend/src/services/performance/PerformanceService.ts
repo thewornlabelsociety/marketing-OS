@@ -1,3 +1,6 @@
-// PerformanceService reads and writes campaign/content/channel performance data.
-// Performance exists at: workspace, campaign, content item, channel, ad, conversion.
-export class PerformanceService {}
+export { campaignPerformanceService as PerformanceService } from './CampaignPerformanceService';
+export { performanceIngestionService } from './PerformanceIngestionService';
+export { performanceAggregationService } from './PerformanceAggregationService';
+export { objectiveEvaluationService } from './ObjectiveEvaluationService';
+export { performanceLearningService } from './PerformanceLearningService';
+export { learningService } from './LearningService';

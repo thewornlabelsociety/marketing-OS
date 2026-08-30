@@ -17,6 +17,8 @@ import type {
   ScheduledContentItem,
   Entity,
   Objective,
+  CampaignPerformanceSummary,
+  WorkspacePerformanceSummary,
   PerformanceLog,
 } from '../types';
 
@@ -303,5 +305,28 @@ export const api = {
     request<{ synced: number; entities: string[] }>('/performance/sync-vault', {
       method: 'POST',
       body: JSON.stringify(entityId ? { entityId } : {}),
+    }),
+  getPerformanceSummary: (workspaceId: string) =>
+    request<WorkspacePerformanceSummary>(`/performance/summary?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getCampaignPerformance: (campaignId: string, workspaceId: string) =>
+    request<CampaignPerformanceSummary>(`/campaigns/${campaignId}/performance?workspaceId=${encodeURIComponent(workspaceId)}`),
+  createPerformanceObservation: (
+    campaignId: string,
+    workspaceId: string,
+    payload: Record<string, unknown>
+  ) =>
+    request<unknown>(`/campaigns/${campaignId}/performance/observations`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, ...payload }),
+    }),
+  refreshCampaignPerformance: (campaignId: string, workspaceId: string) =>
+    request<{ ingested: number }>(`/campaigns/${campaignId}/performance/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  evaluateCampaignPerformance: (campaignId: string, workspaceId: string) =>
+    request<unknown>(`/campaigns/${campaignId}/performance/evaluate`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
     }),
 };

@@ -1,8 +1,6 @@
 import {
   AlertCircle,
   ArrowLeft,
-  BarChart3,
-  FileText,
   Loader2,
   MoreHorizontal,
   Sparkles,
@@ -13,6 +11,7 @@ import { SopDrawerTrigger } from '../../components/drawers/SopDrawer';
 import { PlanReviewDrawer } from '../../components/drawers/PlanReviewDrawer';
 import { ContentPlanTab } from './ContentPlanTab';
 import { CampaignScheduleTab } from './CampaignScheduleTab';
+import { CampaignPerformanceTab } from './CampaignPerformanceTab';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
 import type { Campaign, CampaignBrief, CampaignCreativeSummary, CampaignPlan, CampaignPublishingSummary, CampaignStatus, ContentPlanStatus } from '../../types';
@@ -67,16 +66,6 @@ function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
         {label}
       </span>
       <span className="flex-1 text-sm text-[#09090B]">{value ?? <span className="text-[#A1A1AA]">—</span>}</span>
-    </div>
-  );
-}
-
-function EmptyTabState({ icon: Icon, message }: { icon: typeof FileText; message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-      <Icon className="h-8 w-8 text-[#A1A1AA]" />
-      <p className="text-sm font-medium text-[#09090B]">{message}</p>
-      <p className="text-xs text-[#71717A]">This will be available in a future update.</p>
     </div>
   );
 }
@@ -768,7 +757,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
         )}
 
         {tab === 'performance' && (
-          <EmptyTabState icon={BarChart3} message="No performance data yet" />
+          <CampaignPerformanceTab campaignId={campaignId} />
         )}
       </div>
     </div>

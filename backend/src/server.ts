@@ -16,6 +16,8 @@ import { entitiesRouter } from './routes/entities';
 import { bridgeIntakeRouter, intakeRouter } from './routes/intake';
 import { mediaRouter } from './routes/media';
 import { objectivesRouter } from './routes/objectives';
+import { campaignPerformanceRouter } from './routes/campaignPerformance';
+import { learningsRouter } from './routes/learnings';
 import { performanceRouter } from './routes/performance';
 import { sopsRouter } from './routes/sops';
 import { publishingSchedulerService } from './services/publishing/PublishingSchedulerService';
@@ -36,6 +38,7 @@ app.use('/api/campaigns/:campaignId/plan', campaignPlansRouter);
 app.use('/api/campaigns/:campaignId/content-plan', contentPlansRouter);
 app.use('/api/campaigns/:campaignId/creative', campaignCreativeRouter);
 app.use('/api/campaigns/:campaignId/schedule', campaignScheduleRouter);
+app.use('/api/campaigns/:campaignId/performance', campaignPerformanceRouter);
 app.use('/api/calendar/schedule', calendarScheduleRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/publishing/destinations', publishingDestinationsRouter);
@@ -44,6 +47,7 @@ app.use('/api/intake', intakeRouter);
 app.use('/api/bridge/intake', bridgeIntakeRouter);
 app.use('/api/sops', sopsRouter);
 app.use('/api/performance', performanceRouter);
+app.use('/api/learnings', learningsRouter);
 app.use('/api/media', mediaRouter);
 
 app.get('/health', (_req, res) => {

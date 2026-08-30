@@ -2,11 +2,21 @@ import { Router } from 'express';
 import { LOCAL_TENANT_ID } from '../config/constants';
 import { db } from '../db/database';
 import { BrandMemoryService } from '../services/brand/BrandMemoryService';
+import { campaignPerformanceService } from '../services/performance/CampaignPerformanceService';
 import type { PerformanceRow } from '../types';
 import { mapPerformanceRow } from '../utils/mappers';
 import { queryEntityId } from '../utils/params';
 
 export const performanceRouter = Router();
+
+performanceRouter.get('/summary', (req, res) => {
+  const workspaceId = (req.query.workspaceId as string | undefined) ?? queryEntityId(req);
+  if (!workspaceId) {
+    res.status(400).json({ error: 'workspaceId is required' });
+    return;
+  }
+  res.json(campaignPerformanceService.getWorkspaceSummary(workspaceId));
+});
 
 performanceRouter.get('/', (req, res) => {
   const entity_id = queryEntityId(req);

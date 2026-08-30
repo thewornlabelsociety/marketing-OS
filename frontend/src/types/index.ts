@@ -583,6 +583,72 @@ export interface PublishingDestination {
   status: 'ACTIVE' | 'INACTIVE' | 'ERROR';
 }
 
+// --- Performance (Phase 3F) ---
+
+export type PerformanceClassification =
+  | 'EXCEPTIONAL'
+  | 'HIGH_PERFORMING'
+  | 'ABOVE_AVERAGE'
+  | 'AVERAGE'
+  | 'BELOW_AVERAGE'
+  | 'LOW_PERFORMING'
+  | 'INSUFFICIENT_DATA';
+
+export interface ContentPerformanceSummary {
+  contentKey: string;
+  sourceCreativeArtifactId: string;
+  sourceCreativeVersion: number;
+  channel: MarketingChannel;
+  metrics: Record<string, number | null | undefined>;
+  conversions: { purchases: number; revenue: number; currency?: string | null };
+}
+
+export interface ChannelPerformanceSummary {
+  channel: MarketingChannel;
+  metrics: Record<string, number | null | undefined>;
+  conversions: { purchases: number; revenue: number; qualifiedLeads: number };
+}
+
+export interface CampaignPerformanceSummary {
+  campaignId: string;
+  campaignName: string;
+  objective: { id: string; name: string; type: string; primaryKpi: string };
+  classification: PerformanceClassification;
+  confidence: string;
+  primaryKpi: string;
+  primaryKpiValue?: number | null;
+  metrics: Record<string, number | null | undefined>;
+  conversions: { purchases: number; revenue: number; qualifiedLeads: number; currency?: string | null };
+  spend?: number | null;
+  roas?: number | null;
+  mixedCurrency?: boolean;
+  topContent: ContentPerformanceSummary[];
+  underperformingContent: ContentPerformanceSummary[];
+  channelPerformance: ChannelPerformanceSummary[];
+  evaluationReasons: string[];
+  lastObservedAt?: string;
+  measurementWindow: string;
+  blueprintCandidate?: boolean;
+}
+
+export interface WorkspacePerformanceSummary {
+  campaignsMeasured: number;
+  attributedConversions: number;
+  attributedRevenue: number;
+  spend: number | null;
+  roas: number | null;
+  campaigns: Array<{
+    campaignId: string;
+    campaignName: string;
+    objectiveType: string;
+    classification: PerformanceClassification;
+    primaryKpi: string;
+    primaryKpiValue?: number | null;
+    revenue?: number;
+    status: string;
+  }>;
+}
+
 // --- Legacy ---
 
 export interface DropDraft {

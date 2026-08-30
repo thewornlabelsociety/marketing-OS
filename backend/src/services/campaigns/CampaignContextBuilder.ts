@@ -1,4 +1,5 @@
 import { db } from '../../db/database';
+import { learningService } from '../performance/LearningService';
 import type { CampaignRow, EntityRow, ObjectiveRow } from '../../types';
 
 export interface CampaignContext {
@@ -143,7 +144,11 @@ export class CampaignContextBuilder {
     const language   = (bb.language   ?? {}) as Record<string, unknown>;
     const visual     = (bb.visual     ?? {}) as Record<string, unknown>;
     const marketing  = (bb.marketing  ?? {}) as Record<string, unknown>;
-    const memory     = (bb.memory     ?? {}) as Record<string, unknown>;
+    const channels = JSON.parse(campaign.channels || '[]') as string[];
+    const activeLearnings = learningService.getActiveForContext(entity.id, {
+      objectiveType: objective.objective_type,
+      channels,
+    });
 
     // Load brief if exists
     const briefRow = db
@@ -233,8 +238,8 @@ export class CampaignContextBuilder {
       },
       brief,
       learnings: {
-        marketPerformance: (memory.marketPerformanceLearnings as string[] | undefined) ?? [],
-        userPreferences:   (memory.userPreferenceLearnings    as string[] | undefined) ?? [],
+        marketPerformance: activeLearnings.marketPerformance,
+        userPreferences: activeLearnings.userPreferences,
       },
     };
   }

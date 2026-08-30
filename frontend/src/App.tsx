@@ -6,7 +6,7 @@ import { TopNav } from './components/layout/TopNav';
 import { SimulatorPanel } from './components/simulator/SimulatorPanel';
 import { EmptyBrandState } from './components/ui/EmptyBrandState';
 import { CampaignCalendarTab } from './features/calendar/CampaignCalendarTab';
-import { PerformanceLoggerTab } from './features/performance/PerformanceLoggerTab';
+import PerformancePage from './features/performance/PerformancePage';
 import { StudioTab } from './features/studio/StudioTab';
 import BrandSetupWizard from './features/brands/BrandSetupWizard';
 import BrandBrainPage from './features/brands/BrandBrainPage';
@@ -57,7 +57,7 @@ function AppShell() {
               {activeTab === 'brand-brain' && <BrandBrainPage />}
               {activeTab === 'objectives' && <ObjectiveLibraryPage />}
               {activeTab === 'calendar' && <CampaignCalendarTab />}
-              {activeTab === 'performance' && <PerformanceLoggerTab />}
+              {activeTab === 'performance' && <PerformancePage />}
               {activeTab === 'studio' && <StudioTab />}
             </>
           )}
