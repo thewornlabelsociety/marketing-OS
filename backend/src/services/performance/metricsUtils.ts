@@ -172,15 +172,28 @@ export function getPrimaryKpiValue(metrics: PerformanceMetrics, primaryKpi: stri
 }): number | null {
   const kpi = primaryKpi.toLowerCase().replace(/_/g, '');
   const map: Record<string, number | null | undefined> = {
-    purchases: conversions?.purchases ?? metrics.purchases,
-    conversions: conversions?.purchases ?? metrics.purchases,
-    revenue: conversions?.revenue ?? metrics.revenue,
-    qualifiedleads: conversions?.qualifiedLeads ?? metrics.qualifiedLeads,
+    purchases: conversions !== undefined
+      ? conversions.purchases
+      : (metrics.purchases !== undefined && metrics.purchases !== null ? metrics.purchases : null),
+    conversions: conversions !== undefined
+      ? conversions.purchases
+      : (metrics.purchases !== undefined && metrics.purchases !== null ? metrics.purchases : null),
+    revenue: conversions ? conversions.revenue : (metrics.revenue ?? null),
+    qualifiedleads: conversions ? conversions.qualifiedLeads : (metrics.qualifiedLeads ?? null),
     leads: metrics.leads ?? conversions?.qualifiedLeads,
     reach: metrics.reach,
     impressions: metrics.impressions,
     views: metrics.views,
     clicks: metrics.clicks,
+    ctr: metrics.ctr,
+    roas: metrics.roas,
+    emailopens: metrics.emailOpens,
+    openrate: metrics.emailDelivered && metrics.emailDelivered > 0 && metrics.emailOpens != null
+      ? metrics.emailOpens / metrics.emailDelivered
+      : null,
+    emailopenrate: metrics.emailDelivered && metrics.emailDelivered > 0 && metrics.emailOpens != null
+      ? metrics.emailOpens / metrics.emailDelivered
+      : null,
     websiteclicks: metrics.clicks,
     sessions: metrics.sessions,
     signups: metrics.signups,

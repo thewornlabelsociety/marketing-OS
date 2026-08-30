@@ -91,6 +91,43 @@ export class LearningService {
       return null;
     }
 
+    return this.persistLearning(input, input.evidence.length);
+  }
+
+  recordExperimentCandidate(input: {
+    workspaceId: string;
+    category: string;
+    statement: string;
+    relevanceTags: string[];
+    evidence: Array<{ sourceType: string; sourceId: string; weight?: number }>;
+  }): WorkspaceLearning | null {
+    if (input.evidence.length < 2) return null;
+    return this.persistLearning(
+      {
+        workspaceId: input.workspaceId,
+        type: 'MARKET_PERFORMANCE',
+        category: input.category,
+        statement: input.statement,
+        confidence: 'LOW',
+        relevanceTags: input.relevanceTags,
+        evidence: input.evidence,
+      },
+      input.evidence.length,
+    );
+  }
+
+  private persistLearning(
+    input: {
+      workspaceId: string;
+      type: LearningType;
+      category: string;
+      statement: string;
+      confidence: LearningConfidence;
+      relevanceTags: string[];
+      evidence: Array<{ sourceType: string; sourceId: string; weight?: number }>;
+    },
+    evidenceCount: number,
+  ): WorkspaceLearning | null {
     const existing = db.prepare(`
       SELECT * FROM workspace_learnings
       WHERE workspace_id = ? AND type = ? AND category = ? AND statement = ? AND status != 'DISMISSED'

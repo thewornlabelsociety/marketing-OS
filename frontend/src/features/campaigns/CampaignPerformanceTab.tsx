@@ -1,8 +1,9 @@
-import { BarChart3, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { BarChart3, FlaskConical, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { useApp } from '../../app/AppContext';
 import type { CampaignPerformanceSummary, ScheduledContentItem } from '../../types';
+import type { Experiment } from '../../types/experiment';
 
 const CLASS_LABELS: Record<string, string> = {
   EXCEPTIONAL: 'Exceptional',
@@ -21,6 +22,7 @@ interface Props {
 export function CampaignPerformanceTab({ campaignId }: Props) {
   const { activeEntity } = useApp();
   const [summary, setSummary] = useState<CampaignPerformanceSummary | null>(null);
+  const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [schedules, setSchedules] = useState<ScheduledContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -34,12 +36,14 @@ export function CampaignPerformanceTab({ campaignId }: Props) {
     if (!workspaceId) return;
     setLoading(true);
     try {
-      const [perf, sched] = await Promise.all([
+      const [perf, sched, exps] = await Promise.all([
         api.getCampaignPerformance(campaignId, workspaceId),
         api.getCampaignSchedule(campaignId, workspaceId),
+        api.getCampaignExperiments(campaignId, workspaceId),
       ]);
       setSummary(perf);
       setSchedules(sched.filter((s) => s.status === 'PUBLISHED'));
+      setExperiments(exps);
     } catch {
       setSummary(null);
     } finally {
@@ -169,6 +173,31 @@ export function CampaignPerformanceTab({ campaignId }: Props) {
         <div className="rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] px-4 py-3 text-sm text-[#71717A]">
           More evidence is needed before this campaign is classified. Record additional performance or wait for measurement to mature.
         </div>
+      )}
+
+      {experiments.length > 0 && (
+        <section>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">Experiments</p>
+          <div className="divide-y divide-[#E4E4E7] rounded-xl border border-[#E4E4E7] bg-white">
+            {experiments.map((exp) => (
+              <div key={exp.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="flex items-start gap-2">
+                  <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-[#71717A]" />
+                  <div>
+                    <p className="text-sm font-medium text-[#09090B]">{exp.name}</p>
+                    <p className="text-xs text-[#71717A]">
+                      {exp.status === 'RUNNING' ? 'Running' : exp.status === 'COMPLETED' ? 'Completed' : exp.status.replaceAll('_', ' ')}
+                      {' · '}A vs B · {exp.experimentKpi ?? exp.primaryKpi}
+                    </p>
+                  </div>
+                </div>
+                <p className="shrink-0 text-xs text-[#71717A]">
+                  {exp.outcome ? exp.outcome.replaceAll('_', ' ').toLowerCase() : exp.status === 'RUNNING' ? 'Measuring' : '—'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {summary?.evaluationReasons && summary.evaluationReasons.length > 0 && (

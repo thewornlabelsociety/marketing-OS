@@ -12,6 +12,7 @@ import { PlanReviewDrawer } from '../../components/drawers/PlanReviewDrawer';
 import { ContentPlanTab } from './ContentPlanTab';
 import { CampaignScheduleTab } from './CampaignScheduleTab';
 import { CampaignPerformanceTab } from './CampaignPerformanceTab';
+import { CampaignExperimentsTab } from './CampaignExperimentsTab';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
 import type { Campaign, CampaignBrief, CampaignCreativeSummary, CampaignPlan, CampaignPublishingSummary, CampaignStatus, ContentPlanStatus } from '../../types';
@@ -20,7 +21,7 @@ interface Props {
   campaignId: string | null;
 }
 
-type DetailTab = 'overview' | 'content' | 'schedule' | 'performance';
+type DetailTab = 'overview' | 'content' | 'schedule' | 'performance' | 'experiments';
 
 const STATUS_LABELS: Record<CampaignStatus, string> = {
   DRAFTING: 'Drafting',
@@ -628,7 +629,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
       {/* Tabs */}
       <div className="shrink-0 border-b border-[#E4E4E7] bg-white px-6">
         <div className="flex">
-          {(['overview', 'content', 'schedule', 'performance'] as DetailTab[]).map((t) => (
+          {(['overview', 'content', 'schedule', 'performance', 'experiments'] as DetailTab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -758,6 +759,14 @@ export default function CampaignDetailPage({ campaignId }: Props) {
 
         {tab === 'performance' && (
           <CampaignPerformanceTab campaignId={campaignId} />
+        )}
+
+        {tab === 'experiments' && campaign && (
+          <CampaignExperimentsTab
+            campaignId={campaign.id}
+            workspaceId={campaign.workspaceId}
+            objectivePrimaryKpi={campaign.objectivePrimaryKpi ?? undefined}
+          />
         )}
       </div>
     </div>

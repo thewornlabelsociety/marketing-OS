@@ -23,6 +23,7 @@ import { learningsRouter } from './routes/learnings';
 import { performanceRouter } from './routes/performance';
 import { sopsRouter } from './routes/sops';
 import { archiveRouter } from './routes/archive';
+import { campaignExperimentsRouter } from './routes/campaignExperiments';
 import { publishingSchedulerService } from './services/publishing/PublishingSchedulerService';
 
 dotenv.config();
@@ -42,6 +43,7 @@ app.use('/api/campaigns/:campaignId/content-plan', contentPlansRouter);
 app.use('/api/campaigns/:campaignId/creative', campaignCreativeRouter);
 app.use('/api/campaigns/:campaignId/schedule', campaignScheduleRouter);
 app.use('/api/campaigns/:campaignId/performance', campaignPerformanceRouter);
+app.use('/api/campaigns/:campaignId/experiments', campaignExperimentsRouter);
 app.use('/api/calendar/schedule', calendarScheduleRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/publishing/destinations', publishingDestinationsRouter);

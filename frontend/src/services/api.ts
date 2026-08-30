@@ -24,6 +24,12 @@ import type {
   CampaignBlueprint,
   PerformanceLog,
 } from '../types';
+import type {
+  Experiment,
+  ExperimentAnalysis,
+  ExperimentQualityResult,
+  ExperimentVariableType,
+} from '../types/experiment';
 
 const BASE = '/api';
 
@@ -331,6 +337,92 @@ export const api = {
     request<unknown>(`/campaigns/${campaignId}/performance/evaluate`, {
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
+    }),
+
+  getCampaignExperiments: (campaignId: string, workspaceId: string) =>
+    request<Experiment[]>(`/campaigns/${campaignId}/experiments?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getCampaignExperiment: (campaignId: string, experimentId: string, workspaceId: string) =>
+    request<Experiment>(`/campaigns/${campaignId}/experiments/${experimentId}?workspaceId=${encodeURIComponent(workspaceId)}`),
+  createCampaignExperiment: (
+    campaignId: string,
+    workspaceId: string,
+    payload: {
+      name: string;
+      hypothesis: string;
+      variableType: ExperimentVariableType;
+      controlDescription: string;
+      variantDescription: string;
+      experimentKpi?: string;
+      experimentKpiRationale?: string;
+      mode?: Experiment['mode'];
+    },
+  ) =>
+    request<Experiment>(`/campaigns/${campaignId}/experiments`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, ...payload }),
+    }),
+  addExperimentVariant: (
+    campaignId: string,
+    experimentId: string,
+    workspaceId: string,
+    payload: {
+      label: string;
+      role: 'CONTROL' | 'VARIANT';
+      contentKey: string;
+      creativeArtifactId: string;
+      creativeVersion: number;
+      channel: string;
+      scheduleId?: string;
+      description?: string;
+    },
+  ) =>
+    request<Experiment>(`/campaigns/${campaignId}/experiments/${experimentId}/variants`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, ...payload }),
+    }),
+  validateCampaignExperiment: (campaignId: string, experimentId: string, workspaceId: string) =>
+    request<ExperimentQualityResult>(`/campaigns/${campaignId}/experiments/${experimentId}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  startCampaignExperiment: (campaignId: string, experimentId: string, workspaceId: string) =>
+    request<Experiment>(`/campaigns/${campaignId}/experiments/${experimentId}/start`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  pauseCampaignExperiment: (campaignId: string, experimentId: string, workspaceId: string) =>
+    request<Experiment>(`/campaigns/${campaignId}/experiments/${experimentId}/pause`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+  cancelCampaignExperiment: (campaignId: string, experimentId: string, workspaceId: string, reason?: string) =>
+    request<Experiment>(`/campaigns/${campaignId}/experiments/${experimentId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, reason }),
+    }),
+  analyzeCampaignExperiment: (
+    campaignId: string,
+    experimentId: string,
+    workspaceId: string,
+    measurementWindow = '7_DAYS',
+  ) =>
+    request<ExperimentAnalysis>(`/campaigns/${campaignId}/experiments/${experimentId}/analyze`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, measurementWindow }),
+    }),
+  getCampaignExperimentAnalyses: (campaignId: string, experimentId: string, workspaceId: string) =>
+    request<ExperimentAnalysis[]>(
+      `/campaigns/${campaignId}/experiments/${experimentId}/analyses?workspaceId=${encodeURIComponent(workspaceId)}`,
+    ),
+  completeCampaignExperiment: (
+    campaignId: string,
+    experimentId: string,
+    workspaceId: string,
+    measurementWindow = '7_DAYS',
+  ) =>
+    request<Experiment>(`/campaigns/${campaignId}/experiments/${experimentId}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, measurementWindow }),
     }),
 
   getLibrarySummary: (workspaceId: string) =>
