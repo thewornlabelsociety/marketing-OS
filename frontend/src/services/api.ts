@@ -93,35 +93,35 @@ export const api = {
       body: JSON.stringify(patch),
     }),
 
-  // Campaign Brief
-  getCampaignBrief: (campaignId: string) =>
-    request<CampaignBrief>(`/campaigns/${campaignId}/brief`),
-  patchCampaignBrief: (campaignId: string, patch: Partial<CampaignBrief>) =>
-    request<CampaignBrief>(`/campaigns/${campaignId}/brief`, {
+  // Campaign Brief (workspaceId enforces workspace isolation)
+  getCampaignBrief: (campaignId: string, workspaceId: string) =>
+    request<CampaignBrief>(`/campaigns/${campaignId}/brief?workspaceId=${encodeURIComponent(workspaceId)}`),
+  patchCampaignBrief: (campaignId: string, workspaceId: string, patch: Partial<CampaignBrief>) =>
+    request<CampaignBrief>(`/campaigns/${campaignId}/brief?workspaceId=${encodeURIComponent(workspaceId)}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
     }),
 
-  // Campaign Plans
-  getCampaignPlan: (campaignId: string) =>
-    request<CampaignPlan>(`/campaigns/${campaignId}/plan`),
-  getCampaignPlanStatus: (campaignId: string) =>
+  // Campaign Plans (workspaceId enforces workspace isolation)
+  getCampaignPlan: (campaignId: string, workspaceId: string) =>
+    request<CampaignPlan>(`/campaigns/${campaignId}/plan?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getCampaignPlanStatus: (campaignId: string, workspaceId: string) =>
     request<{ aiConfigured: boolean; aiProvider: string | null; hasPlan: boolean }>(
-      `/campaigns/${campaignId}/plan/status`
+      `/campaigns/${campaignId}/plan/status?workspaceId=${encodeURIComponent(workspaceId)}`
     ),
-  getCampaignPlanVersions: (campaignId: string) =>
-    request<CampaignPlan[]>(`/campaigns/${campaignId}/plan/versions`),
-  generateCampaignPlan: (campaignId: string) =>
-    request<CampaignPlan>(`/campaigns/${campaignId}/plan`, { method: 'POST' }),
-  requestPlanRevision: (campaignId: string, requestText: string) =>
+  getCampaignPlanVersions: (campaignId: string, workspaceId: string) =>
+    request<CampaignPlan[]>(`/campaigns/${campaignId}/plan/versions?workspaceId=${encodeURIComponent(workspaceId)}`),
+  generateCampaignPlan: (campaignId: string, workspaceId: string) =>
+    request<CampaignPlan>(`/campaigns/${campaignId}/plan?workspaceId=${encodeURIComponent(workspaceId)}`, { method: 'POST' }),
+  requestPlanRevision: (campaignId: string, workspaceId: string, requestText: string) =>
     request<CampaignPlan>(`/campaigns/${campaignId}/plan/revisions`, {
       method: 'POST',
-      body: JSON.stringify({ requestText }),
+      body: JSON.stringify({ requestText, workspaceId }),
     }),
-  approveCampaignPlan: (campaignId: string, planId: string) =>
+  approveCampaignPlan: (campaignId: string, workspaceId: string, planId: string) =>
     request<{ approved: boolean }>(`/campaigns/${campaignId}/plan/approve`, {
       method: 'POST',
-      body: JSON.stringify({ planId }),
+      body: JSON.stringify({ planId, workspaceId }),
     }),
 
   // Content

@@ -190,6 +190,7 @@ function OverflowMenu({ campaign, onCancelled }: { campaign: Campaign; onCancell
 
 interface BriefMissingProps {
   brief: CampaignBrief;
+  workspaceId: string;
   onSaved: (updated: CampaignBrief) => void;
 }
 
@@ -200,7 +201,7 @@ const FIELD_LABELS: Record<string, string> = {
   sourceSummary: 'Source summary',
 };
 
-function BriefCompletenessNotice({ brief, onSaved }: BriefMissingProps) {
+function BriefCompletenessNotice({ brief, workspaceId, onSaved }: BriefMissingProps) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -211,7 +212,7 @@ function BriefCompletenessNotice({ brief, onSaved }: BriefMissingProps) {
   async function save() {
     setSaving(true);
     try {
-      const updated = await api.patchCampaignBrief(brief.campaignId, values);
+      const updated = await api.patchCampaignBrief(brief.campaignId, workspaceId, values);
       onSaved(updated);
     } finally {
       setSaving(false);
@@ -291,13 +292,14 @@ function BriefSummary({ brief }: { brief: CampaignBrief }) {
 
 interface PlanSectionProps {
   campaignId: string;
+  workspaceId: string;
   canPlan: boolean;
   brief: CampaignBrief | null;
   onCampaignUpdate: () => void;
   onHasPlanChange: (hasPlan: boolean) => void;
 }
 
-function PlanSection({ campaignId, canPlan, brief, onCampaignUpdate, onHasPlanChange }: PlanSectionProps) {
+function PlanSection({ campaignId, workspaceId, canPlan, brief, onCampaignUpdate, onHasPlanChange }: PlanSectionProps) {
   const [planStatus, setPlanStatus] = useState<{ aiConfigured: boolean; hasPlan: boolean } | null>(null);
   const [plan, setPlan] = useState<CampaignPlan | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -308,17 +310,17 @@ function PlanSection({ campaignId, canPlan, brief, onCampaignUpdate, onHasPlanCh
   const [loadingPlan, setLoadingPlan] = useState(true);
 
   const loadStatus = useCallback(() => {
-    api.getCampaignPlanStatus(campaignId)
+    api.getCampaignPlanStatus(campaignId, workspaceId)
       .then((s) => {
         setPlanStatus(s);
         onHasPlanChange(s.hasPlan);
         if (s.hasPlan) {
-          return api.getCampaignPlan(campaignId).then(setPlan);
+          return api.getCampaignPlan(campaignId, workspaceId).then(setPlan);
         }
       })
       .catch(() => {})
       .finally(() => setLoadingPlan(false));
-  }, [campaignId, onHasPlanChange]);
+  }, [campaignId, workspaceId, onHasPlanChange]);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
@@ -326,7 +328,7 @@ function PlanSection({ campaignId, canPlan, brief, onCampaignUpdate, onHasPlanCh
     setGenerating(true);
     setPlanError('');
     try {
-      const created = await api.generateCampaignPlan(campaignId);
+      const created = await api.generateCampaignPlan(campaignId, workspaceId);
       setPlan(created);
       setPlanStatus((s) => s ? { ...s, hasPlan: true } : s);
       onHasPlanChange(true);
@@ -342,7 +344,7 @@ function PlanSection({ campaignId, canPlan, brief, onCampaignUpdate, onHasPlanCh
   async function approve(planId: string) {
     setApproving(true);
     try {
-      await api.approveCampaignPlan(campaignId, planId);
+      await api.approveCampaignPlan(campaignId, workspaceId, planId);
       setShowReview(false);
       onCampaignUpdate();
     } catch (err) {
@@ -355,7 +357,7 @@ function PlanSection({ campaignId, canPlan, brief, onCampaignUpdate, onHasPlanCh
   async function requestChanges(requestText: string) {
     setRequesting(true);
     try {
-      const revised = await api.requestPlanRevision(campaignId, requestText);
+      const revised = await api.requestPlanRevision(campaignId, workspaceId, requestText);
       setPlan(revised);
       onCampaignUpdate();
     } catch (err) {
@@ -517,10 +519,9 @@ export default function CampaignDetailPage({ campaignId }: Props) {
       .finally(() => setLoading(false));
   }
 
-  function loadBrief() {
-    if (!campaignId) return;
+  function loadBrief(workspaceId: string) {
     setBriefLoading(true);
-    api.getCampaignBrief(campaignId)
+    api.getCampaignBrief(campaignId!, workspaceId)
       .then(setBrief)
       .catch(() => {})
       .finally(() => setBriefLoading(false));
@@ -529,10 +530,10 @@ export default function CampaignDetailPage({ campaignId }: Props) {
   useEffect(() => { loadCampaign(); }, [campaignId]);
 
   useEffect(() => {
-    if (tab === 'overview' && campaignId) {
-      loadBrief();
+    if (tab === 'overview' && campaignId && campaign) {
+      loadBrief(campaign.workspaceId);
     }
-  }, [tab, campaignId]);
+  }, [tab, campaignId, campaign?.workspaceId]);
 
   if (!campaignId) {
     return (
@@ -667,7 +668,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
                 </div>
               ) : brief ? (
                 <div className="space-y-3">
-                  <BriefCompletenessNotice brief={brief} onSaved={setBrief} />
+                  <BriefCompletenessNotice brief={brief} workspaceId={campaign.workspaceId} onSaved={setBrief} />
                   <BriefSummary brief={brief} />
                 </div>
               ) : (
@@ -685,6 +686,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
                 </p>
                 <PlanSection
                   campaignId={campaign.id}
+                  workspaceId={campaign.workspaceId}
                   canPlan={canPlan}
                   brief={brief}
                   onCampaignUpdate={loadCampaign}
