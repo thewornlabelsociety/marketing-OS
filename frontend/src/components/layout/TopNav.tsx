@@ -1,6 +1,5 @@
-import { Brain, Layers, Plus, Sparkles } from 'lucide-react';
-import { useApp } from '../../app/AppContext';
-import { EntitySwitcher } from './EntitySwitcher';
+import { Plus, Sparkles } from 'lucide-react';
+import { WorkspaceMenu } from './WorkspaceMenu';
 
 interface TopNavProps {
   showBrandControls: boolean;
@@ -8,8 +7,6 @@ interface TopNavProps {
 }
 
 export function TopNav({ showBrandControls, onCreateBrand }: TopNavProps) {
-  const { setActiveTab } = useApp();
-
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#E4E4E7] bg-white px-5">
       <div className="flex items-center gap-3">
@@ -24,17 +21,7 @@ export function TopNav({ showBrandControls, onCreateBrand }: TopNavProps) {
 
       <div className="flex items-center gap-3">
         {showBrandControls ? (
-          <>
-            <EntitySwitcher />
-            <button
-              type="button"
-              onClick={() => setActiveTab('brand-brain')}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#E4E4E7] px-3 py-1.5 text-sm font-medium text-[#09090B] transition hover:bg-[#FAFAFA]"
-            >
-              <Brain className="h-4 w-4" />
-              Brand Brain
-            </button>
-          </>
+          <WorkspaceMenu onCreateWorkspace={onCreateBrand} />
         ) : (
           <button
             type="button"
@@ -45,10 +32,6 @@ export function TopNav({ showBrandControls, onCreateBrand }: TopNavProps) {
             Create Brand
           </button>
         )}
-        <div className="hidden items-center gap-2 rounded-lg border border-[#E4E4E7] px-3 py-1.5 text-xs text-[#71717A] md:flex">
-          <Layers className="h-3.5 w-3.5" />
-          v1.0
-        </div>
       </div>
     </header>
   );

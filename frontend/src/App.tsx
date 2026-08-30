@@ -65,7 +65,7 @@ function AppShell() {
           )}
         </main>
 
-        {hasEntities && <SimulatorPanel />}
+        {hasEntities && activeTab === 'studio' && <SimulatorPanel />}
       </div>
 
       {hasEntities && <BrandKitDrawer />}
