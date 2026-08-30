@@ -1,8 +1,16 @@
 ﻿import { AlertCircle, ArrowRight, Calendar, FlaskConical, Loader2, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
 import type { DashboardSnapshot, AttentionSignal } from '../../types/dashboard';
+
+function sectionHasContent(children: ReactNode): boolean {
+  if (children == null || children === false) return false;
+  if (Array.isArray(children)) {
+    return children.some((child) => child != null && child !== false);
+  }
+  return true;
+}
 
 function SignalRow({
   signal,
@@ -43,8 +51,8 @@ function SignalRow({
   );
 }
 
-function Section({ title, children, empty }: { title: string; children: React.ReactNode; empty?: string }) {
-  const hasContent = Array.isArray(children) ? (children as React.ReactNode[]).length > 0 : true;
+function Section({ title, children, empty }: { title: string; children?: ReactNode; empty?: string }) {
+  const hasContent = sectionHasContent(children);
   return (
     <section>
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">{title}</p>
@@ -55,20 +63,38 @@ function Section({ title, children, empty }: { title: string; children: React.Re
   );
 }
 
+function DashboardHeader() {
+  return (
+    <div>
+      <h1 className="text-lg font-semibold text-[#09090B]">Dashboard</h1>
+      <p className="mt-1 text-sm text-[#71717A]">What needs attention, what needs a decision, and what to do next.</p>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { activeEntity, setActiveTab, setActiveCampaignId } = useApp();
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const workspaceId = activeEntity?.id ?? '';
 
   const load = useCallback(async () => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      setLoading(false);
+      setDashboard(null);
+      setLoadError(null);
+      return;
+    }
     setLoading(true);
+    setLoadError(null);
     try {
       setDashboard(await api.getDashboard(workspaceId));
-    } catch {
+    } catch (err) {
+      console.error('Dashboard load failed', err);
       setDashboard(null);
+      setLoadError((err as Error).message || 'Request failed');
     } finally {
       setLoading(false);
     }
@@ -101,31 +127,44 @@ export default function DashboardPage() {
     await load();
   }
 
+  if (!workspaceId && !loading) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-4 p-6">
+        <DashboardHeader />
+        <p className="text-sm text-[#71717A]">Select a workspace to load your dashboard.</p>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm text-[#71717A]">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading dashboard…
+      <div className="mx-auto max-w-4xl space-y-8 p-6">
+        <DashboardHeader />
+        <div className="flex items-center gap-2 text-sm text-[#71717A]">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading dashboard…
+        </div>
       </div>
     );
   }
 
   if (!dashboard) {
-    return <div className="p-6 text-sm text-[#71717A]">Dashboard unavailable.</div>;
-  }
-
-  if (dashboard.empty) {
     return (
-      <div className="mx-auto flex max-w-lg flex-col items-center py-24 text-center">
-        <Sparkles className="h-8 w-8 text-[#A1A1AA]" />
-        <p className="mt-4 text-base font-semibold text-[#09090B]">Create a campaign to start building your marketing plan</p>
-        <button
-          type="button"
-          onClick={() => setActiveTab('campaigns')}
-          className="mt-6 rounded-lg bg-[#09090B] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#18181B]"
-        >
-          Create Campaign
-        </button>
+      <div className="mx-auto max-w-4xl space-y-4 p-6">
+        <DashboardHeader />
+        <div className="rounded-xl border border-[#E4E4E7] bg-white p-4">
+          <p className="text-sm text-[#71717A]">We couldn&apos;t load your dashboard.</p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="mt-3 rounded-lg border border-[#E4E4E7] px-3 py-1.5 text-sm font-medium text-[#09090B] hover:bg-[#FAFAFA]"
+          >
+            Retry
+          </button>
+        </div>
+        {import.meta.env.DEV && loadError && (
+          <p className="text-xs text-[#A1A1AA]">{loadError}</p>
+        )}
       </div>
     );
   }
@@ -135,10 +174,7 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-6">
-      <div>
-        <h1 className="text-lg font-semibold text-[#09090B]">Dashboard</h1>
-        <p className="mt-1 text-sm text-[#71717A]">What needs attention, what needs a decision, and what to do next.</p>
-      </div>
+      <DashboardHeader />
 
       {showCounts && (
         <div className="flex flex-wrap gap-4 text-sm text-[#71717A]">
@@ -169,7 +205,7 @@ export default function DashboardPage() {
         )}
       </Section>
 
-      <Section title="Next Up" empty="Nothing scheduled in the next 7 days.">
+      <Section title="Next Up" empty="No upcoming scheduled content.">
         {dashboard.upcoming.length === 0 ? null : (
           <div className="divide-y divide-[#F4F4F5]">
             {dashboard.upcoming.map((u) => (
@@ -189,7 +225,7 @@ export default function DashboardPage() {
       </Section>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <Section title="High Performing" empty="No high performers in the recent window.">
+        <Section title="High Performing" empty="No recent performance data yet.">
           {dashboard.performance.highPerforming.length === 0 ? null : (
             <div className="divide-y divide-[#F4F4F5]">
               {dashboard.performance.highPerforming.map((p) => (
@@ -271,6 +307,20 @@ export default function DashboardPage() {
             ))}
           </div>
         </Section>
+      )}
+
+      {dashboard.empty && (
+        <div className="rounded-xl border border-dashed border-[#E4E4E7] bg-[#FAFAFA] px-6 py-8 text-center">
+          <Sparkles className="mx-auto h-6 w-6 text-[#A1A1AA]" />
+          <p className="mt-3 text-sm font-medium text-[#09090B]">Create a campaign to start building your marketing plan.</p>
+          <button
+            type="button"
+            onClick={() => setActiveTab('campaigns')}
+            className="mt-4 rounded-lg bg-[#09090B] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#18181B]"
+          >
+            Create Campaign
+          </button>
+        </div>
       )}
     </div>
   );

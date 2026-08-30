@@ -1,4 +1,6 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { randomUUID } from 'crypto';
 import { initDatabase, db } from '../src/db/database';
 import { LOCAL_TENANT_ID } from '../src/config/constants';
@@ -699,6 +701,16 @@ async function main() {
   check('Z empty flag', dashZ.empty === true);
   check('Z no fake needsAttention', dashZ.needsAttention.length === 0);
   check('Z zero counts', dashZ.counts.needsAttention === 0 && dashZ.counts.readyForReview === 0);
+
+  // --- Test AA: Live-app integration guards (Phase 3I runtime regression) ---
+  const serverSrc = fs.readFileSync(path.join(__dirname, '../src/server.ts'), 'utf8');
+  check('AA server mounts dashboard route', serverSrc.includes("app.use('/api/dashboard', dashboardRouter)"));
+  const dashPageSrc = fs.readFileSync(
+    path.join(__dirname, '../../frontend/src/features/dashboard/DashboardPage.tsx'),
+    'utf8'
+  );
+  check('AA dashboard empty section guard', dashPageSrc.includes('sectionHasContent'));
+  check('AA dashboard error retry UI', dashPageSrc.includes("We couldn&apos;t load your dashboard"));
 
   // --- Additional: No AI ---
   check('No AI env empty', process.env.AI_PROVIDER === '');
