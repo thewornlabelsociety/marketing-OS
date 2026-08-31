@@ -17,3 +17,66 @@ calendarScheduleRouter.get('/', (req: Request, res: Response) => {
   }
   res.json(schedulingService.listForWorkspace(workspaceId));
 });
+
+// Approved, unscheduled creative artifacts ready to be scheduled
+export const calendarReadyRouter = Router();
+
+interface ReadyRow {
+  artifact_id: string;
+  campaign_id: string;
+  content_key: string;
+  channel: string;
+  content_type: string;
+  format: string;
+  version: number;
+  campaign_name: string;
+}
+
+calendarReadyRouter.get('/', (req: Request, res: Response) => {
+  const workspaceId = (req.query as { workspaceId?: string }).workspaceId;
+  if (!workspaceId) {
+    res.status(400).json({ error: 'workspaceId is required' });
+    return;
+  }
+  const workspace = db.prepare('SELECT id FROM entities WHERE id = ?').get(workspaceId);
+  if (!workspace) {
+    res.status(404).json({ error: 'Workspace not found' });
+    return;
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      ca.id          AS artifact_id,
+      ca.campaign_id,
+      ca.content_key,
+      ca.channel,
+      ca.content_type,
+      ca.format,
+      ca.version,
+      c.name         AS campaign_name
+    FROM creative_artifacts ca
+    INNER JOIN creative_approvals cap ON cap.creative_artifact_id = ca.id
+    INNER JOIN campaigns c ON c.id = ca.campaign_id
+    WHERE ca.workspace_id = ?
+      AND ca.is_current = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_content_items sci
+        WHERE sci.campaign_id = ca.campaign_id
+          AND sci.content_key = ca.content_key
+          AND sci.status NOT IN ('CANCELLED', 'FAILED')
+      )
+    ORDER BY c.name, ca.channel, ca.content_key
+    LIMIT 50
+  `).all(workspaceId) as ReadyRow[];
+
+  res.json(rows.map(r => ({
+    artifactId: r.artifact_id,
+    campaignId: r.campaign_id,
+    contentKey: r.content_key,
+    channel: r.channel,
+    contentType: r.content_type,
+    format: r.format,
+    version: r.version,
+    campaignName: r.campaign_name,
+  })));
+});

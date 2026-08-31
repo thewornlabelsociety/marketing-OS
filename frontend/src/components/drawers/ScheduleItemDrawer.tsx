@@ -1,4 +1,4 @@
-import { Image, X } from 'lucide-react';
+import { ExternalLink, Image, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/api';
 import type { MarketingChannel, PublicationMode, PublishingDestination, ScheduledContentItem } from '../../types';
@@ -9,6 +9,7 @@ interface BaseProps {
   campaignName: string;
   onClose: () => void;
   onSaved: () => void;
+  onNavigateToCampaign?: (campaignId: string) => void;
 }
 
 interface CreateProps extends BaseProps {
@@ -33,8 +34,12 @@ type Props = CreateProps | ViewProps;
 
 type PinnedMedia = { id: string; type: string; mimeType?: string; storageKey?: string; checksum?: string };
 
+function isUnknownOutcome(item: ScheduledContentItem): boolean {
+  return item.status === 'FAILED' && !!item.blockReason?.toLowerCase().includes('reconcile');
+}
+
 export function ScheduleItemDrawer(props: Props) {
-  const { campaignId, workspaceId, campaignName, onClose, onSaved, mode } = props;
+  const { campaignId, workspaceId, campaignName, onClose, onSaved, mode, onNavigateToCampaign } = props;
   const contentKey = mode === 'create' ? props.contentKey : props.item.contentKey;
   const channel = mode === 'create' ? props.channel : props.item.channel;
   const creativeVersion = mode === 'create' ? props.creativeVersion : props.item.sourceCreativeVersion;
@@ -50,12 +55,17 @@ export function ScheduleItemDrawer(props: Props) {
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('09:00');
 
   useEffect(() => {
     if (mode === 'view' && props.item) {
       const d = new Date(props.item.scheduledFor);
       setDate(d.toISOString().slice(0, 10));
       setTime(d.toISOString().slice(11, 16));
+      setRescheduleDate(d.toISOString().slice(0, 10));
+      setRescheduleTime(d.toISOString().slice(11, 16));
       setTimezone(props.item.timezone);
       setPublicationMode(props.item.publicationMode);
       setDestinationId(props.item.destinationId ?? '');
@@ -173,20 +183,55 @@ export function ScheduleItemDrawer(props: Props) {
     }
   }
 
+  async function confirmReschedule() {
+    if (mode !== 'view') return;
+    setSaving(true);
+    setError('');
+    try {
+      const scheduledFor = new Date(`${rescheduleDate}T${rescheduleTime}:00`).toISOString();
+      await api.rescheduleItem(campaignId, props.item.id, workspaceId, scheduledFor, props.item.timezone);
+      setRescheduling(false);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reschedule');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const item = mode === 'view' ? props.item : null;
+  const unknownOutcome = item ? isUnknownOutcome(item) : false;
+  const canReschedule = item && item.status !== 'PUBLISHED' && item.status !== 'CANCELLED' && item.status !== 'PUBLISHING';
+  const canCancel = item && item.status !== 'PUBLISHED' && item.status !== 'CANCELLED';
 
   return (
     <>
       <button type="button" aria-label="Close" className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
       <div className="fixed right-0 top-0 z-50 flex h-full w-[720px] flex-col border-l border-[#E4E4E7] bg-white shadow-xl">
         <div className="flex shrink-0 items-center justify-between border-b border-[#E4E4E7] px-5 py-4">
-          <div>
-            <h2 className="text-sm font-semibold text-[#09090B]">{mode === 'create' ? 'Schedule Content' : 'Schedule Item'}</h2>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-[#09090B]">{mode === 'create' ? 'Schedule Content' : 'Schedule Item'}</h2>
+              {mode === 'view' && onNavigateToCampaign && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToCampaign(campaignId)}
+                  className="flex items-center gap-0.5 text-xs text-[#71717A] hover:text-[#09090B]"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Campaign
+                </button>
+              )}
+            </div>
             <p className="text-xs text-[#71717A]">{campaignName} · {contentKey}</p>
-            <p className="text-xs text-[#71717A]">{channel} · Approved V{creativeVersion}</p>
-            {item && <p className="text-xs text-[#71717A]">{item.status.replaceAll('_', ' ').toLowerCase()}</p>}
+            <p className="text-xs text-[#71717A]">{channel} · V{creativeVersion}</p>
+            {item && (
+              <p className={`text-xs font-medium ${unknownOutcome ? 'text-orange-600' : item.status === 'FAILED' ? 'text-red-600' : item.status === 'BLOCKED' ? 'text-amber-600' : item.status === 'PUBLISHED' ? 'text-green-700' : 'text-[#71717A]'}`}>
+                {unknownOutcome ? 'Reconciliation required' : item.status.replaceAll('_', ' ').toLowerCase()}
+              </p>
+            )}
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={onClose} className="ml-3 rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm">
@@ -244,32 +289,118 @@ export function ScheduleItemDrawer(props: Props) {
             </>
           ) : item && (
             <>
+              {/* Unknown outcome alert */}
+              {unknownOutcome && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
+                  <p className="text-sm font-medium text-orange-800">Publish outcome unknown</p>
+                  <p className="mt-1 text-xs text-orange-700">
+                    The publish attempt did not return a clear success or failure. Before retrying, confirm whether this actually published by checking the platform directly. Mark as published if it went live, or it will remain blocked.
+                  </p>
+                </div>
+              )}
+
               <Field label="Scheduled">{new Date(item.scheduledFor).toLocaleString()} ({item.timezone})</Field>
               <Field label="Mode">{item.publicationMode}</Field>
-              <Field label="Creative version">V{item.sourceCreativeVersion}</Field>
-              {item.mediaAssets[0] && <Field label="Pinned media">{item.mediaAssets[0].id}</Field>}
-              {item.blockReason && <Field label="Blocked">{item.blockReason}</Field>}
+              <Field label="Creative version">V{item.sourceCreativeVersion} · {item.sourceCreativeArtifactId.slice(0, 18)}…</Field>
+
+              {item.mediaAssets[0] && (
+                <Field label="Pinned media">
+                  <span className="font-mono text-xs">{item.mediaAssets[0].id}</span>
+                  {item.mediaAssets[0].type && <span className="ml-2 text-[#71717A]">({item.mediaAssets[0].type})</span>}
+                </Field>
+              )}
+
+              {item.blockReason && !unknownOutcome && (
+                <Field label="Blocked">
+                  <span className="text-amber-700">{item.blockReason}</span>
+                </Field>
+              )}
+
               {item.publishedAt && <Field label="Published">{new Date(item.publishedAt).toLocaleString()}</Field>}
-              {item.externalUrl && <Field label="URL">{item.externalUrl}</Field>}
+              {item.externalUrl && (
+                <Field label="URL">
+                  <a href={item.externalUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-blue-600 underline underline-offset-2">
+                    {item.externalUrl}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </Field>
+              )}
+
+              {/* Inline reschedule form */}
+              {rescheduling && (
+                <div className="rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] p-3 space-y-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#A1A1AA]">Reschedule to</p>
+                  <div className="flex gap-2">
+                    <input type="date" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)}
+                      className="flex-1 rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm" />
+                    <input type="time" value={rescheduleTime} onChange={e => setRescheduleTime(e.target.value)}
+                      className="w-28 rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" disabled={saving} onClick={() => void confirmReschedule()}
+                      className="rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                      {saving ? 'Moving…' : 'Confirm'}
+                    </button>
+                    <button type="button" onClick={() => setRescheduling(false)}
+                      className="rounded-lg border border-[#E4E4E7] px-4 py-2 text-sm text-[#71717A]">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
 
         <div className="shrink-0 border-t border-[#E4E4E7] px-5 py-4">
           {mode === 'create' ? (
-            <button type="button" disabled={saving} onClick={() => void saveSchedule()} className="rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white hover:bg-[#18181B] disabled:opacity-50">
+            <button type="button" disabled={saving} onClick={() => void saveSchedule()}
+              className="rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white hover:bg-[#18181B] disabled:opacity-50">
               {saving ? 'Scheduling…' : 'Schedule'}
             </button>
-          ) : item && (
+          ) : item && !rescheduling && (
             <div className="flex flex-wrap gap-2">
-              {item.status === 'FAILED' && (
-                <button type="button" disabled={saving} onClick={() => void retryPublish()} className="rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white">Retry</button>
+              {/* Unknown outcome: offer Reconcile (mark published) — no blind Retry */}
+              {unknownOutcome && (
+                <>
+                  <button type="button" disabled={saving} onClick={() => void markPublished()}
+                    className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                    Mark as Published
+                  </button>
+                  <div className="flex-1 text-right text-xs text-[#A1A1AA] leading-[2.5]">
+                    Confirm it published, then Retry in the Campaigns tab after reconciling.
+                  </div>
+                </>
               )}
-              {(item.publicationMode === 'MANUAL' || item.publicationMode === 'EXPORT') && item.status !== 'PUBLISHED' && (
-                <button type="button" disabled={saving} onClick={() => void markPublished()} className="rounded-lg border border-[#E4E4E7] px-4 py-2 text-sm">Mark Published</button>
+              {/* Clean FAILED: offer Retry */}
+              {item.status === 'FAILED' && !unknownOutcome && (
+                <button type="button" disabled={saving} onClick={() => void retryPublish()}
+                  className="rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                  {saving ? 'Retrying…' : 'Retry'}
+                </button>
               )}
-              {item.status !== 'PUBLISHED' && item.status !== 'CANCELLED' && (
-                <button type="button" disabled={saving} onClick={() => void cancelItem()} className="rounded-lg border border-[#E4E4E7] px-4 py-2 text-sm text-[#71717A]">Cancel</button>
+              {/* Manual/export not yet published: mark published */}
+              {(item.publicationMode === 'MANUAL' || item.publicationMode === 'EXPORT') &&
+                item.status !== 'PUBLISHED' && !unknownOutcome && (
+                  <button type="button" disabled={saving} onClick={() => void markPublished()}
+                    className="rounded-lg border border-[#E4E4E7] px-4 py-2 text-sm disabled:opacity-50">
+                    Mark Published
+                  </button>
+              )}
+              {/* Reschedule (not for published/cancelled/unknown) */}
+              {canReschedule && !unknownOutcome && (
+                <button type="button" onClick={() => setRescheduling(true)}
+                  className="rounded-lg border border-[#E4E4E7] px-4 py-2 text-sm text-[#71717A]">
+                  Reschedule
+                </button>
+              )}
+              {/* Cancel */}
+              {canCancel && (
+                <button type="button" disabled={saving} onClick={() => void cancelItem()}
+                  className="rounded-lg border border-[#E4E4E7] px-4 py-2 text-sm text-[#71717A] disabled:opacity-50">
+                  Cancel
+                </button>
               )}
             </div>
           )}

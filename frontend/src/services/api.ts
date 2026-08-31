@@ -24,6 +24,7 @@ import type {
   CampaignBlueprint,
   PerformanceLog,
   MediaAsset,
+  ReadyToScheduleItem,
 } from '../types';
 import type {
   Experiment,
@@ -303,6 +304,13 @@ export const api = {
     }),
   getWorkspaceSchedule: (workspaceId: string) =>
     request<ScheduledContentItem[]>(`/calendar/schedule?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getReadyToSchedule: (workspaceId: string) =>
+    request<ReadyToScheduleItem[]>(`/calendar/ready?workspaceId=${encodeURIComponent(workspaceId)}`),
+  rescheduleItem: (campaignId: string, scheduleId: string, workspaceId: string, scheduledFor: string, timezone?: string) =>
+    request<{ item: ScheduledContentItem }>(`/campaigns/${campaignId}/schedule/${scheduleId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ workspaceId, scheduledFor, ...(timezone ? { timezone } : {}) }),
+    }),
   getIntegrations: (workspaceId: string) =>
     request<IntegrationConnection[]>(`/integrations?workspaceId=${encodeURIComponent(workspaceId)}`),
   getMetaIntegrationStatus: () =>

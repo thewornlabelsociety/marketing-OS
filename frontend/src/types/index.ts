@@ -584,6 +584,17 @@ export interface CampaignPublishingSummary {
   failedItems: ScheduledContentItem[];
 }
 
+export interface ReadyToScheduleItem {
+  artifactId: string;
+  campaignId: string;
+  contentKey: string;
+  channel: MarketingChannel;
+  contentType: string;
+  format: string;
+  version: number;
+  campaignName: string;
+}
+
 export interface IntegrationConnection {
   id: string;
   workspaceId: string;
