@@ -16,6 +16,8 @@ import CampaignLibraryPage from './features/archive/CampaignLibraryPage';
 import CampaignDetailPage from './features/campaigns/CampaignDetailPage';
 import DashboardPage from './features/dashboard/DashboardPage';
 import IntegrationsPage from './features/integrations/IntegrationsPage';
+import CreatePage from './features/create/CreatePage';
+import LearnPage from './features/learn/LearnPage';
 
 function AppShell() {
   const { activeTab, activeCampaignId, entities, loading, error } = useApp();
@@ -56,6 +58,7 @@ function AppShell() {
           {!loading && !error && hasEntities && (
             <>
               {activeTab === 'dashboard' && <DashboardPage />}
+              {activeTab === 'create' && <CreatePage />}
               {activeTab === 'campaigns' && <CampaignsPage />}
               {activeTab === 'campaign-detail' && <CampaignDetailPage campaignId={activeCampaignId} />}
               {activeTab === 'brand-brain' && <BrandBrainPage />}
@@ -65,6 +68,7 @@ function AppShell() {
               {activeTab === 'library' && <CampaignLibraryPage />}
               {activeTab === 'integrations' && <IntegrationsPage />}
               {activeTab === 'studio' && <StudioTab />}
+              {activeTab === 'learn' && <LearnPage />}
             </>
           )}
         </main>

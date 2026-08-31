@@ -692,7 +692,7 @@ export default function CampaignDetailPage({ campaignId }: Props) {
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
-            <h1 className="text-base font-semibold text-[#09090B]">{campaign.name}</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-[#09090B]">{displayCampaignName(campaign.name, campaign.sourceTitle)}</h1>
             <p className="mt-0.5 text-xs text-[#71717A]">
               {sourceLabel}
               {campaign.objectiveName ? ` · ${campaign.objectiveName}` : ''}
@@ -852,4 +852,8 @@ export default function CampaignDetailPage({ campaignId }: Props) {
       )}
     </div>
   );
+}
+
+function displayCampaignName(name: string, sourceTitle: string): string {
+  return /^(Campaign|Cmp) camp_/i.test(name) ? `${sourceTitle || 'Untitled'} campaign` : name;
 }

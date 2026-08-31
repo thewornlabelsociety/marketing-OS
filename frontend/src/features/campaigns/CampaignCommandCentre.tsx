@@ -555,7 +555,7 @@ export function CampaignCommandCentre({
                   <div key={item.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#F4F4F5] last:border-0">
                     <Calendar className="h-3.5 w-3.5 shrink-0 text-[#A1A1AA]" />
                     <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm text-[#09090B]">{item.contentKey}</p>
+                      <p className="truncate text-sm font-medium text-[#09090B]">{item.contentKey.replace(/[-_]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase()).replace(/\b0*\d+\b/g, '').trim()}</p>
                       <p className="text-xs text-[#71717A]">{item.channel} · {dateLabel} {timeLabel}</p>
                     </div>
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${

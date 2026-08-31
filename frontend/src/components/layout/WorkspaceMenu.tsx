@@ -1,4 +1,4 @@
-import { Brain, Check, ChevronDown, Plug, Plus, Target } from 'lucide-react';
+import { Check, ChevronDown, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../app/AppContext';
 
@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function WorkspaceMenu({ onCreateWorkspace }: Props) {
-  const { entities, activeEntity, setActiveEntityId, setActiveTab } = useApp();
+  const { entities, activeEntity, setActiveEntityId } = useApp();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -19,10 +19,7 @@ export function WorkspaceMenu({ onCreateWorkspace }: Props) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  function navigate(tab: Parameters<typeof setActiveTab>[0]) {
-    setActiveTab(tab);
-    setOpen(false);
-  }
+  const visibleEntities = entities.filter(entity => !isDevelopmentWorkspace(entity));
 
   return (
     <div ref={ref} className="relative">
@@ -38,12 +35,12 @@ export function WorkspaceMenu({ onCreateWorkspace }: Props) {
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-[#E4E4E7] bg-white shadow-lg">
           {/* Workspace switcher */}
-          {entities.length > 0 && (
+          {visibleEntities.length > 0 && (
             <div className="py-1">
               <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
                 Workspace
               </p>
-              {entities.map((entity) => (
+              {visibleEntities.map((entity) => (
                 <button
                   key={entity.id}
                   type="button"
@@ -70,46 +67,15 @@ export function WorkspaceMenu({ onCreateWorkspace }: Props) {
             </button>
           </div>
 
-          {/* Configuration */}
-          {activeEntity && (
-            <>
-              <div className="border-t border-[#E4E4E7] py-1">
-                <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
-                  Configuration
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate('integrations')}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-[#09090B] hover:bg-[#FAFAFA]"
-                >
-                  <Plug className="h-4 w-4 shrink-0 text-[#71717A]" />
-                  Integrations
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('brand-brain')}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-[#09090B] hover:bg-[#FAFAFA]"
-                >
-                  <Brain className="h-4 w-4 shrink-0 text-[#71717A]" />
-                  Brand Brain
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('objectives')}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-[#09090B] hover:bg-[#FAFAFA]"
-                >
-                  <Target className="h-4 w-4 shrink-0 text-[#71717A]" />
-                  Objectives
-                </button>
-              </div>
-
-              <div className="border-t border-[#E4E4E7] px-3 py-2">
-                <p className="text-[10px] text-[#A1A1AA]">Marketing OS v1.0</p>
-              </div>
-            </>
-          )}
         </div>
       )}
     </div>
   );
+}
+
+function isDevelopmentWorkspace(entity: { id: string; name: string }): boolean {
+  return entity.id.startsWith('ws_')
+    || entity.id.startsWith('entity_test')
+    || entity.id === 'entity_workspace_b_'
+    || /^(workspace [ab]|empty workspace|test |brand ws$|[ab]$|ws[ _])/i.test(entity.name.trim());
 }

@@ -26,6 +26,37 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+:root {
+  --mos-canvas: #fafafa;
+  --mos-surface: #ffffff;
+  --mos-ink: #09090b;
+  --mos-muted: #71717a;
+  --mos-border: #e4e4e7;
+  --mos-radius: 0.875rem;
+}
+
+.mos-page { margin-inline: auto; display: flex; flex-direction: column; gap: 2.25rem; padding: 2rem; }
+.mos-display { font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.9rem, 3vw, 2.75rem); line-height: 1.05; letter-spacing: -0.035em; color: var(--mos-ink); }
+.mos-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a1a1aa; }
+.mos-button { display: inline-flex; min-height: 2.4rem; align-items: center; justify-content: center; gap: .5rem; border-radius: .65rem; padding: .55rem .9rem; font-size: .875rem; font-weight: 600; transition: background-color .16s ease, color .16s ease, border-color .16s ease, transform .16s ease; }
+.mos-button:focus-visible { outline: 2px solid #09090b; outline-offset: 2px; }
+.mos-button:active:not(:disabled) { transform: translateY(1px); }
+.mos-button:disabled { cursor: not-allowed; opacity: .5; }
+.mos-button-primary { background: #09090b; color: white; }
+.mos-button-primary:hover { background: #27272a; }
+.mos-button-secondary { border: 1px solid var(--mos-border); background: white; color: var(--mos-ink); }
+.mos-button-secondary:hover, .mos-button-quiet:hover { background: #f4f4f5; }
+.mos-button-quiet { color: #52525b; }
+.mos-button-danger { background: #dc2626; color: white; }
+.mos-status { display: inline-flex; align-items: center; border-radius: 999px; padding: .22rem .55rem; font-size: .68rem; font-weight: 650; white-space: nowrap; }
+.mos-status-neutral { background: #f4f4f5; color: #52525b; }.mos-status-success { background: #ecfdf5; color: #047857; }.mos-status-warning { background: #fffbeb; color: #a16207; }.mos-status-danger { background: #fef2f2; color: #b91c1c; }.mos-status-info { background: #eff6ff; color: #1d4ed8; }
+.mos-empty { display: flex; min-height: 15rem; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed #d4d4d8; border-radius: 1rem; background: linear-gradient(180deg,#fff,#fafafa); padding: 2.5rem; text-align: center; }
+.mos-skeleton { overflow: hidden; border-radius: .6rem; background: linear-gradient(90deg,#f4f4f5 25%,#fafafa 45%,#f4f4f5 65%); background-size: 300% 100%; animation: mos-shimmer 1.4s ease infinite; }
+@keyframes mos-shimmer { to { background-position: -100% 0; } }
+@keyframes studio-in { from { transform: translateX(18px); opacity: .85; } to { transform: translateX(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+@media (max-width: 720px) { .mos-page { padding: 1.25rem; gap: 1.75rem; } }
+
 button,
 input,
 textarea,

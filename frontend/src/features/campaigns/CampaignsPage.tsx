@@ -1,4 +1,4 @@
-import { Plus, Rocket } from 'lucide-react';
+import { ArrowRight, CalendarClock, Plus, Rocket } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useApp } from '../../app/AppContext';
 import { CampaignCreateDrawer } from './CampaignCreateDrawer';
@@ -88,12 +88,13 @@ export default function CampaignsPage() {
 
   return (
     <>
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-[#FAFAFA]">
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-[#E4E4E7] bg-white px-6 py-4">
+      <div className="flex shrink-0 items-end justify-between border-b border-[#E4E4E7] bg-white px-8 py-6">
         <div>
-          <h1 className="text-base font-semibold text-[#09090B]">Campaigns</h1>
-          {activeEntity && <p className="text-xs text-[#71717A]">{activeEntity.name}</p>}
+          <p className="mos-eyebrow">{activeEntity?.name ?? 'Your workspace'}</p>
+          <h1 className="mos-display mt-1 text-[2rem]">Campaigns</h1>
+          <p className="mt-2 text-sm text-[#71717A]">The idea, content, schedule and results—kept together.</p>
         </div>
         <button
           type="button"
@@ -131,7 +132,7 @@ export default function CampaignsPage() {
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-8">
         {loading ? (
           <p className="text-sm text-[#71717A]">Loading…</p>
         ) : filtered.length === 0 ? (
@@ -153,17 +154,18 @@ export default function CampaignsPage() {
             )}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="mx-auto max-w-5xl divide-y divide-zinc-200 border-y border-zinc-200">
             {filtered.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => openCampaign(c.id)}
-                className="flex w-full items-start justify-between rounded-xl border border-[#E4E4E7] bg-white px-5 py-4 text-left transition hover:bg-[#FAFAFA]"
+                className="group flex w-full items-center gap-5 bg-transparent px-1 py-5 text-left transition hover:bg-white"
               >
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-zinc-100 text-sm font-semibold text-zinc-600">{campaignInitial(c)}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-[#09090B]">{c.name}</p>
+                    <p className="truncate text-base font-semibold tracking-tight text-[#09090B]">{displayCampaignName(c)}</p>
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[c.status] ?? 'bg-[#F4F4F5] text-[#71717A]'}`}>
                       {STATUS_LABELS[c.status] ?? c.status}
                     </span>
@@ -172,10 +174,10 @@ export default function CampaignsPage() {
                     <span>{SOURCE_LABELS[c.sourceType] ?? c.sourceType}: {c.sourceTitle}</span>
                     {c.objectiveName && <span>· {c.objectiveName}</span>}
                   </div>
-                  <p className="mt-1 text-[10px] text-[#A1A1AA]">
-                    {new Date(c.updatedAt).toLocaleDateString()}
-                  </p>
+                  <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#A1A1AA]"><CalendarClock className="h-3 w-3" /> Updated {new Date(c.updatedAt).toLocaleDateString('en-NZ',{day:'numeric',month:'short'})}</p>
                 </div>
+                <span className="hidden text-xs font-medium text-zinc-500 sm:block">{nextAction(c.status)}</span>
+                <ArrowRight className="h-4 w-4 text-zinc-400 transition group-hover:translate-x-1 group-hover:text-zinc-950" />
               </button>
             ))}
           </div>
@@ -189,3 +191,7 @@ export default function CampaignsPage() {
     </>
   );
 }
+
+function displayCampaignName(c: Campaign): string { return c.name.startsWith('Campaign camp_') || c.name.startsWith('Cmp camp_') ? `${c.sourceTitle || 'Untitled'} campaign` : c.name; }
+function campaignInitial(c: Campaign): string { return (c.sourceTitle || displayCampaignName(c)).trim().slice(0,2).toUpperCase(); }
+function nextAction(status: CampaignStatus): string { return ({ DRAFTING:'Continue building', READY_FOR_REVIEW:'Review content', CHANGES_REQUESTED:'Make changes', REVISING:'Review revision', READY_FOR_APPROVAL:'Approve', APPROVED:'Plan the schedule', SCHEDULED:'Monitor publishing', PUBLISHED:'Review results', MEASURING:'See what worked', COMPLETE:'View learning' } as Partial<Record<CampaignStatus,string>>)[status] ?? 'Open campaign'; }

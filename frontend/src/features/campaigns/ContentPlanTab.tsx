@@ -499,7 +499,7 @@ function CreativeSection({
 
       {!aiConfigured && summary.generated === 0 && (
         <p className="mb-4 text-xs text-[#71717A]">
-          AI provider is not configured. Creative generation is unavailable until AI_PROVIDER and an API key are set.
+          Creative assistance is not connected yet. You can still review the plan, and an administrator can connect it when you are ready.
         </p>
       )}
 
@@ -512,7 +512,6 @@ function CreativeSection({
               <p className="text-xs text-[#71717A]">
                 {row.channel} · {TYPE_LABEL[row.contentType] ?? row.contentType} · {FORMAT_LABEL[row.format] ?? row.format}
               </p>
-              <p className="text-xs text-[#A1A1AA]">{row.contentKey}</p>
               <p className="mt-1 text-xs text-[#71717A]">
                 {!row.hasCreative
                   ? 'Not generated'

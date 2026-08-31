@@ -1,8 +1,8 @@
 import {
   BarChart3,
   CalendarDays,
+  CirclePlus,
   LayoutDashboard,
-  Library,
   Rocket,
 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
@@ -15,19 +15,19 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'dashboard', label: 'Today', icon: LayoutDashboard },
+  { id: 'create', label: 'Create', icon: CirclePlus },
   { id: 'campaigns', label: 'Campaigns', icon: Rocket },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
-  { id: 'performance', label: 'Performance', icon: BarChart3 },
-  { id: 'library', label: 'Library', icon: Library },
+  { id: 'learn', label: 'Learn', icon: BarChart3 },
 ];
 
 export function SidebarNav() {
   const { activeTab, setActiveTab } = useApp();
 
   return (
-    <nav className="flex w-48 shrink-0 flex-col border-r border-[#E4E4E7] bg-white">
-      <div className="space-y-0.5 p-3 pt-4">
+    <nav className="flex w-52 shrink-0 flex-col border-r border-[#E4E4E7] bg-[#FAFAFA]">
+      <div className="space-y-1 p-3 pt-5">
         {PRIMARY_NAV.map(({ id, label, icon: Icon }) => {
           const active = activeTab === id || (id === 'campaigns' && activeTab === 'campaign-detail');
           return (
@@ -35,7 +35,7 @@ export function SidebarNav() {
               key={id}
               type="button"
               onClick={() => setActiveTab(id)}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+            className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
                 active
                   ? 'bg-[#09090B] text-white'
                   : 'text-[#09090B] hover:bg-[#FAFAFA]'

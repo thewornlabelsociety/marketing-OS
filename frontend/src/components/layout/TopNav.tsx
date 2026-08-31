@@ -8,14 +8,14 @@ interface TopNavProps {
 
 export function TopNav({ showBrandControls, onCreateBrand }: TopNavProps) {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#E4E4E7] bg-white px-5">
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-[#E4E4E7] bg-white px-5">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E4E4E7] bg-white">
-          <Sparkles className="h-4 w-4 text-[#09090B]" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#09090B] text-white shadow-sm">
+          <Sparkles className="h-4 w-4" />
         </div>
         <div>
-          <p className="text-sm font-semibold tracking-tight text-[#09090B]">Marketing OS</p>
-          <p className="text-xs text-[#71717A]">Desktop Studio</p>
+          <p className="text-sm font-semibold tracking-tight text-[#09090B]">MarketingOS</p>
+          <p className="text-[11px] text-[#71717A]">Creative operating system</p>
         </div>
       </div>
 

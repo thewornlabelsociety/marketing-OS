@@ -58,7 +58,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEntities(data);
       setActiveEntityId((current) => {
         if (current && data.some((e) => e.id === current)) return current;
-        return data[0]?.id ?? '';
+        const wornLabel = data.find((e) => e.name.trim().toLowerCase() === 'worn label');
+        const credible = data.find((e) => !/^(ws_|workspace [ab]$|empty workspace|test |brand ws$|[ab]$)/i.test(e.name.trim()));
+        return wornLabel?.id ?? credible?.id ?? data[0]?.id ?? '';
       });
     } catch (err) {
       setError((err as Error).message);
@@ -87,7 +89,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const applyDeepLink = useCallback(
     (params: { entity?: string; brand?: string; title?: string; price?: string }) => {
-      setActiveTab('studio');
+      setActiveTab('create');
       if (params.entity && entities.length > 0) {
         const match = entities.find(
           (e) => e.slug === params.entity || e.id === params.entity

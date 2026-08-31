@@ -35,8 +35,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; border: string; 
   BLOCKED:           { bg: '#FFFBEB', text: '#B45309', border: '#FDE68A', label: 'Blocked' },
   PUBLISHING:        { bg: '#EEF2FF', text: '#4338CA', border: '#C7D2FE', label: 'Publishing…' },
   PUBLISHED:         { bg: '#F0FDF4', text: '#166534', border: '#86EFAC', label: 'Published' },
-  FAILED:            { bg: '#FEF2F2', text: '#B91C1C', border: '#FECACA', label: 'Failed' },
-  FAILED_RECONCILE:  { bg: '#FFF7ED', text: '#C2410C', border: '#FDBA74', label: 'Reconcile' },
+  FAILED:            { bg: '#FEF2F2', text: '#B91C1C', border: '#FECACA', label: 'Publishing failed' },
+  FAILED_RECONCILE:  { bg: '#FFF7ED', text: '#C2410C', border: '#FDBA74', label: 'Check publication' },
   CANCELLED:         { bg: '#F4F4F5', text: '#71717A', border: '#D4D4D8', label: 'Cancelled' },
 };
 
@@ -124,25 +124,18 @@ function ItemCard({
       onDragStart={draggable ? (e) => onDragStart(e, item) : undefined}
       onClick={() => onClick(item)}
       style={{ backgroundColor: c.bg, borderColor: c.border, color: c.text }}
-      className="mb-0.5 cursor-pointer select-none rounded border px-1.5 py-1 text-[11px] leading-tight hover:opacity-80"
+      className="mb-0.5 cursor-pointer select-none rounded-lg border px-2 py-1.5 text-[11px] leading-tight transition hover:-translate-y-px hover:shadow-sm"
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="truncate font-medium">{item.contentKey}</span>
+        <span className="truncate font-semibold">{humanContentTitle(item.contentKey)}</span>
         <span className="shrink-0 font-semibold">{c.label}</span>
       </div>
       <div className="mt-0.5 flex items-center gap-1 opacity-80">
         <Clock className="h-2.5 w-2.5" />
         <span>{scheduledHHMM}</span>
         <span>·</span>
-        <span>{item.channel}</span>
-        <span>·</span>
-        <span>V{item.sourceCreativeVersion}</span>
+        <span>{titleCase(item.channel)}</span>
       </div>
-      {item.mediaAssets[0] && (
-        <div className="mt-0.5 truncate font-mono opacity-60" style={{ fontSize: 9 }}>
-          {item.mediaAssets[0].id}
-        </div>
-      )}
     </div>
   );
 }
@@ -399,7 +392,7 @@ function MonthView({
                       style={{ fontSize: 9, backgroundColor: c.bg, color: c.text, borderColor: c.border }}
                       className="truncate rounded border px-1 py-0.5"
                     >
-                      {item.contentKey}
+                      {humanContentTitle(item.contentKey)}
                     </div>
                   );
                 })}
@@ -454,12 +447,12 @@ function ReadyToScheduleSidebar({
               >
                 <div className="flex items-start justify-between gap-1">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium text-[#09090B]">{item.contentKey}</p>
+                    <p className="truncate text-xs font-semibold text-[#09090B]">{humanContentTitle(item.contentKey)}</p>
                     <p className="truncate text-[11px] text-[#71717A]">
-                      {item.campaignName}
+                      {humanCampaignLabel(item.campaignName, item.contentKey)}
                     </p>
                     <p className="text-[11px] text-[#A1A1AA]">
-                      {item.channel} · {item.format} · V{item.version}
+                      {titleCase(item.channel)} · {humanFormat(item.format)}
                     </p>
                   </div>
                   <button
@@ -493,12 +486,9 @@ function StatusLegend() {
   const entries = [
     STATUS_COLORS.SCHEDULED,
     STATUS_COLORS.READY,
-    STATUS_COLORS.BLOCKED,
-    STATUS_COLORS.PUBLISHING,
     STATUS_COLORS.PUBLISHED,
-    STATUS_COLORS.FAILED,
     STATUS_COLORS.FAILED_RECONCILE,
-    STATUS_COLORS.CANCELLED,
+    STATUS_COLORS.FAILED,
   ];
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[#F4F4F5] px-4 py-1.5">
@@ -714,10 +704,10 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-[#FAFAFA]">
       {/* ── Header ── */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#E4E4E7] px-6 py-3">
-        <h1 className="text-sm font-semibold text-[#09090B]">Calendar</h1>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#E4E4E7] bg-white px-6 py-4">
+        <div><p className="mos-eyebrow">Plan the week</p><h1 className="mt-0.5 text-xl font-semibold tracking-tight text-[#09090B]">Calendar</h1></div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* View switcher */}
@@ -759,7 +749,7 @@ export default function CalendarPage() {
 
           {/* Timezone badge */}
           <span className="rounded bg-[#F4F4F5] px-2 py-1 text-[10px] text-[#71717A]" title="Authoritative scheduling timezone">
-            Scheduling timezone: {calendarTz}
+            Times shown in {calendarTz}
           </span>
 
           {loading && <span className="text-xs text-[#A1A1AA]">Loading…</span>}
@@ -777,7 +767,7 @@ export default function CalendarPage() {
             <option value="">All campaigns</option>
             {allCampaigns.map(it => (
               <option key={it.campaignId} value={it.campaignId}>
-                {campaignNames[it.campaignId] ?? it.campaignId}
+                {humanCampaignLabel(campaignNames[it.campaignId] ?? '', it.contentKey)}
               </option>
             ))}
           </select>
@@ -802,10 +792,10 @@ export default function CalendarPage() {
             <option value="SCHEDULED">Scheduled</option>
             <option value="READY">Ready</option>
             <option value="BLOCKED">Blocked</option>
-            <option value="PUBLISHING">Publishing</option>
+            <option value="PUBLISHING">Publishing now</option>
             <option value="PUBLISHED">Published</option>
-            <option value="FAILED">Failed</option>
-            <option value="FAILED_RECONCILE">Reconcile required</option>
+            <option value="FAILED">Publishing failed</option>
+            <option value="FAILED_RECONCILE">Publication needs checking</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
 
@@ -934,4 +924,20 @@ export default function CalendarPage() {
       )}
     </div>
   );
+}
+
+function humanContentTitle(value: string): string {
+  return value.replace(/[-_]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase()).replace(/\b0*\d+\b/g, '').replace(/\s+/g, ' ').trim() || 'Untitled content';
+}
+
+function humanCampaignLabel(name: string, contentKey: string): string {
+  return /^(Campaign|Cmp) camp_/i.test(name) || !name ? `${humanContentTitle(contentKey)} campaign` : name;
+}
+
+function titleCase(value: string): string {
+  return value.toLowerCase().replace(/\b\w/g, m => m.toUpperCase());
+}
+
+function humanFormat(value: string): string {
+  return titleCase(value.replaceAll('_', ' '));
 }

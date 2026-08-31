@@ -251,11 +251,11 @@ export function ScheduleItemDrawer(props: Props) {
   return (
     <>
       <button type="button" aria-label="Close" className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
-      <div className="fixed right-0 top-0 z-50 flex h-full w-[720px] flex-col border-l border-[#E4E4E7] bg-white shadow-xl">
+      <div className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[680px] flex-col border-l border-[#E4E4E7] bg-white shadow-xl motion-safe:animate-[studio-in_.2s_ease-out]">
         <div className="flex shrink-0 items-center justify-between border-b border-[#E4E4E7] px-5 py-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-[#09090B]">{mode === 'create' ? 'Schedule Content' : 'Schedule Item'}</h2>
+              <h2 className="text-base font-semibold tracking-tight text-[#09090B]">{mode === 'create' ? 'Add to calendar' : humanContentTitle(contentKey)}</h2>
               {mode === 'view' && onNavigateToCampaign && (
                 <button
                   type="button"
@@ -267,11 +267,10 @@ export function ScheduleItemDrawer(props: Props) {
                 </button>
               )}
             </div>
-            <p className="text-xs text-[#71717A]">{campaignName} · {contentKey}</p>
-            <p className="text-xs text-[#71717A]">{channel} · V{creativeVersion}</p>
+            <p className="mt-0.5 text-xs text-[#71717A]">{humanCampaignName(campaignName, contentKey)} · {titleCase(channel)}</p>
             {item && (
               <p className={`text-xs font-medium ${unknownOutcome ? 'text-orange-600' : item.status === 'FAILED' ? 'text-red-600' : item.status === 'BLOCKED' ? 'text-amber-600' : item.status === 'PUBLISHED' ? 'text-green-700' : 'text-[#71717A]'}`}>
-                {unknownOutcome ? 'Reconciliation required' : item.status.replaceAll('_', ' ').toLowerCase()}
+                {unknownOutcome ? 'Publication needs checking' : humanStatus(item.status)}
               </p>
             )}
           </div>
@@ -287,25 +286,25 @@ export function ScheduleItemDrawer(props: Props) {
             <>
               <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2" /></Field>
               <Field label="Time"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2" /></Field>
-              <Field label="Timezone"><input value={timezone} readOnly className="mt-1 w-full rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] px-3 py-2 text-[#52525B]" /></Field>
-              <Field label="Mode">
+              <p className="text-xs text-zinc-500">Times are shown in {timezone}.</p>
+              <Field label="How should this be published?">
                 <select value={publicationMode} onChange={(e) => setPublicationMode(e.target.value as PublicationMode)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2">
-                  <option value="MANUAL">Manual</option>
-                  <option value="EXPORT">Export</option>
-                  <option value="DIRECT">Direct Publish</option>
+                  <option value="MANUAL">I’ll publish this myself</option>
+                  <option value="EXPORT">Export for publishing</option>
+                  <option value="DIRECT">Publish automatically</option>
                 </select>
               </Field>
 
               <Field label="Media">
                 <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#E4E4E7] px-3 py-3 hover:bg-[#FAFAFA]">
                   <Image className="h-4 w-4 text-[#71717A]" />
-                  <span className="text-sm text-[#71717A]">{pinnedMedia ? `Pinned · ${pinnedMedia.id}` : 'Attach image for this creative version'}</span>
+                  <span className="text-sm text-[#71717A]">{pinnedMedia ? 'Creative media attached' : 'Attach an image for this creative'}</span>
                   <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onMediaSelected(f); }} />
                 </label>
               </Field>
 
               {publicationMode === 'DIRECT' && (
-                <Field label="Destination">
+                <Field label="Account">
                   <select value={destinationId} onChange={(e) => setDestinationId(e.target.value)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2">
                     <option value="">Select destination</option>
                     {compatibleDestinations.map((d) => (
@@ -322,8 +321,8 @@ export function ScheduleItemDrawer(props: Props) {
 
               <section className="rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#A1A1AA]">Publish preview</p>
-                <p className="mt-2 text-sm text-[#09090B]">{selectedDestination?.displayName ?? (publicationMode === 'DIRECT' ? 'No destination selected' : publicationMode.toLowerCase())}</p>
-                <p className="text-xs text-[#71717A]">Creative V{creativeVersion} · {channel} · {publicationMode}</p>
+                <p className="mt-2 text-sm text-[#09090B]">{selectedDestination?.displayName ?? publicationModeLabel(publicationMode)}</p>
+                <p className="text-xs text-[#71717A]">{titleCase(channel)} · {humanContentTitle(contentKey)}</p>
                 {mediaPreview && <img src={mediaPreview} alt="Scheduled media preview" className="mt-3 max-h-40 rounded-md border border-[#E4E4E7]" />}
                 {!pinnedMedia && publicationMode === 'DIRECT' && (
                   <p className="mt-2 text-xs text-amber-700">Direct publish requires a pinned media asset.</p>
@@ -338,9 +337,9 @@ export function ScheduleItemDrawer(props: Props) {
               {/* Unknown outcome alert */}
               {unknownOutcome && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
-                  <p className="text-sm font-medium text-orange-800">Publish outcome unknown — reconciliation required</p>
+                  <p className="text-sm font-medium text-orange-800">We’re not certain this published</p>
                   <p className="mt-1 text-xs text-orange-700">
-                    The publish attempt did not return a clear success or failure. Check the platform directly before acting.
+                    The connected platform did not return a clear result. Check the post directly before acting.
                     If the post went live, use <strong>Resolve as Published</strong> below. Do not retry blindly — a duplicate post may result.
                   </p>
                 </div>
@@ -365,20 +364,9 @@ export function ScheduleItemDrawer(props: Props) {
                 {formatDateTimeInTz(item.scheduledFor, timezone)}
                 <span className="ml-1 text-[#A1A1AA]">({timezone})</span>
               </Field>
-              <Field label="Mode">{item.publicationMode}</Field>
+              <Field label="Publishing">{publicationModeLabel(item.publicationMode)}</Field>
 
-              {/* Exact pinned creative version — never "latest" */}
-              <Field label="Scheduled creative">
-                <span className="font-mono text-xs">V{item.sourceCreativeVersion} · {item.sourceCreativeArtifactId}</span>
-              </Field>
-
-              {/* Exact pinned media identity */}
-              {item.mediaAssets[0] && (
-                <Field label="Pinned media">
-                  <span className="font-mono text-xs">{item.mediaAssets[0].id}</span>
-                  {item.mediaAssets[0].type && <span className="ml-2 text-[#A1A1AA]">({item.mediaAssets[0].type})</span>}
-                </Field>
-              )}
+              <details className="rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] px-3 py-2 text-xs text-zinc-500"><summary className="cursor-pointer font-medium text-zinc-700">Creative details</summary><div className="mt-2 space-y-1"><p>Version {item.sourceCreativeVersion}</p><p>Media {item.mediaAssets[0] ? 'attached' : 'not attached'}</p></div></details>
 
               {item.blockReason && !unknownOutcome && (
                 <Field label="Blocked">
@@ -522,7 +510,7 @@ export function ScheduleItemDrawer(props: Props) {
           <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
             <h2 id="resolution-title" className="text-base font-semibold text-[#09090B]">Resolve as Published</h2>
             <p className="mt-2 text-sm text-[#52525B]">
-              Continue only after you have verified that this post exists on the external platform. This records a manual operator reconciliation; it does not claim the provider API confirmed publication.
+              Continue only after you have verified that this post exists on the external platform. MarketingOS will record your evidence without claiming the connected platform confirmed publication.
             </p>
             <label className="mt-4 block text-xs font-medium text-[#3F3F46]">
               Verification evidence <span className="text-red-600">*</span>
@@ -564,3 +552,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </label>
   );
 }
+
+function humanContentTitle(value: string): string { return value.replace(/[-_]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase()).replace(/\b0*\d+\b/g, '').replace(/\s+/g, ' ').trim() || 'Untitled content'; }
+function humanCampaignName(name: string, key: string): string { return /^(Campaign|Cmp) camp_/i.test(name) ? `${humanContentTitle(key)} campaign` : name; }
+function titleCase(value: string): string { return value.toLowerCase().replace(/\b\w/g, m => m.toUpperCase()); }
+function publicationModeLabel(mode: PublicationMode): string { return mode === 'DIRECT' ? 'Publish automatically' : mode === 'EXPORT' ? 'Export for publishing' : 'I’ll publish this myself'; }
+function humanStatus(status: string): string { return ({ PUBLISHED:'Published', SCHEDULED:'Scheduled', READY:'Ready', BLOCKED:'Needs attention', PUBLISHING:'Publishing now', FAILED:'Needs attention', CANCELLED:'Cancelled' } as Record<string,string>)[status] ?? titleCase(status.replaceAll('_',' ')); }

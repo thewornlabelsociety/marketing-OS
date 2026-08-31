@@ -1,10 +1,10 @@
 import { Check, ChevronDown, ChevronUp, Image, Loader2, MessageSquare, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CreativeContentEditor } from '../../features/studio/CreativeContentEditor';
-import { CreativeContentView } from '../../features/studio/CreativeContentView';
+import { ChannelPreview } from '../../features/studio/ChannelPreview';
 import { CreativeStudioDrawer } from './CreativeStudioDrawer';
 import { api } from '../../services/api';
-import type { CreativeArtifact, CreativeArtifactStatus, CreativeContent } from '../../types';
+import type { CreativeArtifact, CreativeArtifactStatus, CreativeContent, PreviewDescriptor } from '../../types';
 
 interface Props {
   campaignId: string;
@@ -67,7 +67,7 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
 
   // Unsaved changes guard
   const dirtyRef = useRef(isDirty);
-  dirtyRef.current = isDirty;
+  useEffect(() => { dirtyRef.current = isDirty; }, [isDirty]);
 
   const loadArtifact = useCallback(async () => {
     try {
@@ -218,17 +218,22 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
   }
 
   const isLocked = artifact?.status === 'APPROVED';
+  const previewDescriptor: PreviewDescriptor | null = artifact ? {
+    channel: artifact.channel.toLowerCase() as PreviewDescriptor['channel'],
+    format: previewFormat(artifact.contentType),
+    device: artifact.channel === 'EMAIL' ? 'desktop' : 'mobile',
+  } : null;
 
   return (
     <>
       <button type="button" aria-label="Close" className="fixed inset-0 z-40 bg-black/20" onClick={handleClose} />
-      <div className="fixed right-0 top-0 z-50 flex h-full w-[760px] flex-col border-l border-[#E4E4E7] bg-white shadow-xl">
+      <div className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[1240px] flex-col border-l border-[#E4E4E7] bg-white shadow-xl motion-safe:animate-[studio-in_.2s_ease-out]">
 
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-[#E4E4E7] px-5 py-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="truncate text-sm font-semibold text-[#09090B]">
+              <h2 className="truncate text-base font-semibold tracking-tight text-[#09090B]">
                 {artifact?.title ?? contentKey}
               </h2>
               {artifact && (
@@ -239,7 +244,7 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
             </div>
             {artifact && (
               <p className="text-xs text-[#71717A]">
-                {artifact.channel} · {artifact.contentType} · {artifact.format.replaceAll('_', ' ').toLowerCase()} · V{artifact.version}
+                Studio · {titleCase(artifact.channel)} · Version {artifact.version} {isDirty ? '· Unsaved changes' : ''}
               </p>
             )}
           </div>
@@ -249,7 +254,7 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
               onClick={() => setMode(m => m === 'edit' ? 'preview' : 'edit')}
               className="rounded-md border border-[#E4E4E7] px-3 py-1.5 text-xs text-[#09090B] hover:bg-[#FAFAFA]"
             >
-              {mode === 'edit' ? 'Preview' : 'Edit'}
+              <span className="lg:hidden">{mode === 'edit' ? 'Preview' : 'Edit'}</span><span className="hidden lg:inline">Live preview</span>
             </button>
             <button type="button" aria-label="Close" onClick={handleClose} className="rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]">
               <X className="h-4 w-4" />
@@ -265,11 +270,14 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
         ) : error && !artifact ? (
           <div className="flex flex-1 items-center justify-center p-8 text-sm text-red-600">{error}</div>
         ) : artifact && draft ? (
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-h-0 bg-[#FAFAFA]">
 
             {/* Main editing area */}
-            <div className="flex flex-1 flex-col min-w-0 border-r border-[#F4F4F5]">
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            <div className={`${mode === 'preview' ? 'hidden lg:flex' : 'flex'} min-w-0 flex-1 flex-col border-r border-[#E4E4E7] bg-white`}>
+              <div className="border-b border-[#F4F4F5] px-6 py-3">
+                <div className="flex items-center gap-2 text-xs font-semibold"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-950 text-[10px] text-white">1</span> Build <span className="text-zinc-300">→</span><span className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-[10px]">2</span> Review <span className="text-zinc-300">→</span><span className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-[10px]">3</span> Ready</div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
                 {error && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
                 )}
@@ -278,7 +286,7 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
                 )}
                 {isLocked && mode === 'edit' && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    This creative is approved. Editing will require re-review.
+                    Editing this will send it back for review.
                   </div>
                 )}
                 {artifact.quality.warnings.length > 0 && (
@@ -287,11 +295,7 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
                   </div>
                 )}
 
-                {mode === 'preview' ? (
-                  <CreativeContentView content={draft} />
-                ) : (
-                  <CreativeContentEditor content={draft} onChange={handleContentChange} />
-                )}
+                <CreativeContentEditor content={draft} onChange={handleContentChange} />
 
                 {/* Version history (collapsible) */}
                 {versions.length > 1 && (
@@ -357,7 +361,7 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
             </div>
 
             {/* Sidebar: context + AI + approval */}
-            <div className="flex w-56 shrink-0 flex-col overflow-y-auto px-4 py-4 space-y-5">
+            <div className="hidden w-56 shrink-0 flex-col overflow-y-auto border-r border-[#E4E4E7] bg-white px-4 py-4 space-y-5 xl:flex">
 
               {/* Context */}
               <section>
@@ -392,7 +396,7 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
                     className="flex w-full items-center gap-1.5 rounded-md border border-[#E4E4E7] px-3 py-2 text-xs text-[#09090B] hover:bg-[#FAFAFA]"
                   >
                     <Image className="h-3.5 w-3.5 text-[#71717A]" />
-                    {artifact.mediaAssetId ? 'Edit media' : 'Attach media'}
+                    {artifact.mediaAssetId ? 'Choose & edit media' : 'Choose media'}
                   </button>
                 </section>
               )}
@@ -495,10 +499,15 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
                 <section>
                   <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
                     <p className="font-medium">Approved</p>
-                    <p className="mt-0.5">Edit to re-enter review.</p>
+                    <p className="mt-0.5">Editing will send this back for review.</p>
                   </div>
                 </section>
               )}
+            </div>
+            <div className={`${mode === 'edit' ? 'hidden lg:flex' : 'flex'} w-full flex-col overflow-y-auto bg-[#F4F4F5] p-5 lg:w-[430px] lg:shrink-0`}>
+              <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-zinc-400">Customer view</p><p className="mt-1 text-sm font-semibold">Live preview</p></div>{isDirty && <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-800">Previewing unsaved changes</span>}</div>
+              {previewDescriptor && <div className="flex min-h-[520px] flex-1 items-start justify-center rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"><ChannelPreview descriptor={previewDescriptor} creative={draft} /></div>}
+              <p className="mt-3 text-center text-[11px] text-zinc-500">This preview uses the same draft you are editing.</p>
             </div>
           </div>
         ) : null}
@@ -520,3 +529,12 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
     </>
   );
 }
+
+function previewFormat(type: string): string {
+  if (type === 'STORY') return 'story';
+  if (type === 'CAROUSEL') return 'carousel';
+  if (type === 'SHORT_VIDEO') return 'short-video';
+  if (type === 'NEWSLETTER' || type === 'EMAIL') return 'newsletter';
+  return 'feed';
+}
+function titleCase(value: string): string { return value.toLowerCase().replace(/\b\w/g, m => m.toUpperCase()); }
