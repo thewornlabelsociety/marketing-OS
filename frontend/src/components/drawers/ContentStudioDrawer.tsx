@@ -1,7 +1,8 @@
-import { Check, ChevronDown, ChevronUp, Loader2, MessageSquare, Sparkles, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Image, Loader2, MessageSquare, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CreativeContentEditor } from '../../features/studio/CreativeContentEditor';
 import { CreativeContentView } from '../../features/studio/CreativeContentView';
+import { CreativeStudioDrawer } from './CreativeStudioDrawer';
 import { api } from '../../services/api';
 import type { CreativeArtifact, CreativeArtifactStatus, CreativeContent } from '../../types';
 
@@ -60,6 +61,9 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
 
   // History
   const [showHistory, setShowHistory] = useState(false);
+
+  // Creative Studio
+  const [showCreativeStudio, setShowCreativeStudio] = useState(false);
 
   // Unsaved changes guard
   const dirtyRef = useRef(isDirty);
@@ -378,6 +382,21 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
                 </dl>
               </section>
 
+              {/* Creative Studio link — for image-bearing content */}
+              {artifact && ['STATIC_POST', 'CAROUSEL', 'STORY'].includes(artifact.content.kind) && (
+                <section>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#A1A1AA]">Media</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreativeStudio(true)}
+                    className="flex w-full items-center gap-1.5 rounded-md border border-[#E4E4E7] px-3 py-2 text-xs text-[#09090B] hover:bg-[#FAFAFA]"
+                  >
+                    <Image className="h-3.5 w-3.5 text-[#71717A]" />
+                    {artifact.mediaAssetId ? 'Edit media' : 'Attach media'}
+                  </button>
+                </section>
+              )}
+
               {/* AI actions */}
               {aiConfigured && (
                 <section>
@@ -484,6 +503,20 @@ export function ContentStudioDrawer({ campaignId, workspaceId, contentKey, aiCon
           </div>
         ) : null}
       </div>
+
+      {showCreativeStudio && artifact && (
+        <CreativeStudioDrawer
+          campaignId={campaignId}
+          workspaceId={workspaceId}
+          contentKey={contentKey}
+          artifact={artifact}
+          onClose={() => setShowCreativeStudio(false)}
+          onArtifactChanged={(updated) => {
+            setArtifact(updated);
+            onSaved?.();
+          }}
+        />
+      )}
     </>
   );
 }

@@ -164,6 +164,7 @@ export interface CreativeArtifact {
   quality: CreativeQualityResult;
   status: CreativeArtifactStatus;
   isCurrent: boolean;
+  mediaAssetId?: string;
   createdAt: string;
   updatedAt: string;
 }

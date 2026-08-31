@@ -44,6 +44,7 @@ interface CreativeRow {
   title: string | null;
   content: string;
   quality: string;
+  media_asset_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +69,7 @@ function mapRow(row: CreativeRow): CreativeArtifact {
     quality: JSON.parse(row.quality) as CreativeQualityResult,
     status: row.status as CreativeArtifactStatus,
     isCurrent: row.is_current === 1,
+    mediaAssetId: row.media_asset_id ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

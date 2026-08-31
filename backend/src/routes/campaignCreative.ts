@@ -205,3 +205,44 @@ campaignCreativeRouter.patch('/:contentKey', (req: CreativeReq, res: Response) =
   }
   res.json(updated);
 });
+
+// POST /:contentKey/select-media — attach a media asset to the current creative artifact
+campaignCreativeRouter.post('/:contentKey/select-media', (req: CreativeReq, res: Response) => {
+  const { campaignId, contentKey } = req.params;
+  const { workspaceId, mediaAssetId } = req.body as { workspaceId?: string; mediaAssetId?: string };
+  if (!mediaAssetId || typeof mediaAssetId !== 'string') {
+    res.status(400).json({ error: 'mediaAssetId is required' });
+    return;
+  }
+  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  // Verify media asset belongs to this workspace
+  const asset = db.prepare('SELECT id FROM media_assets WHERE id = ? AND workspace_id = ? AND status = ?')
+    .get(mediaAssetId, workspaceId!, 'ACTIVE');
+  if (!asset) {
+    res.status(404).json({ error: 'Media asset not found or not accessible' });
+    return;
+  }
+  interface ArtifactSelectRow { id: string; status: string }
+  const artifact = db.prepare(
+    'SELECT id, status FROM creative_artifacts WHERE campaign_id = ? AND content_key = ? AND is_current = 1'
+  ).get(campaignId, contentKey!) as ArtifactSelectRow | undefined;
+  if (!artifact) {
+    res.status(404).json({ error: 'No current creative artifact found' });
+    return;
+  }
+  const wasApproved = artifact.status === 'APPROVED';
+  const newStatus = wasApproved ? 'READY_FOR_REVIEW' : artifact.status;
+  const now = new Date().toISOString();
+  db.prepare('UPDATE creative_artifacts SET media_asset_id = ?, status = ?, updated_at = ? WHERE id = ?')
+    .run(mediaAssetId, newStatus, now, artifact.id);
+  if (wasApproved) {
+    db.prepare('DELETE FROM creative_approvals WHERE campaign_id = ? AND content_key = ?')
+      .run(campaignId, contentKey!);
+  }
+  const result = creativeGeneratorService.getCurrent(campaignId, contentKey!);
+  if (!result) {
+    res.status(500).json({ error: 'Failed to retrieve updated artifact' });
+    return;
+  }
+  res.json(result);
+});

@@ -23,6 +23,7 @@ import type {
   LibrarySummary,
   CampaignBlueprint,
   PerformanceLog,
+  MediaAsset,
 } from '../types';
 import type {
   Experiment,
@@ -265,6 +266,20 @@ export const api = {
     request<{ asset: { id: string; type: string; mimeType?: string; storageKey?: string }; checksum: string }>('/media/assets', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  listCreativeMedia: (workspaceId: string, creativeArtifactId: string) =>
+    request<{ assets: MediaAsset[] }>(`/media/assets?workspaceId=${encodeURIComponent(workspaceId)}&creativeArtifactId=${encodeURIComponent(creativeArtifactId)}`),
+  getMediaPreviewUrl: (assetId: string, workspaceId: string) =>
+    request<{ url: string }>(`/media/preview-url?assetId=${encodeURIComponent(assetId)}&workspaceId=${encodeURIComponent(workspaceId)}`),
+  selectCreativeMedia: (campaignId: string, contentKey: string, workspaceId: string, mediaAssetId: string) =>
+    request<CreativeArtifact>(`/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}/select-media`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, mediaAssetId }),
+    }),
+  adaptImageDimensions: (imageBase64: string, backgroundColorHex?: string) =>
+    request<{ success: boolean; renditions: Record<string, string> }>('/media/adapt-dimensions', {
+      method: 'POST',
+      body: JSON.stringify({ imageBase64, backgroundColorHex }),
     }),
   cancelSchedule: (campaignId: string, scheduleId: string, workspaceId: string) =>
     request<ScheduledContentItem>(`/campaigns/${campaignId}/schedule/${scheduleId}/cancel`, {

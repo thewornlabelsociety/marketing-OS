@@ -471,6 +471,26 @@ export interface CreativeArtifact {
   quality: CreativeQualityResult;
   status: CreativeArtifactStatus;
   isCurrent: boolean;
+  mediaAssetId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaAsset {
+  id: string;
+  workspaceId: string;
+  campaignId?: string;
+  contentKey?: string;
+  creativeArtifactId?: string;
+  creativeVersion?: number;
+  storageKey: string;
+  mimeType: string;
+  fileSize: number;
+  width?: number;
+  height?: number;
+  checksum: string;
+  originalFilename?: string;
+  status: string;
   createdAt: string;
   updatedAt: string;
 }

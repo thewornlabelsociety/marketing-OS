@@ -80,6 +80,67 @@ mediaRouter.get('/assets/:assetId', (req: Request, res: Response) => {
   res.json({ asset: mediaAssetService.toPublishableAsset(record), checksum: record.checksum, status: record.status });
 });
 
+mediaRouter.get('/preview-url', (req: Request, res: Response) => {
+  const assetId = typeof req.query.assetId === 'string' ? req.query.assetId : undefined;
+  const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined;
+  if (!assetId || !workspaceId) {
+    res.status(400).json({ error: 'assetId and workspaceId are required' });
+    return;
+  }
+  const record = mediaAssetService.getById(assetId, workspaceId);
+  if (!record) {
+    res.status(404).json({ error: 'Asset not found' });
+    return;
+  }
+  const token = mediaDeliveryService.createHostedToken(record.id, workspaceId);
+  const baseUrl = process.env.MEDIA_PUBLIC_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4100}`;
+  res.json({ url: `${baseUrl}/api/media/hosted/${token}` });
+});
+
+mediaRouter.get('/assets', (req: Request, res: Response) => {
+  const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined;
+  const creativeArtifactId = typeof req.query.creativeArtifactId === 'string' ? req.query.creativeArtifactId : undefined;
+  if (!workspaceId) {
+    res.status(400).json({ error: 'workspaceId is required' });
+    return;
+  }
+  interface AssetListRow {
+    id: string; workspace_id: string; campaign_id: string | null; content_key: string | null;
+    creative_artifact_id: string | null; creative_version: number | null;
+    storage_key: string; mime_type: string; file_size: number; width: number | null; height: number | null;
+    checksum: string; original_filename: string | null; status: string; created_at: string; updated_at: string;
+  }
+  let rows: AssetListRow[];
+  if (creativeArtifactId) {
+    rows = db.prepare(
+      'SELECT * FROM media_assets WHERE workspace_id = ? AND creative_artifact_id = ? AND status = ? ORDER BY created_at DESC'
+    ).all(workspaceId, creativeArtifactId, 'ACTIVE') as AssetListRow[];
+  } else {
+    rows = db.prepare(
+      'SELECT * FROM media_assets WHERE workspace_id = ? AND status = ? ORDER BY created_at DESC LIMIT 50'
+    ).all(workspaceId, 'ACTIVE') as AssetListRow[];
+  }
+  const assets = rows.map(r => ({
+    id: r.id,
+    workspaceId: r.workspace_id,
+    campaignId: r.campaign_id ?? undefined,
+    contentKey: r.content_key ?? undefined,
+    creativeArtifactId: r.creative_artifact_id ?? undefined,
+    creativeVersion: r.creative_version ?? undefined,
+    storageKey: r.storage_key,
+    mimeType: r.mime_type,
+    fileSize: r.file_size,
+    width: r.width ?? undefined,
+    height: r.height ?? undefined,
+    checksum: r.checksum,
+    originalFilename: r.original_filename ?? undefined,
+    status: r.status,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+  res.json({ assets });
+});
+
 // Image → multi-ratio renditions (4:5, 1:1, 9:16, 16:9)
 mediaRouter.post('/adapt-dimensions', async (req, res) => {
   try {
