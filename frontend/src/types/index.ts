@@ -89,6 +89,7 @@ export interface SourceProduct {
   priceCurrency: string | null; availability: 'AVAILABLE' | 'SOLD' | 'UNAVAILABLE'; occurredAt: string | null;
   sourceUpdatedAt: string | null; lastSyncedAt: string; usageCount: number;
   usageStatus: 'NEVER_FEATURED' | 'USED_IN_DRAFT' | 'SCHEDULED' | 'PUBLISHED';
+  marketingBucket: 'NEW' | 'CURRENT' | 'SALE' | null;
   attributes: { brand?: string; category?: string; size?: string; publicUrl?: string; condition?: string };
 }
 

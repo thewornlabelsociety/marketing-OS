@@ -40,7 +40,9 @@ export class BusinessIntegrationService {
     const now = new Date().toISOString();
     const id = existing?.id ?? `bizint_${randomUUID()}`;
     if (existing) {
-      db.prepare("UPDATE business_integrations SET display_name = 'Worn Label', status = 'CONNECTED', capabilities = ?, config = ?, last_error_summary = NULL, updated_at = ? WHERE id = ? AND workspace_id = ?")
+      const prevConfig = JSON.parse(existing.config ?? '{}') as Record<string, unknown>;
+      const baseUrlChanged = prevConfig.baseUrl !== baseUrl;
+      db.prepare(`UPDATE business_integrations SET display_name = 'Worn Label', status = 'CONNECTED', capabilities = ?, config = ?, last_error_summary = NULL${baseUrlChanged ? ', sync_checkpoint = NULL' : ''}, updated_at = ? WHERE id = ? AND workspace_id = ?`)
         .run(JSON.stringify(connector.capabilities), JSON.stringify({ baseUrl }), now, id, workspaceId);
     } else {
       db.prepare("INSERT INTO business_integrations (id, workspace_id, integration_type, display_name, status, capabilities, config, created_at, updated_at) VALUES (?, ?, 'WORN_LABEL', 'Worn Label', 'CONNECTED', ?, ?, ?, ?)")

@@ -5,6 +5,7 @@ interface WornLabelProduct {
   size?: string | null; price: number; currency: string; description?: string | null; publicUrl?: string | null;
   primaryImageUrl?: string | null; images: string[]; publishedAt?: string | null; updatedAt?: string | null;
   availability: 'AVAILABLE' | 'SOLD' | 'UNAVAILABLE'; condition?: string | null;
+  marketingBucket?: 'NEW' | 'CURRENT' | 'SALE' | null;
   attributes?: Record<string, unknown>;
 }
 
@@ -16,13 +17,22 @@ export class WornLabelConnector implements BusinessIntegrationConnector {
     const baseUrl = String(config.baseUrl ?? '').replace(/\/$/, '');
     if (!baseUrl) throw new Error('Worn Label API URL is not configured');
     if (!secret) throw new Error('Worn Label service credential is not configured');
+
     const url = new URL(`${baseUrl}/api/service/marketing/products`);
-    if (checkpoint) url.searchParams.set('updated_after', checkpoint);
-    url.searchParams.set('status', 'all');
+    if (checkpoint) {
+      // Incremental sync: fetch active + sold to detect availability changes
+      url.searchParams.set('status', 'all');
+      url.searchParams.set('updated_after', checkpoint);
+    } else {
+      // Initial full sync: active listings only (bounded, no historical noise)
+      url.searchParams.set('status', 'active');
+    }
     url.searchParams.set('limit', '100');
+
     const response = await fetch(url, { headers: { 'X-Service-Token': secret, Accept: 'application/json' } });
     if (!response.ok) throw new Error(`Worn Label sync failed (${response.status})`);
     const data = await response.json() as { products: WornLabelProduct[]; checkpoint?: string | null };
+
     const records: NormalizedSourceRecord[] = data.products.map((product) => ({
       externalId: product.id,
       sourceType: 'PRODUCT',
