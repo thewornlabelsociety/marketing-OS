@@ -65,6 +65,18 @@ calendarReadyRouter.get('/', (req: Request, res: Response) => {
           AND sci.content_key = ca.content_key
           AND sci.status NOT IN ('CANCELLED', 'FAILED')
       )
+      AND NOT EXISTS (
+        -- Exclude if a FAILED schedule has an UNKNOWN publish attempt (reconciliation required).
+        -- This is authoritative: checks publish_attempts.status, not text heuristics.
+        SELECT 1 FROM scheduled_content_items sci2
+        WHERE sci2.campaign_id = ca.campaign_id
+          AND sci2.content_key = ca.content_key
+          AND sci2.status = 'FAILED'
+          AND EXISTS (
+            SELECT 1 FROM publish_attempts pa
+            WHERE pa.schedule_id = sci2.id AND pa.status = 'UNKNOWN'
+          )
+      )
     ORDER BY c.name, ca.channel, ca.content_key
     LIMIT 50
   `).all(workspaceId) as ReadyRow[];

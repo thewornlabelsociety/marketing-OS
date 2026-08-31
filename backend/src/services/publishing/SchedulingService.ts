@@ -43,7 +43,7 @@ interface ScheduleRow {
   updated_at: string;
 }
 
-function mapRow(row: ScheduleRow, newerRevisionAvailable = false): ScheduledContentItem {
+function mapRow(row: ScheduleRow, newerRevisionAvailable = false, reconciliationRequired = false): ScheduledContentItem {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -65,10 +65,15 @@ function mapRow(row: ScheduleRow, newerRevisionAvailable = false): ScheduledCont
     cancelledAt: row.cancelled_at ?? undefined,
     blockReason: row.block_reason ?? undefined,
     newerRevisionAvailable,
+    reconciliationRequired: reconciliationRequired || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
+
+const HAS_UNKNOWN_ATTEMPT_CASE = `CASE WHEN EXISTS (
+  SELECT 1 FROM publish_attempts pa WHERE pa.schedule_id = sci.id AND pa.status = 'UNKNOWN'
+) THEN 1 ELSE 0 END AS has_unknown_attempt`;
 
 function resolveApprovedCreative(
   campaignId: string,
@@ -103,19 +108,30 @@ function hasNewerUnapprovedRevision(campaignId: string, contentKey: string, sche
 export class SchedulingService {
   list(campaignId: string): ScheduledContentItem[] {
     const rows = db.prepare(`
-      SELECT * FROM scheduled_content_items
-      WHERE campaign_id = ? AND cancelled_at IS NULL
-      ORDER BY scheduled_for ASC
-    `).all(campaignId) as ScheduleRow[];
-    return rows.map((row) => mapRow(row, hasNewerUnapprovedRevision(campaignId, row.content_key, row.source_creative_artifact_id)));
+      SELECT sci.*, ${HAS_UNKNOWN_ATTEMPT_CASE}
+      FROM scheduled_content_items sci
+      WHERE sci.campaign_id = ? AND sci.cancelled_at IS NULL
+      ORDER BY sci.scheduled_for ASC
+    `).all(campaignId) as (ScheduleRow & { has_unknown_attempt: number })[];
+    return rows.map((row) => mapRow(
+      row,
+      hasNewerUnapprovedRevision(campaignId, row.content_key, row.source_creative_artifact_id),
+      row.has_unknown_attempt === 1,
+    ));
   }
 
   getById(scheduleId: string, campaignId: string): ScheduledContentItem | null {
     const row = db.prepare(`
-      SELECT * FROM scheduled_content_items WHERE id = ? AND campaign_id = ?
-    `).get(scheduleId, campaignId) as ScheduleRow | undefined;
+      SELECT sci.*, ${HAS_UNKNOWN_ATTEMPT_CASE}
+      FROM scheduled_content_items sci
+      WHERE sci.id = ? AND sci.campaign_id = ?
+    `).get(scheduleId, campaignId) as (ScheduleRow & { has_unknown_attempt: number }) | undefined;
     if (!row) return null;
-    return mapRow(row, hasNewerUnapprovedRevision(campaignId, row.content_key, row.source_creative_artifact_id));
+    return mapRow(
+      row,
+      hasNewerUnapprovedRevision(campaignId, row.content_key, row.source_creative_artifact_id),
+      row.has_unknown_attempt === 1,
+    );
   }
 
   getSummary(campaignId: string): CampaignPublishingSummary | SchedulingServiceError {
@@ -383,11 +399,16 @@ export class SchedulingService {
 
   listForWorkspace(workspaceId: string): ScheduledContentItem[] {
     const rows = db.prepare(`
-      SELECT * FROM scheduled_content_items
-      WHERE workspace_id = ? AND cancelled_at IS NULL
-      ORDER BY scheduled_for ASC
-    `).all(workspaceId) as ScheduleRow[];
-    return rows.map((row) => mapRow(row, hasNewerUnapprovedRevision(row.campaign_id, row.content_key, row.source_creative_artifact_id)));
+      SELECT sci.*, ${HAS_UNKNOWN_ATTEMPT_CASE}
+      FROM scheduled_content_items sci
+      WHERE sci.workspace_id = ? AND sci.cancelled_at IS NULL
+      ORDER BY sci.scheduled_for ASC
+    `).all(workspaceId) as (ScheduleRow & { has_unknown_attempt: number })[];
+    return rows.map((row) => mapRow(
+      row,
+      hasNewerUnapprovedRevision(row.campaign_id, row.content_key, row.source_creative_artifact_id),
+      row.has_unknown_attempt === 1,
+    ));
   }
 
   preflight(scheduleId: string, campaignId: string, options?: { manualPublish?: boolean }) {

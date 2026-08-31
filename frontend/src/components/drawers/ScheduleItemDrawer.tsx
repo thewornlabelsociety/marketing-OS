@@ -1,7 +1,13 @@
-import { ExternalLink, Image, X } from 'lucide-react';
+import { ExternalLink, Image, Info, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/api';
 import type { MarketingChannel, PublicationMode, PublishingDestination, ScheduledContentItem } from '../../types';
+import {
+  formatDateTimeInTz,
+  getDateStrInTz,
+  getTimePartsInTz,
+  wallClockToISO,
+} from '../../utils/timezone';
 
 interface BaseProps {
   campaignId: string;
@@ -34,7 +40,17 @@ type Props = CreateProps | ViewProps;
 
 type PinnedMedia = { id: string; type: string; mimeType?: string; storageKey?: string; checksum?: string };
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * Returns true when the schedule item has an unresolved unknown publish outcome.
+ * Uses the canonical `reconciliationRequired` field when available; falls back to
+ * the `blockReason` text for older API responses.
+ */
 function isUnknownOutcome(item: ScheduledContentItem): boolean {
+  if (item.reconciliationRequired !== undefined) return !!item.reconciliationRequired;
   return item.status === 'FAILED' && !!item.blockReason?.toLowerCase().includes('reconcile');
 }
 
@@ -61,12 +77,14 @@ export function ScheduleItemDrawer(props: Props) {
 
   useEffect(() => {
     if (mode === 'view' && props.item) {
-      const d = new Date(props.item.scheduledFor);
-      setDate(d.toISOString().slice(0, 10));
-      setTime(d.toISOString().slice(11, 16));
-      setRescheduleDate(d.toISOString().slice(0, 10));
-      setRescheduleTime(d.toISOString().slice(11, 16));
-      setTimezone(props.item.timezone);
+      const tz = props.item.timezone;
+      // Show date/time in the item's stored timezone, not the browser's local timezone
+      setDate(getDateStrInTz(props.item.scheduledFor, tz));
+      const { hour, minute } = getTimePartsInTz(props.item.scheduledFor, tz);
+      setTime(`${pad2(hour)}:${pad2(minute)}`);
+      setRescheduleDate(getDateStrInTz(props.item.scheduledFor, tz));
+      setRescheduleTime(`${pad2(hour)}:${pad2(minute)}`);
+      setTimezone(tz);
       setPublicationMode(props.item.publicationMode);
       setDestinationId(props.item.destinationId ?? '');
       const asset = props.item.mediaAssets[0];
@@ -121,7 +139,10 @@ export function ScheduleItemDrawer(props: Props) {
     setSaving(true);
     setError('');
     try {
-      const scheduledFor = new Date(`${date}T${time}:00`).toISOString();
+      // Use wallClockToISO so the entered wall-clock time is correctly converted to UTC
+      // using the selected timezone, not the browser's local timezone.
+      const [hh, mm] = time.split(':').map(Number);
+      const scheduledFor = wallClockToISO(date, hh, mm, timezone);
       if (publicationMode === 'DIRECT' && !destinationId) {
         throw new Error('Select a destination for direct publishing.');
       }
@@ -157,14 +178,14 @@ export function ScheduleItemDrawer(props: Props) {
     }
   }
 
-  async function markPublished() {
+  async function resolveAsPublished() {
     if (mode !== 'view') return;
     setSaving(true);
     try {
       await api.markSchedulePublished(campaignId, props.item.id, workspaceId);
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to mark published');
+      setError(err instanceof Error ? err.message : 'Failed to resolve as published');
     } finally {
       setSaving(false);
     }
@@ -188,8 +209,11 @@ export function ScheduleItemDrawer(props: Props) {
     setSaving(true);
     setError('');
     try {
-      const scheduledFor = new Date(`${rescheduleDate}T${rescheduleTime}:00`).toISOString();
-      await api.rescheduleItem(campaignId, props.item.id, workspaceId, scheduledFor, props.item.timezone);
+      const tz = props.item.timezone;
+      const [hh, mm] = rescheduleTime.split(':').map(Number);
+      // Convert wall-clock time in the item's timezone to UTC
+      const scheduledFor = wallClockToISO(rescheduleDate, hh, mm, tz);
+      await api.rescheduleItem(campaignId, props.item.id, workspaceId, scheduledFor, tz);
       setRescheduling(false);
       onSaved();
     } catch (err) {
@@ -231,7 +255,9 @@ export function ScheduleItemDrawer(props: Props) {
               </p>
             )}
           </div>
-          <button type="button" onClick={onClose} className="ml-3 rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={onClose} className="ml-3 rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]">
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm">
@@ -292,21 +318,45 @@ export function ScheduleItemDrawer(props: Props) {
               {/* Unknown outcome alert */}
               {unknownOutcome && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
-                  <p className="text-sm font-medium text-orange-800">Publish outcome unknown</p>
+                  <p className="text-sm font-medium text-orange-800">Publish outcome unknown — reconciliation required</p>
                   <p className="mt-1 text-xs text-orange-700">
-                    The publish attempt did not return a clear success or failure. Before retrying, confirm whether this actually published by checking the platform directly. Mark as published if it went live, or it will remain blocked.
+                    The publish attempt did not return a clear success or failure. Check the platform directly before acting.
+                    If the post went live, use <strong>Resolve as Published</strong> below. Do not retry blindly — a duplicate post may result.
                   </p>
                 </div>
               )}
 
-              <Field label="Scheduled">{new Date(item.scheduledFor).toLocaleString()} ({item.timezone})</Field>
-              <Field label="Mode">{item.publicationMode}</Field>
-              <Field label="Creative version">V{item.sourceCreativeVersion} · {item.sourceCreativeArtifactId.slice(0, 18)}…</Field>
+              {/* Newer revision warning */}
+              {item.newerRevisionAvailable && (
+                <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
+                  <p className="text-xs text-blue-700">
+                    This schedule is pinned to V{item.sourceCreativeVersion}. A newer unapproved revision exists.
+                    Editing the current working version will not affect this scheduled publication.
+                    {onNavigateToCampaign && (
+                      <> <button type="button" onClick={() => onNavigateToCampaign(campaignId)} className="underline underline-offset-2">Open campaign</button> to review or approve the new revision first.</>
+                    )}
+                  </p>
+                </div>
+              )}
 
+              {/* Core item fields — display in item's stored timezone, not browser local */}
+              <Field label="Scheduled">
+                {formatDateTimeInTz(item.scheduledFor, item.timezone)}
+                <span className="ml-1 text-[#A1A1AA]">({item.timezone})</span>
+              </Field>
+              <Field label="Mode">{item.publicationMode}</Field>
+
+              {/* Exact pinned creative version — never "latest" */}
+              <Field label="Scheduled creative">
+                <span className="font-mono text-xs">V{item.sourceCreativeVersion} · {item.sourceCreativeArtifactId}</span>
+              </Field>
+
+              {/* Exact pinned media identity */}
               {item.mediaAssets[0] && (
                 <Field label="Pinned media">
                   <span className="font-mono text-xs">{item.mediaAssets[0].id}</span>
-                  {item.mediaAssets[0].type && <span className="ml-2 text-[#71717A]">({item.mediaAssets[0].type})</span>}
+                  {item.mediaAssets[0].type && <span className="ml-2 text-[#A1A1AA]">({item.mediaAssets[0].type})</span>}
                 </Field>
               )}
 
@@ -316,7 +366,11 @@ export function ScheduleItemDrawer(props: Props) {
                 </Field>
               )}
 
-              {item.publishedAt && <Field label="Published">{new Date(item.publishedAt).toLocaleString()}</Field>}
+              {item.publishedAt && (
+                <Field label="Published">
+                  {formatDateTimeInTz(item.publishedAt, item.timezone)}
+                </Field>
+              )}
               {item.externalUrl && (
                 <Field label="URL">
                   <a href={item.externalUrl} target="_blank" rel="noopener noreferrer"
@@ -327,16 +381,52 @@ export function ScheduleItemDrawer(props: Props) {
                 </Field>
               )}
 
+              {/* Content / Creative Studio links */}
+              {onNavigateToCampaign && (
+                <div className="rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] p-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#A1A1AA]">Open in Campaigns</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToCampaign(campaignId)}
+                      className="flex items-center gap-1 rounded border border-[#E4E4E7] bg-white px-2.5 py-1.5 text-xs text-[#09090B] hover:bg-[#F4F4F5]"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      View Content
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToCampaign(campaignId)}
+                      className="flex items-center gap-1 rounded border border-[#E4E4E7] bg-white px-2.5 py-1.5 text-xs text-[#09090B] hover:bg-[#F4F4F5]"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      View Creative
+                    </button>
+                  </div>
+                  {item.newerRevisionAvailable && (
+                    <p className="mt-2 text-[11px] text-amber-700">
+                      Scheduled V{item.sourceCreativeVersion} differs from the current working version.
+                      The schedule will publish exactly V{item.sourceCreativeVersion} unless you explicitly update it.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Inline reschedule form */}
               {rescheduling && (
-                <div className="rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] p-3 space-y-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#A1A1AA]">Reschedule to</p>
+                <div className="space-y-3 rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#A1A1AA]">
+                    Reschedule to ({item.timezone})
+                  </p>
                   <div className="flex gap-2">
                     <input type="date" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)}
                       className="flex-1 rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm" />
                     <input type="time" value={rescheduleTime} onChange={e => setRescheduleTime(e.target.value)}
                       className="w-28 rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm" />
                   </div>
+                  <p className="text-[11px] text-[#A1A1AA]">
+                    Time entered in {item.timezone}. Creative V{item.sourceCreativeVersion} and pinned media remain unchanged.
+                  </p>
                   <div className="flex gap-2">
                     <button type="button" disabled={saving} onClick={() => void confirmReschedule()}
                       className="rounded-lg bg-[#09090B] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
@@ -361,16 +451,16 @@ export function ScheduleItemDrawer(props: Props) {
             </button>
           ) : item && !rescheduling && (
             <div className="flex flex-wrap gap-2">
-              {/* Unknown outcome: offer Reconcile (mark published) — no blind Retry */}
+              {/* Unknown outcome: Resolve as Published — no blind Retry */}
               {unknownOutcome && (
                 <>
-                  <button type="button" disabled={saving} onClick={() => void markPublished()}
+                  <button type="button" disabled={saving} onClick={() => void resolveAsPublished()}
                     className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-                    Mark as Published
+                    {saving ? 'Resolving…' : 'Resolve as Published'}
                   </button>
-                  <div className="flex-1 text-right text-xs text-[#A1A1AA] leading-[2.5]">
-                    Confirm it published, then Retry in the Campaigns tab after reconciling.
-                  </div>
+                  <p className="flex-1 self-center text-right text-xs text-[#A1A1AA]">
+                    Only use this after confirming the post is live on the platform.
+                  </p>
                 </>
               )}
               {/* Clean FAILED: offer Retry */}
@@ -383,7 +473,7 @@ export function ScheduleItemDrawer(props: Props) {
               {/* Manual/export not yet published: mark published */}
               {(item.publicationMode === 'MANUAL' || item.publicationMode === 'EXPORT') &&
                 item.status !== 'PUBLISHED' && !unknownOutcome && (
-                  <button type="button" disabled={saving} onClick={() => void markPublished()}
+                  <button type="button" disabled={saving} onClick={() => void resolveAsPublished()}
                     className="rounded-lg border border-[#E4E4E7] px-4 py-2 text-sm disabled:opacity-50">
                     Mark Published
                   </button>
@@ -414,7 +504,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return (
     <label className="block text-[11px] font-medium uppercase tracking-wide text-[#A1A1AA]">
       {label}
-      <div className="text-sm normal-case text-[#09090B]">{children}</div>
+      <div className="mt-0.5 text-sm normal-case text-[#09090B]">{children}</div>
     </label>
   );
 }

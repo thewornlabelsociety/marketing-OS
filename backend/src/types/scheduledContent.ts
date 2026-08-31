@@ -47,6 +47,8 @@ export interface ScheduledContentItem {
   cancelledAt?: string;
   blockReason?: string;
   newerRevisionAvailable?: boolean;
+  /** True when the schedule has an UNKNOWN publish attempt that must be reconciled before retrying. */
+  reconciliationRequired?: boolean;
   createdAt: string;
   updatedAt: string;
 }

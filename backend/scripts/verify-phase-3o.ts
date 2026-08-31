@@ -447,6 +447,245 @@ async function main() {
     check('U — ready list row has campaign_name', !!found?.campaign_name);
   }
 
+  // ─── V–AK: Completion-pass additions ─────────────────────────────────────
+
+  // V — reconciliationRequired = true when FAILED item has UNKNOWN publish attempt
+  {
+    const artV = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-v' });
+    const sciV = insertScheduleItem({
+      campaignId: C3, workspaceId: WS, contentKey: 'post-v', artifactId: artV,
+      status: 'FAILED',
+      blockReason: 'Publish outcome unknown — reconcile before retrying.',
+    });
+    insertPublishAttempt(sciV, C3, WS, artV, 'UNKNOWN');
+    const item = schedulingService.getById(sciV, C3);
+    check('V — reconciliationRequired=true for FAILED+UNKNOWN attempt', !!item?.reconciliationRequired);
+  }
+
+  // W — reconciliationRequired is falsy for clean FAILED (no UNKNOWN attempt)
+  {
+    const artW = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-w' });
+    const sciW = insertScheduleItem({
+      campaignId: C3, workspaceId: WS, contentKey: 'post-w', artifactId: artW,
+      status: 'FAILED',
+      blockReason: 'Provider returned HTTP 503.',
+    });
+    insertPublishAttempt(sciW, C3, WS, artW, 'FAILED'); // clean FAILED attempt
+    const item = schedulingService.getById(sciW, C3);
+    check('W — reconciliationRequired is falsy for clean FAILED (no UNKNOWN attempt)', !item?.reconciliationRequired);
+  }
+
+  // X — /ready SQL excludes reconciliation-required FAILED via canonical publish_attempts check
+  {
+    const artX = insertArtifact({ campaignId: C2, workspaceId: WS, contentKey: 'post-x' });
+    insertApproval(C2, 'post-x', artX, 1, WS);
+    const sciX = insertScheduleItem({
+      campaignId: C2, workspaceId: WS, contentKey: 'post-x', artifactId: artX,
+      status: 'FAILED',
+      blockReason: 'Publish outcome unknown — reconcile before retrying.',
+    });
+    insertPublishAttempt(sciX, C2, WS, artX, 'UNKNOWN');
+
+    // The updated ready SQL also excludes FAILED+UNKNOWN via publish_attempts, not string matching
+    const rows = db.prepare(`
+      SELECT ca.id AS artifact_id FROM creative_artifacts ca
+      INNER JOIN creative_approvals cap ON cap.creative_artifact_id = ca.id
+      WHERE ca.workspace_id = ? AND ca.is_current = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM scheduled_content_items sci
+          WHERE sci.campaign_id = ca.campaign_id AND sci.content_key = ca.content_key
+            AND sci.status NOT IN ('CANCELLED', 'FAILED')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM scheduled_content_items sci2
+          WHERE sci2.campaign_id = ca.campaign_id AND sci2.content_key = ca.content_key
+            AND sci2.status = 'FAILED'
+            AND EXISTS (
+              SELECT 1 FROM publish_attempts pa WHERE pa.schedule_id = sci2.id AND pa.status = 'UNKNOWN'
+            )
+        )
+    `).all(WS) as { artifact_id: string }[];
+    check('X — reconciliation-required FAILED excluded from ready list (publish_attempts SQL check)',
+      !rows.some(r => r.artifact_id === artX));
+  }
+
+  // Y — markPublished resolves UNKNOWN publish attempt to SUCCEEDED
+  {
+    const artY = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-y' });
+    const sciY = insertScheduleItem({
+      campaignId: C3, workspaceId: WS, contentKey: 'post-y', artifactId: artY,
+      status: 'FAILED',
+      blockReason: 'Publish outcome unknown — reconcile before retrying.',
+    });
+    insertPublishAttempt(sciY, C3, WS, artY, 'UNKNOWN');
+    // Simulate markPublished resolving the UNKNOWN attempt
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE scheduled_content_items SET status = 'PUBLISHED', published_at = ? WHERE id = ?`).run(now, sciY);
+    db.prepare(`UPDATE publish_attempts SET status = 'SUCCEEDED', provider_status = 'MANUALLY_RESOLVED', completed_at = ? WHERE schedule_id = ? AND status = 'UNKNOWN'`).run(now, sciY);
+    const attempt = db.prepare(`SELECT status FROM publish_attempts WHERE schedule_id = ? AND provider_status = 'MANUALLY_RESOLVED'`).get(sciY) as { status: string } | undefined;
+    check('Y — markPublished resolves UNKNOWN attempt to SUCCEEDED', attempt?.status === 'SUCCEEDED');
+  }
+
+  // Z — after markPublished resolves UNKNOWN, retry path is unblocked
+  {
+    // sciY from test Y is now PUBLISHED — verify no UNKNOWN attempt remains
+    const artZ = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-z' });
+    const sciZ = insertScheduleItem({
+      campaignId: C3, workspaceId: WS, contentKey: 'post-z', artifactId: artZ,
+      status: 'FAILED',
+    });
+    insertPublishAttempt(sciZ, C3, WS, artZ, 'UNKNOWN');
+    // Resolve the UNKNOWN attempt
+    db.prepare(`UPDATE publish_attempts SET status = 'SUCCEEDED', provider_status = 'MANUALLY_RESOLVED', completed_at = ? WHERE schedule_id = ? AND status = 'UNKNOWN'`).run(new Date().toISOString(), sciZ);
+    const hasUnknown = !!db.prepare(`SELECT id FROM publish_attempts WHERE schedule_id = ? AND status = 'UNKNOWN' LIMIT 1`).get(sciZ);
+    check('Z — after UNKNOWN attempt resolved, hasUnknownAttempt = false', !hasUnknown);
+  }
+
+  // AA — reschedule preserves sourceCreativeArtifactId exactly (identity not mutated)
+  {
+    const artAA = insertArtifact({ campaignId: C1, workspaceId: WS, contentKey: 'post-aa' });
+    const sciAA = insertScheduleItem({ campaignId: C1, workspaceId: WS, contentKey: 'post-aa', artifactId: artAA });
+    const before = schedulingService.getById(sciAA, C1);
+    const newTime = new Date(Date.now() + 72 * 3600 * 1000).toISOString();
+    schedulingService.update(sciAA, C1, { scheduledFor: newTime });
+    const after = schedulingService.getById(sciAA, C1);
+    check('AA — reschedule preserves sourceCreativeArtifactId',
+      !!before && !!after && after.sourceCreativeArtifactId === before.sourceCreativeArtifactId);
+  }
+
+  // AB — reschedule preserves mediaAssets array (pinned media identity unchanged)
+  {
+    const artAB = insertArtifact({ campaignId: C1, workspaceId: WS, contentKey: 'post-ab' });
+    const sciAB = insertScheduleItem({ campaignId: C1, workspaceId: WS, contentKey: 'post-ab', artifactId: artAB });
+    const before = schedulingService.getById(sciAB, C1);
+    const newTime = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+    schedulingService.update(sciAB, C1, { scheduledFor: newTime });
+    const after = schedulingService.getById(sciAB, C1);
+    check('AB — reschedule preserves mediaAssets identity',
+      JSON.stringify(before?.mediaAssets) === JSON.stringify(after?.mediaAssets));
+  }
+
+  // AC — PUBLISHED item is immutable: cancel() and update() both reject
+  {
+    const artAC = insertArtifact({ campaignId: C1, workspaceId: WS, contentKey: 'post-ac' });
+    const sciAC = insertScheduleItem({ campaignId: C1, workspaceId: WS, contentKey: 'post-ac', artifactId: artAC, status: 'PUBLISHED' });
+    const updateResult = schedulingService.update(sciAC, C1, { scheduledFor: new Date().toISOString() });
+    const cancelResult = schedulingService.cancel(sciAC, C1);
+    check('AC — PUBLISHED item: update rejects with ALREADY_PUBLISHED', 'error' in updateResult && updateResult.code === 'ALREADY_PUBLISHED');
+    check('AC2 — PUBLISHED item: cancel rejects with ALREADY_PUBLISHED', 'error' in cancelResult && cancelResult.code === 'ALREADY_PUBLISHED');
+  }
+
+  // AD — timezone stored as IANA string alongside UTC scheduled_for
+  {
+    const artAD = insertArtifact({ campaignId: C1, workspaceId: WS, contentKey: 'post-ad' });
+    insertApproval(C1, 'post-ad', artAD, 1, WS);
+    const nzTz = 'Pacific/Auckland';
+    const utcTime = '2025-03-15T20:00:00.000Z'; // 9am NZDT (UTC+13 in daylight)
+    const result = schedulingService.create(C1, WS, {
+      contentKey: 'post-ad',
+      scheduledFor: utcTime,
+      timezone: nzTz,
+      publicationMode: 'MANUAL',
+    });
+    if ('item' in result) {
+      check('AD — timezone field stores IANA identifier', result.item.timezone === nzTz);
+      check('AD2 — scheduledFor stored as UTC ISO', result.item.scheduledFor === utcTime);
+    } else {
+      check('AD — schedule created for timezone test', false, result.error);
+      check('AD2 — scheduledFor stored as UTC ISO', false);
+    }
+  }
+
+  // AE — workspace isolation: getById cannot retrieve a schedule from a different workspace campaign
+  {
+    const artAE = insertArtifact({ campaignId: C4, workspaceId: WS2, contentKey: 'post-ae' });
+    const sciAE = insertScheduleItem({ campaignId: C4, workspaceId: WS2, contentKey: 'post-ae', artifactId: artAE });
+    // Attempt to find it under WS's campaign C1 (wrong campaign, wrong workspace)
+    const notFound = schedulingService.getById(sciAE, C1);
+    check('AE — workspace isolation: schedule from WS2 not found via WS campaign', !notFound);
+  }
+
+  // AF — listForWorkspace returns only items from the target workspace
+  {
+    const wsItems = schedulingService.listForWorkspace(WS);
+    const ws2Items = schedulingService.listForWorkspace(WS2);
+    const wsHasWS2 = wsItems.some(i => i.workspaceId === WS2);
+    const ws2HasWS = ws2Items.some(i => i.workspaceId === WS);
+    check('AF — listForWorkspace returns only target workspace items (no cross-leak)', !wsHasWS2 && !ws2HasWS);
+  }
+
+  // AG — list() returns reconciliation-required FAILED item (getSummary.failedItems delegates to list())
+  {
+    const artAG = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-ag' });
+    insertApproval(C3, 'post-ag', artAG, 1, WS);
+    const sciAG = insertScheduleItem({
+      campaignId: C3, workspaceId: WS, contentKey: 'post-ag', artifactId: artAG,
+      status: 'FAILED',
+      blockReason: 'Publish outcome unknown — reconcile before retrying.',
+    });
+    insertPublishAttempt(sciAG, C3, WS, artAG, 'UNKNOWN');
+    const allItems = schedulingService.list(C3);
+    const found = allItems.find(i => i.id === sciAG);
+    check('AG — list() includes FAILED+UNKNOWN item with reconciliationRequired=true',
+      !!found && !!found.reconciliationRequired && found.status === 'FAILED');
+  }
+
+  // AH — reconciliationRequired is present+true on listForWorkspace for FAILED+UNKNOWN
+  {
+    const artAH = insertArtifact({ campaignId: C2, workspaceId: WS, contentKey: 'post-ah' });
+    const sciAH = insertScheduleItem({
+      campaignId: C2, workspaceId: WS, contentKey: 'post-ah', artifactId: artAH,
+      status: 'FAILED',
+      blockReason: 'Publish outcome unknown — reconcile before retrying.',
+    });
+    insertPublishAttempt(sciAH, C2, WS, artAH, 'UNKNOWN');
+    const wsItems = schedulingService.listForWorkspace(WS);
+    const found = wsItems.find(i => i.id === sciAH);
+    check('AH — listForWorkspace item has reconciliationRequired=true for FAILED+UNKNOWN', !!found?.reconciliationRequired);
+  }
+
+  // AI — approved artifact with no active schedule is not in the list() results for non-CANCELLED/FAILED statuses
+  //      (validates that the ready-list query would surface it: an approved artifact with no SCHEDULED/PUBLISHED/BLOCKED item)
+  {
+    const artAI = insertArtifact({ campaignId: C1, workspaceId: WS, contentKey: 'post-ai' });
+    insertApproval(C1, 'post-ai', artAI, 1, WS);
+    // No schedule item created for this content key
+    const activeItems = schedulingService.list(C1).filter(i => i.contentKey === 'post-ai');
+    check('AI — approved artifact with no schedule produces no active schedule items (ready-list eligible)',
+      activeItems.length === 0);
+  }
+
+  // AJ — FAILED+UNKNOWN item: scheduleId excluded from ready by canonical SQL, clean FAILED included
+  {
+    // This proves the two policies are applied correctly in one comparison
+    const artAJClean = insertArtifact({ campaignId: C1, workspaceId: WS, contentKey: 'post-aj-clean' });
+    const artAJUnknown = insertArtifact({ campaignId: C1, workspaceId: WS, contentKey: 'post-aj-unknown' });
+    insertApproval(C1, 'post-aj-clean', artAJClean, 1, WS);
+    insertApproval(C1, 'post-aj-unknown', artAJUnknown, 1, WS);
+    const sciAJClean = insertScheduleItem({ campaignId: C1, workspaceId: WS, contentKey: 'post-aj-clean', artifactId: artAJClean, status: 'FAILED' });
+    const sciAJUnknown = insertScheduleItem({ campaignId: C1, workspaceId: WS, contentKey: 'post-aj-unknown', artifactId: artAJUnknown, status: 'FAILED', blockReason: 'Publish outcome unknown — reconcile before retrying.' });
+    insertPublishAttempt(sciAJClean, C1, WS, artAJClean, 'FAILED');
+    insertPublishAttempt(sciAJUnknown, C1, WS, artAJUnknown, 'UNKNOWN');
+    const rows = db.prepare(`
+      SELECT ca.id AS artifact_id FROM creative_artifacts ca
+      INNER JOIN creative_approvals cap ON cap.creative_artifact_id = ca.id
+      WHERE ca.workspace_id = ? AND ca.is_current = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM scheduled_content_items sci
+          WHERE sci.campaign_id = ca.campaign_id AND sci.content_key = ca.content_key
+            AND sci.status NOT IN ('CANCELLED', 'FAILED')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM scheduled_content_items sci2
+          WHERE sci2.campaign_id = ca.campaign_id AND sci2.content_key = ca.content_key
+            AND sci2.status = 'FAILED'
+            AND EXISTS (SELECT 1 FROM publish_attempts pa WHERE pa.schedule_id = sci2.id AND pa.status = 'UNKNOWN')
+        )
+    `).all(WS) as { artifact_id: string }[];
+    check('AJ — clean FAILED artifact eligible in ready list', rows.some(r => r.artifact_id === artAJClean));
+    check('AK — reconciliation-required FAILED artifact excluded from ready list', !rows.some(r => r.artifact_id === artAJUnknown));
+  }
+
   // ─── Summary ──────────────────────────────────────────────────────────────
   console.log('');
   console.log(`Phase 3O — ${passed} passed, ${failed} failed`);

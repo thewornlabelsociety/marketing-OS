@@ -292,6 +292,14 @@ export class PublishingService {
       WHERE id = ? AND campaign_id = ?
     `).run(publishedAt, input.externalUrl ?? null, input.notes ?? null, now, scheduleId, campaignId);
 
+    // Resolve any UNKNOWN publish attempts so hasUnknownAttempt() is false going forward.
+    // This is the canonical reconciliation action: the operator confirmed the post went live.
+    db.prepare(`
+      UPDATE publish_attempts
+      SET status = 'SUCCEEDED', provider_status = 'MANUALLY_RESOLVED', completed_at = ?
+      WHERE schedule_id = ? AND status = 'UNKNOWN'
+    `).run(now, scheduleId);
+
     return { item: schedulingService.getById(scheduleId, campaignId)! };
   }
 }
