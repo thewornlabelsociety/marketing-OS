@@ -25,6 +25,8 @@ import type {
   PerformanceLog,
   MediaAsset,
   ReadyToScheduleItem,
+  BusinessIntegration,
+  SourceProduct,
 } from '../types';
 import type {
   Experiment,
@@ -37,6 +39,7 @@ const BASE = '/api';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
@@ -59,6 +62,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  establishLocalOperatorSession: () => request<{ authenticated: boolean }>('/local-operator-session', { method: 'POST' }),
+  getBusinessIntegrations: (workspaceId: string) => request<BusinessIntegration[]>(`/business-sources/integrations?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getSourceProducts: (workspaceId: string, filter = 'all') => request<SourceProduct[]>(`/business-sources/products?workspaceId=${encodeURIComponent(workspaceId)}&filter=${encodeURIComponent(filter)}`),
+  getSourceProductUsage: (id: string, workspaceId: string) => request<Array<Record<string, unknown>>>(`/business-sources/products/${encodeURIComponent(id)}/usage?workspaceId=${encodeURIComponent(workspaceId)}`),
   // Entities / Workspaces
   getEntities: () => request<Entity[]>('/entities'),
   createEntity: (payload: { id: string; name: string; slug: string; brand_kit?: BrandKit }) =>

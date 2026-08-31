@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
-import type { IntegrationConnection, PublishingDestination } from '../../types';
+import type { BusinessIntegration, IntegrationConnection, PublishingDestination } from '../../types';
 
 function statusLabel(status: IntegrationConnection['status']): string {
   switch (status) {
@@ -23,6 +23,7 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [businessIntegrations, setBusinessIntegrations] = useState<BusinessIntegration[]>([]);
 
   const metaConnection = connections.find((c) => c.providerKey === 'meta');
 
@@ -47,6 +48,13 @@ export default function IntegrationsPage() {
   }, [workspaceId]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!workspaceId) return;
+    api.establishLocalOperatorSession()
+      .then(() => api.getBusinessIntegrations(workspaceId))
+      .then(setBusinessIntegrations)
+      .catch(() => setBusinessIntegrations([]));
+  }, [workspaceId]);
 
   async function handleConnect() {
     if (!workspaceId) return;
@@ -111,6 +119,15 @@ export default function IntegrationsPage() {
           <AlertCircle className="mb-2 h-4 w-4 text-[#71717A]" />
           We couldn&apos;t load integrations. {error}
         </div>
+      )}
+
+      {!loading && (
+        <section className="rounded-xl border border-[#E4E4E7] bg-white">
+          <div className="flex items-start justify-between gap-4 px-4 py-4">
+            <div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E4E4E7] bg-[#FAFAFA]"><Link2 className="h-4 w-4" /></div><div><p className="text-sm font-medium text-[#09090B]">Worn Label</p><p className="text-xs text-[#71717A]">Read-only products and availability</p></div></div>
+            {businessIntegrations.find(item=>item.integrationType==='WORN_LABEL') ? <div className="text-right"><p className="text-xs font-medium uppercase tracking-wide text-[#71717A]">{businessHealth(businessIntegrations.find(item=>item.integrationType==='WORN_LABEL')!.status)}</p><p className="mt-1 text-xs text-[#A1A1AA]">{lastSyncLabel(businessIntegrations.find(item=>item.integrationType==='WORN_LABEL')!)}</p></div> : <p className="text-xs text-[#A1A1AA]">Not configured on the server</p>}
+          </div>
+        </section>
       )}
 
       {!loading && (
@@ -216,3 +233,5 @@ export default function IntegrationsPage() {
     </div>
   );
 }
+function businessHealth(status:BusinessIntegration['status']){return ({CONNECTED:'Connected',SYNCING:'Syncing',NEEDS_ATTENTION:'Needs attention',DISCONNECTED:'Disconnected'} as const)[status];}
+function lastSyncLabel(item:BusinessIntegration){return item.lastSuccessfulSyncAt?`Last synced ${new Date(item.lastSuccessfulSyncAt).toLocaleString('en-NZ')}`:item.lastErrorSummary??'Waiting for first sync';}

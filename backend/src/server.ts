@@ -27,9 +27,13 @@ import { archiveRouter } from './routes/archive';
 import { campaignExperimentsRouter } from './routes/campaignExperiments';
 import { dashboardRouter, attentionRouter } from './routes/dashboard';
 import { publishingSchedulerService } from './services/publishing/PublishingSchedulerService';
+import { businessSourcesRouter } from './routes/businessSources';
+import { businessIntegrationService } from './services/business/BusinessIntegrationService';
+import { establishLocalOperatorSession } from './middleware/localOperatorSession';
+import { resolveWornLabelIntegrationEnvironment } from './config/businessIntegrationEnvironment';
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/, credentials: true }));
 app.use(express.json({ limit: '100mb' }));
 
 initDatabase();
@@ -60,6 +64,8 @@ app.use('/api/blueprints', blueprintsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/attention', attentionRouter);
 app.use('/api/media', mediaRouter);
+app.post('/api/local-operator-session', establishLocalOperatorSession);
+app.use('/api/business-sources', businessSourcesRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'marketing-os-backend' });
@@ -69,4 +75,17 @@ const PORT = process.env.PORT || 4100;
 app.listen(PORT, () => {
   console.log(`Marketing OS Backend running on http://localhost:${PORT}`);
   publishingSchedulerService.start();
+  const wornLabelEnv = resolveWornLabelIntegrationEnvironment();
+  console.log(`[business-sync] ${wornLabelEnv.diagnostic}`);
+  if (wornLabelEnv.enabled && wornLabelEnv.workspaceId) {
+    try {
+      const integration = businessIntegrationService.connectWornLabelFromEnvironment(wornLabelEnv.workspaceId);
+      const syncWornLabel = () => void businessIntegrationService.sync(integration.id, wornLabelEnv.workspaceId!)
+        .catch((error) => console.error('[business-sync] Worn Label sync failed:', (error as Error).message));
+      syncWornLabel();
+      setInterval(syncWornLabel, wornLabelEnv.syncIntervalMinutes * 60_000).unref();
+    } catch (error) {
+      console.error('[business-sync] Worn Label configuration failed:', (error as Error).message);
+    }
+  }
 });

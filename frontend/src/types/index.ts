@@ -77,6 +77,21 @@ export interface Entity {
   updatedAt: string;
 }
 
+export interface BusinessIntegration {
+  id: string; workspaceId: string; integrationType: string; displayName: string;
+  status: 'CONNECTED' | 'SYNCING' | 'NEEDS_ATTENTION' | 'DISCONNECTED'; capabilities: string[];
+  syncCheckpoint: string | null; lastAttemptedSyncAt: string | null;
+  lastSuccessfulSyncAt: string | null; lastErrorSummary: string | null;
+}
+export interface SourceProduct {
+  id: string; workspaceId: string; integrationId: string; sourceType: 'PRODUCT'; title: string;
+  subtitle: string | null; description: string | null; imageUrls: string[]; priceAmount: number | null;
+  priceCurrency: string | null; availability: 'AVAILABLE' | 'SOLD' | 'UNAVAILABLE'; occurredAt: string | null;
+  sourceUpdatedAt: string | null; lastSyncedAt: string; usageCount: number;
+  usageStatus: 'NEVER_FEATURED' | 'USED_IN_DRAFT' | 'SCHEDULED' | 'PUBLISHED';
+  attributes: { brand?: string; category?: string; size?: string; publicUrl?: string; condition?: string };
+}
+
 export interface Objective {
   id: string;
   workspaceId: string | null;
@@ -771,6 +786,7 @@ export interface DropDraft {
 
 export type AppTab =
   | 'dashboard'
+  | 'create'
   | 'campaigns'
   | 'campaign-detail'
   | 'calendar'
@@ -779,7 +795,8 @@ export type AppTab =
   | 'brand-brain'
   | 'objectives'
   | 'integrations'
-  | 'studio';
+  | 'studio'
+  | 'learn';
 
 export interface DeepLinkParams {
   entity?: string;
