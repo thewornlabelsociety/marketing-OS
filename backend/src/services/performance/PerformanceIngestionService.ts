@@ -196,8 +196,8 @@ export class PerformanceIngestionService {
 
     if (input.externalConversionId) {
       const existing = db.prepare(
-        'SELECT id FROM conversion_events WHERE external_conversion_id = ?'
-      ).get(input.externalConversionId) as { id: string } | undefined;
+        'SELECT id FROM conversion_events WHERE external_conversion_id = ? AND workspace_id = ?'
+      ).get(input.externalConversionId, input.workspaceId) as { id: string } | undefined;
       if (existing) return { conversion: mapConversionRow(db.prepare('SELECT * FROM conversion_events WHERE id = ?').get(existing.id) as ConversionRow) };
     }
 

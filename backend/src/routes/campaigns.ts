@@ -182,6 +182,13 @@ campaignsRouter.patch('/:id', (req, res) => {
     res.status(403).json({ error: 'Campaign does not belong to this workspace' });
     return;
   }
+
+  const READ_ONLY_STATUSES = new Set(['CANCELLED', 'COMPLETE', 'ARCHIVED']);
+  if (READ_ONLY_STATUSES.has(existing.status)) {
+    res.status(409).json({ error: `Campaign is ${existing.status.toLowerCase()} and cannot be edited` });
+    return;
+  }
+
   const sets: string[] = [];
   const vals: unknown[] = [];
 

@@ -207,15 +207,52 @@ async function main() {
   check('11b Campaign name unchanged after failed cross-workspace patch', get11.body.name === 'Workspace B campaign',
     `name=${get11.body.name as string}`);
 
-  // ── 12. Cancelled campaign: PATCH without workspaceId still allowed (cancel flow) ──
+  // ── 12. CANCELLED campaign: PATCH returns 409 (server-enforced read-only) ──
   const campE = `camp_edit_e_${randomUUID()}`;
   insertCampaign(campE, wsA, { status: 'CANCELLED' });
-  const patch12 = await req('PATCH', `/${campE}`, { name: 'Post-cancel rename attempt' });
-  // Backend allows it (no status gate on PATCH itself; UI restricts edit drawer to EDITABLE statuses)
-  // The status rule is enforced in the frontend by the EDITABLE set. Backend is permissive for flexibility.
-  check('12 Backend PATCH is status-agnostic (UI enforces editability)',
-    patch12.status === 200,
+  const patch12 = await req('PATCH', `/${campE}`, { workspaceId: wsA, name: 'Post-cancel rename attempt' });
+  check('12 CANCELLED PATCH returns 409',
+    patch12.status === 409,
     `status=${patch12.status}`);
+
+  // ── 13. CANCELLED: campaign unchanged after rejected PATCH ──
+  const get13 = await req('GET', `/${campE}`);
+  check('13 CANCELLED campaign name unchanged after rejected PATCH',
+    get13.body.name === `Campaign ${campE}`,
+    `name=${get13.body.name as string}`);
+
+  // ── 14. COMPLETE: PATCH returns 409 ──
+  const campF = `camp_edit_f_${randomUUID()}`;
+  insertCampaign(campF, wsA, { status: 'COMPLETE' });
+  const patch14 = await req('PATCH', `/${campF}`, { workspaceId: wsA, name: 'Complete rename attempt' });
+  check('14 COMPLETE PATCH returns 409', patch14.status === 409, `status=${patch14.status}`);
+
+  // ── 15. ARCHIVED: PATCH returns 409 ──
+  const campG2 = `camp_edit_g_${randomUUID()}`;
+  insertCampaign(campG2, wsA, { status: 'ARCHIVED' });
+  const patch15 = await req('PATCH', `/${campG2}`, { workspaceId: wsA, name: 'Archive rename attempt' });
+  check('15 ARCHIVED PATCH returns 409', patch15.status === 409, `status=${patch15.status}`);
+
+  // ── 16. Editable status (SCHEDULED) PATCH succeeds ──
+  const campH = `camp_edit_h_${randomUUID()}`;
+  insertCampaign(campH, wsA, { status: 'SCHEDULED', name: 'Scheduled campaign' });
+  const patch16 = await req('PATCH', `/${campH}`, { workspaceId: wsA, name: 'Updated Scheduled' });
+  check('16 SCHEDULED (editable) PATCH returns 200', patch16.status === 200, `status=${patch16.status}`);
+
+  // ── 17. Wrong workspace rejected even for read-only campaign ──
+  const campI2 = `camp_edit_i_${randomUUID()}`;
+  insertCampaign(campI2, wsA, { status: 'CANCELLED', name: 'WS-B locked' });
+  const patch17 = await req('PATCH', `/${campI2}`, { workspaceId: wsB, name: 'Cross-ws attack on locked' });
+  // Workspace guard fires first (403), editability guard is secondary (409).
+  check('17 Wrong workspace on locked campaign returns 403', patch17.status === 403, `status=${patch17.status}`);
+
+  // ── 18. Cancel flow unbroken: DRAFTING → CANCELLED still returns 200 ──
+  const campJ = `camp_edit_j_${randomUUID()}`;
+  insertCampaign(campJ, wsA, { status: 'DRAFTING' });
+  const patch18 = await req('PATCH', `/${campJ}`, { workspaceId: wsA, status: 'CANCELLED', cancellationReason: 'No longer needed' });
+  check('18 Cancel flow (DRAFTING → CANCELLED) returns 200',
+    patch18.status === 200 && patch18.body.status === 'CANCELLED',
+    `status=${patch18.status} campStatus=${patch18.body.status as string}`);
 
   server.close();
 

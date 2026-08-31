@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS conversion_events (
   FOREIGN KEY (workspace_id) REFERENCES entities(id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_conversion_external ON conversion_events(external_conversion_id)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversion_external ON conversion_events(workspace_id, external_conversion_id)
   WHERE external_conversion_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_conversion_campaign ON conversion_events(campaign_id);

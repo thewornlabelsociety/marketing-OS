@@ -28,6 +28,11 @@ import type { AttentionSignalType } from '../src/types/attention';
 async function main() {
   initDatabase();
 
+  // Reset obj_sys_sales to its seeded defaults before every run so tests J and P
+  // (which mutate this global row) cannot contaminate subsequent invocations.
+  db.prepare('UPDATE objectives SET success_criteria = NULL, primary_kpi = ? WHERE id = ?')
+    .run('conversions', 'obj_sys_sales');
+
   let failed = 0;
   let passed = 0;
 
@@ -713,12 +718,16 @@ async function main() {
   check('AA dashboard error retry UI', dashPageSrc.includes("We couldn&apos;t load your dashboard"));
 
   // --- Additional: No AI ---
-  check('No AI env empty', process.env.AI_PROVIDER === '');
+  check('No AI env empty', !process.env.AI_PROVIDER);
   const campNoAi = `camp_noai_${randomUUID()}`;
   insertCampaign(campNoAi, wsEmpty, 'obj_sys_sales', 'APPROVED');
   seedPlanChain(campNoAi, wsEmpty);
   const noAiArt = persistCreative(campNoAi, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   check('No AI manual creative', Boolean(noAiArt.id));
+
+  // Restore obj_sys_sales to its seeded defaults after the run.
+  db.prepare('UPDATE objectives SET success_criteria = NULL, primary_kpi = ? WHERE id = ?')
+    .run('conversions', 'obj_sys_sales');
 
   console.log(`\nPhase 3I verification: ${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
