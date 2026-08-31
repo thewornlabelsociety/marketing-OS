@@ -132,7 +132,7 @@ async function main() {
       publicationMode: 'MANUAL',
     });
     if ('error' in sched) throw new Error(sched.error);
-    publishingService.markPublished(sched.item.id, campaignId, { externalUrl: `https://example.com/${contentKey}` });
+    publishingService.markPublished(sched.item.id, campaignId, { evidence: 'Verified externally', externalUrl: `https://example.com/${contentKey}` });
     return { schedule: sched.item, creative };
   }
 
@@ -154,7 +154,7 @@ async function main() {
       db.prepare(`UPDATE scheduled_content_items SET source_creative_artifact_id = ?, source_creative_version = ?, channel = ? WHERE id = ?`)
         .run(artifactId, version, channel, sched.item.id);
     }
-    publishingService.markPublished(sched.item.id, campaignId, { externalUrl: `https://example.com/${contentKey}` });
+    publishingService.markPublished(sched.item.id, campaignId, { evidence: 'Verified externally', externalUrl: `https://example.com/${contentKey}` });
     return sched.item.id;
   }
 
@@ -275,7 +275,7 @@ async function main() {
   check('G overdue is CRITICAL', failSignalsG.some((s) => s.severity === 'CRITICAL'));
 
   // --- Test H: mark published resolves failure signal ---
-  publishingService.markPublished(schedG.item.id, campG, { externalUrl: 'https://example.com/fixed' });
+  publishingService.markPublished(schedG.item.id, campG, { evidence: 'Verified externally', externalUrl: 'https://example.com/fixed' });
   attentionSignalService.reconcile(wsA);
   const openAfterH = attentionSignalService.list(wsA).filter(
     (s) => s.campaignId === campG && (s.signalType === 'PUBLISHING_FAILED' || s.signalType === 'PUBLISHING_RETRY_REQUIRED'),

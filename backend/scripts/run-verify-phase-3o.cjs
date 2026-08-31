@@ -6,6 +6,7 @@ const tmp = path.join(os.tmpdir(), `marketing-os-verify-3o-${Date.now()}.db`);
 process.env.SQLITE_PATH = tmp;
 process.env.AI_PROVIDER = '';
 process.env.META_MOCK_MODE = '1';
+process.env.DEFAULT_SCHEDULE_TIMEZONE = 'Pacific/Auckland';
 
 require('ts-node/register/transpile-only');
 require('./verify-phase-3o.ts');

@@ -74,10 +74,20 @@ export interface PublishAttempt {
   errorCode?: string;
   errorMessage?: string;
   errorCategory?: string;
+  resolutionMethod?: string;
+  resolutionEvidence?: string;
+  resolvedAt?: string;
   mediaAssetIds?: string[];
   mediaChecksums?: string[];
   startedAt: string;
   completedAt?: string;
+}
+
+export interface PublicationReconciliationInput {
+  evidence: string;
+  externalPublishId?: string;
+  externalUrl?: string;
+  publishedAt?: string;
 }
 
 export interface PrePublishCheck {

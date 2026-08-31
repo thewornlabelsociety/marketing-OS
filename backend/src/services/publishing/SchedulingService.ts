@@ -199,7 +199,9 @@ export class SchedulingService {
       return { error: 'Invalid scheduled date/time.', code: 'PUBLISH_VALIDATION_FAILED' };
     }
 
-    const timezone = input.timezone?.trim() || DEFAULT_SCHEDULE_TIMEZONE;
+    // Single-workspace local mode has one authoritative scheduling timezone.
+    // Clients may send the value for compatibility, but cannot establish a competing authority.
+    const timezone = DEFAULT_SCHEDULE_TIMEZONE;
     let mediaAssets: PublishableAsset[] = input.mediaAssets ?? [];
     if (mediaAssets.length > 0) {
       try {
@@ -276,7 +278,7 @@ export class SchedulingService {
     if (existing.status === 'CANCELLED') return { error: 'Cancelled items cannot be updated.', code: 'SCHEDULE_CANCELLED' };
 
     const scheduledFor = input.scheduledFor ? new Date(input.scheduledFor).toISOString() : existing.scheduledFor;
-    const timezone = input.timezone ?? existing.timezone;
+    const timezone = DEFAULT_SCHEDULE_TIMEZONE;
     const destinationId = input.destinationId === undefined ? existing.destinationId : input.destinationId ?? undefined;
     const mediaAssets = input.mediaAssets !== undefined
       ? (() => {

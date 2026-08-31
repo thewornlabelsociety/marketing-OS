@@ -208,7 +208,7 @@ export function CreativeStudioDrawer({ campaignId, workspaceId, contentKey, arti
   const approve = async () => {
     setApproving(true);
     try {
-      await api.approveCreative(campaignId, contentKey, workspaceId);
+      await api.approveCreative(campaignId, contentKey, workspaceId, artifact.id);
       const updated = await api.getCreative(campaignId, contentKey, workspaceId);
       setArtifact(updated);
       onArtifactChanged?.(updated);

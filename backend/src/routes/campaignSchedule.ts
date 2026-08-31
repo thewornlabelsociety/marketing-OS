@@ -206,7 +206,12 @@ campaignScheduleRouter.post('/:scheduleId/retry', async (req: ScheduleReq, res: 
 campaignScheduleRouter.post('/:scheduleId/mark-published', (req: ScheduleReq, res: Response) => {
   const { campaignId, scheduleId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  const body = req.body as { publishedAt?: string; externalUrl?: string; notes?: string };
+  const body = req.body as {
+    evidence: string;
+    publishedAt?: string;
+    externalPublishId?: string;
+    externalUrl?: string;
+  };
   const result = publishingService.markPublished(scheduleId!, campaignId, body);
   if ('error' in result) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });

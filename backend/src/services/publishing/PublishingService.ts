@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
 import { PublishingProviderRegistry } from '../../integrations/adapters/PublishingProviderRegistry';
-import type { PublishAttempt, PublishableAsset, ScheduledContentItem } from '../../types/scheduledContent';
+import type { PublicationReconciliationInput, PublishAttempt, PublishableAsset, ScheduledContentItem } from '../../types/scheduledContent';
 import { creativeGeneratorService } from '../creative/CreativeGeneratorService';
 import { prePublishCheckService } from './PrePublishCheckService';
 import { schedulingService, type SchedulingServiceError } from './SchedulingService';
@@ -29,6 +29,9 @@ interface AttemptRow {
   error_code: string | null;
   error_message: string | null;
   error_category: string | null;
+  resolution_method: string | null;
+  resolution_evidence: string | null;
+  resolved_at: string | null;
   media_asset_ids: string | null;
   media_checksums: string | null;
   media_delivery_metadata: string | null;
@@ -56,6 +59,9 @@ function mapAttempt(row: AttemptRow): PublishAttempt {
     errorCode: row.error_code ?? undefined,
     errorMessage: row.error_message ?? undefined,
     errorCategory: row.error_category ?? undefined,
+    resolutionMethod: row.resolution_method ?? undefined,
+    resolutionEvidence: row.resolution_evidence ?? undefined,
+    resolvedAt: row.resolved_at ?? undefined,
     mediaAssetIds: row.media_asset_ids ? JSON.parse(row.media_asset_ids) as string[] : undefined,
     mediaChecksums: row.media_checksums ? JSON.parse(row.media_checksums) as string[] : undefined,
     startedAt: row.started_at,
@@ -268,13 +274,23 @@ export class PublishingService {
   markPublished(
     scheduleId: string,
     campaignId: string,
-    input: { publishedAt?: string; externalUrl?: string; notes?: string },
+    input: PublicationReconciliationInput,
   ): { item: ScheduledContentItem } | PublishingServiceError {
     const schedule = schedulingService.getById(scheduleId, campaignId);
     if (!schedule) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
     if (schedule.status === 'CANCELLED') return { error: 'Schedule is cancelled.', code: 'SCHEDULE_CANCELLED' };
     if (this.hasSuccessfulPublish(scheduleId) || schedule.status === 'PUBLISHED') {
       return { error: 'Item already published.', code: 'ALREADY_PUBLISHED' };
+    }
+
+    const hasUnknownAttempt = this.hasUnknownAttempt(scheduleId);
+    if (!hasUnknownAttempt && schedule.publicationMode !== 'MANUAL' && schedule.publicationMode !== 'EXPORT') {
+      return { error: 'Only uncertain provider outcomes or manual/export items can be reconciled.', code: 'PUBLISH_VALIDATION_FAILED' };
+    }
+
+    const evidence = input.evidence?.trim();
+    if (!evidence) {
+      return { error: 'Reconciliation evidence is required.', code: 'PUBLISH_VALIDATION_FAILED' };
     }
 
     const artifact = creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
@@ -285,20 +301,80 @@ export class PublishingService {
     }
 
     const publishedAt = input.publishedAt ?? new Date().toISOString();
+    if (Number.isNaN(new Date(publishedAt).getTime())) {
+      return { error: 'Invalid publication date/time.', code: 'PUBLISH_VALIDATION_FAILED' };
+    }
     const now = new Date().toISOString();
-    db.prepare(`
-      UPDATE scheduled_content_items
-      SET status = 'PUBLISHED', published_at = ?, external_url = ?, notes = COALESCE(?, notes), updated_at = ?
-      WHERE id = ? AND campaign_id = ?
-    `).run(publishedAt, input.externalUrl ?? null, input.notes ?? null, now, scheduleId, campaignId);
+    const resolve = db.transaction(() => {
+      db.prepare(`
+        UPDATE scheduled_content_items
+        SET status = 'PUBLISHED', published_at = ?, external_publish_id = ?, external_url = ?,
+            block_reason = NULL, updated_at = ?
+        WHERE id = ? AND campaign_id = ?
+      `).run(
+        new Date(publishedAt).toISOString(),
+        input.externalPublishId?.trim() || null,
+        input.externalUrl?.trim() || null,
+        now,
+        scheduleId,
+        campaignId,
+      );
 
-    // Resolve any UNKNOWN publish attempts so hasUnknownAttempt() is false going forward.
-    // This is the canonical reconciliation action: the operator confirmed the post went live.
-    db.prepare(`
-      UPDATE publish_attempts
-      SET status = 'SUCCEEDED', provider_status = 'MANUALLY_RESOLVED', completed_at = ?
-      WHERE schedule_id = ? AND status = 'UNKNOWN'
-    `).run(now, scheduleId);
+      const unknown = db.prepare(`
+        SELECT id FROM publish_attempts
+        WHERE schedule_id = ? AND status = 'UNKNOWN'
+        LIMIT 1
+      `).get(scheduleId) as { id: string } | undefined;
+
+      if (unknown) {
+        // Preserve the original attempt identity and provider history while recording
+        // that a human, not the provider API, resolved the outcome.
+        db.prepare(`
+          UPDATE publish_attempts
+          SET status = 'SUCCEEDED', provider_status = 'MANUALLY_RESOLVED',
+              external_publish_id = COALESCE(?, external_publish_id),
+              external_url = COALESCE(?, external_url),
+              resolution_method = 'OPERATOR_CONFIRMED_EXTERNAL',
+              resolution_evidence = ?, resolved_at = ?, completed_at = COALESCE(completed_at, ?)
+          WHERE schedule_id = ? AND status = 'UNKNOWN'
+        `).run(
+          input.externalPublishId?.trim() || null,
+          input.externalUrl?.trim() || null,
+          evidence,
+          now,
+          now,
+          scheduleId,
+        );
+      } else {
+        // MANUAL/EXPORT publication has no provider request. Create truthful lineage
+        // without claiming that an external provider API returned success.
+        db.prepare(`
+          INSERT INTO publish_attempts
+            (id, workspace_id, campaign_id, schedule_id, attempt_number, provider_key,
+             source_creative_artifact_id, source_creative_version, idempotency_key, status,
+             external_publish_id, external_url, provider_status, resolution_method,
+             resolution_evidence, resolved_at, started_at, completed_at)
+          VALUES (?, ?, ?, ?, ?, 'manual_reconciliation', ?, ?, ?, 'SUCCEEDED',
+                  ?, ?, 'MANUALLY_RESOLVED', 'OPERATOR_CONFIRMED_EXTERNAL', ?, ?, ?, ?)
+        `).run(
+          `attempt_${randomUUID()}`,
+          schedule.workspaceId,
+          campaignId,
+          scheduleId,
+          this.nextAttemptNumber(scheduleId),
+          schedule.sourceCreativeArtifactId,
+          schedule.sourceCreativeVersion,
+          `manual-resolution:${scheduleId}`,
+          input.externalPublishId?.trim() || null,
+          input.externalUrl?.trim() || null,
+          evidence,
+          now,
+          now,
+          now,
+        );
+      }
+    });
+    resolve();
 
     return { item: schedulingService.getById(scheduleId, campaignId)! };
   }

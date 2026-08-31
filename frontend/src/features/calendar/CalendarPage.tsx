@@ -64,6 +64,11 @@ function addDays(date: Date, n: number): Date {
   return d;
 }
 
+function dateInTimezone(utcInstant: Date, timezone: string): Date {
+  const [year, month, day] = getDateStrInTz(utcInstant.toISOString(), timezone).split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+}
+
 function isSameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -110,7 +115,7 @@ function ItemCard({
   const sk = statusKey(item);
   const c = STATUS_COLORS[sk] ?? STATUS_COLORS.DRAFT;
   const draggable = item.status !== 'PUBLISHED' && item.status !== 'CANCELLED';
-  const tz = item.timezone || calendarTz;
+  const tz = calendarTz;
   const scheduledHHMM = formatTimeInTz(item.scheduledFor, tz);
 
   return (
@@ -350,7 +355,7 @@ function MonthView({
 
   function itemsForDay(day: Date) {
     const ds = localDateStr(day);
-    return items.filter(it => getDateStrInTz(it.scheduledFor, it.timezone || calendarTz) === ds);
+    return items.filter(it => getDateStrInTz(it.scheduledFor, calendarTz) === ds);
   }
 
   return (
@@ -525,6 +530,7 @@ export default function CalendarPage() {
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [dropError, setDropError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [calendarTz, setCalendarTz] = useState('UTC');
 
   // Filters
   const [filterCampaignId, setFilterCampaignId] = useState('');
@@ -533,12 +539,6 @@ export default function CalendarPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>;
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(anchor, i));
-
-  // Canonical timezone: use first item's stored timezone, fall back to browser timezone
-  const calendarTz = useMemo(
-    () => items[0]?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
-    [items],
-  );
 
   // Distinct campaigns and channels for filter dropdowns
   const allCampaigns = useMemo(() => {
@@ -556,7 +556,7 @@ export default function CalendarPage() {
     if (filterCampaignId && it.campaignId !== filterCampaignId) return false;
     if (filterChannel && it.channel !== filterChannel) return false;
     if (filterStatus) {
-      if (filterStatus === 'FAILED_RECONCILE') return !!it.reconciliationRequired;
+      if (filterStatus === 'FAILED_RECONCILE') return statusKey(it) === 'FAILED_RECONCILE';
       return it.status === filterStatus;
     }
     return true;
@@ -576,14 +576,22 @@ export default function CalendarPage() {
       api.getReadyToSchedule(workspaceId),
       api.getIntegrations(workspaceId),
       api.getCampaigns(workspaceId),
+      api.getCalendarConfig(),
     ])
-      .then(([sched, ready, intgs, campaigns]) => {
+      .then(([sched, ready, intgs, campaigns, config]) => {
         setItems(sched);
         setReadyItems(ready);
         setIntegrations(intgs);
         const nameMap: Record<string, string> = {};
         campaigns.forEach(c => { nameMap[c.id] = c.name; });
         setCampaignNames(nameMap);
+        setCalendarTz(config.timezone);
+        setAnchor(current => {
+          const configuredToday = dateInTimezone(new Date(), config.timezone);
+          return localDateStr(current) === localDateStr(startOfWeek(new Date()))
+            ? startOfWeek(configuredToday)
+            : current;
+        });
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -602,7 +610,7 @@ export default function CalendarPage() {
   }
 
   function goToday() {
-    const today = new Date();
+    const today = dateInTimezone(new Date(), calendarTz);
     if (view === 'week') setAnchor(startOfWeek(today));
     else setAnchor(today);
   }
@@ -627,12 +635,11 @@ export default function CalendarPage() {
       );
     });
 
-  // Timezone-aware cell lookup: compare items in their stored timezone
+    // Calendar cells and items are always compared in the authoritative configured timezone.
   function itemsForCell(day: Date, hour: number): ScheduledContentItem[] {
     const cellDate = localDateStr(day); // YYYY-MM-DD in browser local (= operator local for local-first)
     return filteredItems.filter(it => {
-      const tz = it.timezone || calendarTz;
-      return getDateStrInTz(it.scheduledFor, tz) === cellDate && getHourInTz(it.scheduledFor, tz) === hour;
+      return getDateStrInTz(it.scheduledFor, calendarTz) === cellDate && getHourInTz(it.scheduledFor, calendarTz) === hour;
     });
   }
 
@@ -666,10 +673,8 @@ export default function CalendarPage() {
     if (!draggedItem) return;
     if (!campaignId) campaignId = draggedItem.campaignId;
 
-    // Convert the drop target (browser-local YYYY-MM-DD at `hour`) to UTC using the item's timezone.
-    // The calendar displays times in the item's stored timezone, so 9am in a cell means
-    // 9am in that timezone — not 9am in the browser's local timezone.
-    const tz = draggedItem.timezone || calendarTz;
+    // Convert the displayed wall-clock cell through the authoritative calendar timezone.
+    const tz = calendarTz;
     const dayStr = localDateStr(day); // YYYY-MM-DD (calendar day as displayed)
     const scheduledFor = wallClockToISO(dayStr, hour, 0, tz);
 
@@ -753,11 +758,9 @@ export default function CalendarPage() {
           </button>
 
           {/* Timezone badge */}
-          {calendarTz !== 'UTC' && (
-            <span className="rounded bg-[#F4F4F5] px-2 py-1 text-[10px] text-[#71717A]">
-              {calendarTz}
-            </span>
-          )}
+          <span className="rounded bg-[#F4F4F5] px-2 py-1 text-[10px] text-[#71717A]" title="Authoritative scheduling timezone">
+            Scheduling timezone: {calendarTz}
+          </span>
 
           {loading && <span className="text-xs text-[#A1A1AA]">Loading…</span>}
         </div>

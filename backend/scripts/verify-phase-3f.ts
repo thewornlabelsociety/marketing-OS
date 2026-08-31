@@ -94,7 +94,7 @@ async function main() {
       publicationMode: 'MANUAL',
     });
     if ('error' in sched) throw new Error(sched.error);
-    publishingService.markPublished(sched.item.id, campaignId, { externalUrl: `https://example.com/${contentKey}` });
+    publishingService.markPublished(sched.item.id, campaignId, { evidence: 'Verified externally', externalUrl: `https://example.com/${contentKey}` });
     return { schedule: sched.item, creative };
   }
 

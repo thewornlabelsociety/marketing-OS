@@ -63,7 +63,7 @@ export function ScheduleItemDrawer(props: Props) {
 
   const [date, setDate] = useState('');
   const [time, setTime] = useState('09:00');
-  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const [timezone, setTimezone] = useState('UTC');
   const [publicationMode, setPublicationMode] = useState<PublicationMode>('MANUAL');
   const [destinationId, setDestinationId] = useState('');
   const [destinations, setDestinations] = useState<PublishingDestination[]>([]);
@@ -74,17 +74,20 @@ export function ScheduleItemDrawer(props: Props) {
   const [rescheduling, setRescheduling] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('09:00');
+  const [showResolution, setShowResolution] = useState(false);
+  const [resolutionEvidence, setResolutionEvidence] = useState('');
+  const [resolutionUrl, setResolutionUrl] = useState('');
+  const [resolutionExternalId, setResolutionExternalId] = useState('');
 
   useEffect(() => {
     if (mode === 'view' && props.item) {
-      const tz = props.item.timezone;
+      const tz = timezone;
       // Show date/time in the item's stored timezone, not the browser's local timezone
       setDate(getDateStrInTz(props.item.scheduledFor, tz));
       const { hour, minute } = getTimePartsInTz(props.item.scheduledFor, tz);
       setTime(`${pad2(hour)}:${pad2(minute)}`);
       setRescheduleDate(getDateStrInTz(props.item.scheduledFor, tz));
       setRescheduleTime(`${pad2(hour)}:${pad2(minute)}`);
-      setTimezone(tz);
       setPublicationMode(props.item.publicationMode);
       setDestinationId(props.item.destinationId ?? '');
       const asset = props.item.mediaAssets[0];
@@ -92,7 +95,13 @@ export function ScheduleItemDrawer(props: Props) {
     } else {
       setDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
     }
-  }, [mode, props]);
+  }, [mode, props, timezone]);
+
+  useEffect(() => {
+    api.getCalendarConfig()
+      .then(config => setTimezone(config.timezone))
+      .catch(() => setError('Unable to load the authoritative scheduling timezone.'));
+  }, []);
 
   useEffect(() => {
     api.getPublishingDestinations(workspaceId, channel)
@@ -180,9 +189,20 @@ export function ScheduleItemDrawer(props: Props) {
 
   async function resolveAsPublished() {
     if (mode !== 'view') return;
+    const evidence = resolutionEvidence.trim();
+    if (!evidence) {
+      setError('Enter evidence describing how you verified the external post.');
+      return;
+    }
     setSaving(true);
+    setError('');
     try {
-      await api.markSchedulePublished(campaignId, props.item.id, workspaceId);
+      await api.resolveSchedulePublished(campaignId, props.item.id, workspaceId, {
+        evidence,
+        externalUrl: resolutionUrl.trim() || undefined,
+        externalPublishId: resolutionExternalId.trim() || undefined,
+      });
+      setShowResolution(false);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resolve as published');
@@ -209,7 +229,7 @@ export function ScheduleItemDrawer(props: Props) {
     setSaving(true);
     setError('');
     try {
-      const tz = props.item.timezone;
+      const tz = timezone;
       const [hh, mm] = rescheduleTime.split(':').map(Number);
       // Convert wall-clock time in the item's timezone to UTC
       const scheduledFor = wallClockToISO(rescheduleDate, hh, mm, tz);
@@ -267,7 +287,7 @@ export function ScheduleItemDrawer(props: Props) {
             <>
               <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2" /></Field>
               <Field label="Time"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2" /></Field>
-              <Field label="Timezone"><input value={timezone} onChange={(e) => setTimezone(e.target.value)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2" /></Field>
+              <Field label="Timezone"><input value={timezone} readOnly className="mt-1 w-full rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] px-3 py-2 text-[#52525B]" /></Field>
               <Field label="Mode">
                 <select value={publicationMode} onChange={(e) => setPublicationMode(e.target.value as PublicationMode)} className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2">
                   <option value="MANUAL">Manual</option>
@@ -342,8 +362,8 @@ export function ScheduleItemDrawer(props: Props) {
 
               {/* Core item fields — display in item's stored timezone, not browser local */}
               <Field label="Scheduled">
-                {formatDateTimeInTz(item.scheduledFor, item.timezone)}
-                <span className="ml-1 text-[#A1A1AA]">({item.timezone})</span>
+                {formatDateTimeInTz(item.scheduledFor, timezone)}
+                <span className="ml-1 text-[#A1A1AA]">({timezone})</span>
               </Field>
               <Field label="Mode">{item.publicationMode}</Field>
 
@@ -368,7 +388,7 @@ export function ScheduleItemDrawer(props: Props) {
 
               {item.publishedAt && (
                 <Field label="Published">
-                  {formatDateTimeInTz(item.publishedAt, item.timezone)}
+                  {formatDateTimeInTz(item.publishedAt, timezone)}
                 </Field>
               )}
               {item.externalUrl && (
@@ -416,7 +436,7 @@ export function ScheduleItemDrawer(props: Props) {
               {rescheduling && (
                 <div className="space-y-3 rounded-lg border border-[#E4E4E7] bg-[#FAFAFA] p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-[#A1A1AA]">
-                    Reschedule to ({item.timezone})
+                    Reschedule to ({timezone})
                   </p>
                   <div className="flex gap-2">
                     <input type="date" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)}
@@ -425,7 +445,7 @@ export function ScheduleItemDrawer(props: Props) {
                       className="w-28 rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm" />
                   </div>
                   <p className="text-[11px] text-[#A1A1AA]">
-                    Time entered in {item.timezone}. Creative V{item.sourceCreativeVersion} and pinned media remain unchanged.
+                    Time entered in {timezone}. Creative V{item.sourceCreativeVersion} and pinned media remain unchanged.
                   </p>
                   <div className="flex gap-2">
                     <button type="button" disabled={saving} onClick={() => void confirmReschedule()}
@@ -454,7 +474,7 @@ export function ScheduleItemDrawer(props: Props) {
               {/* Unknown outcome: Resolve as Published — no blind Retry */}
               {unknownOutcome && (
                 <>
-                  <button type="button" disabled={saving} onClick={() => void resolveAsPublished()}
+                  <button type="button" disabled={saving} onClick={() => setShowResolution(true)}
                     className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
                     {saving ? 'Resolving…' : 'Resolve as Published'}
                   </button>
@@ -470,12 +490,12 @@ export function ScheduleItemDrawer(props: Props) {
                   {saving ? 'Retrying…' : 'Retry'}
                 </button>
               )}
-              {/* Manual/export not yet published: mark published */}
+              {/* Manual/export reconciliation */}
               {(item.publicationMode === 'MANUAL' || item.publicationMode === 'EXPORT') &&
                 item.status !== 'PUBLISHED' && !unknownOutcome && (
-                  <button type="button" disabled={saving} onClick={() => void resolveAsPublished()}
+                  <button type="button" disabled={saving} onClick={() => setShowResolution(true)}
                     className="rounded-lg border border-[#E4E4E7] px-4 py-2 text-sm disabled:opacity-50">
-                    Mark Published
+                    Resolve as Published
                   </button>
               )}
               {/* Reschedule (not for published/cancelled/unknown) */}
@@ -496,6 +516,42 @@ export function ScheduleItemDrawer(props: Props) {
           )}
         </div>
       </div>
+
+      {showResolution && item && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="resolution-title">
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
+            <h2 id="resolution-title" className="text-base font-semibold text-[#09090B]">Resolve as Published</h2>
+            <p className="mt-2 text-sm text-[#52525B]">
+              Continue only after you have verified that this post exists on the external platform. This records a manual operator reconciliation; it does not claim the provider API confirmed publication.
+            </p>
+            <label className="mt-4 block text-xs font-medium text-[#3F3F46]">
+              Verification evidence <span className="text-red-600">*</span>
+              <textarea value={resolutionEvidence} onChange={e => setResolutionEvidence(e.target.value)} rows={3}
+                placeholder="Example: Verified in Meta Business Suite at 10:15 AM; post is visible on the brand profile."
+                className="mt-1 w-full rounded-lg border border-[#D4D4D8] px-3 py-2 text-sm" />
+            </label>
+            <label className="mt-3 block text-xs font-medium text-[#3F3F46]">
+              External post URL or reference (optional)
+              <input value={resolutionUrl} onChange={e => setResolutionUrl(e.target.value)} placeholder="https://…"
+                className="mt-1 w-full rounded-lg border border-[#D4D4D8] px-3 py-2 text-sm" />
+            </label>
+            <label className="mt-3 block text-xs font-medium text-[#3F3F46]">
+              External publication ID (optional)
+              <input value={resolutionExternalId} onChange={e => setResolutionExternalId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-[#D4D4D8] px-3 py-2 text-sm" />
+            </label>
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={saving} onClick={() => { setShowResolution(false); setError(''); }}
+                className="rounded-lg border border-[#D4D4D8] px-4 py-2 text-sm">Cancel</button>
+              <button type="button" disabled={saving || !resolutionEvidence.trim()} onClick={() => void resolveAsPublished()}
+                className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                {saving ? 'Resolving…' : 'Confirm Resolution'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

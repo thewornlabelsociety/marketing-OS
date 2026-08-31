@@ -302,7 +302,10 @@ async function main() {
     resetMockPublishingState();
     await publishingSchedulerService.executeDueScheduledItems(new Date());
     check('K manual due item provider not called', mockPublishCallLog.length === 0);
-    const marked = publishingService.markPublished(manual.item.id, campA, { externalUrl: 'https://manual.example/post' });
+    const marked = publishingService.markPublished(manual.item.id, campA, {
+      evidence: 'Operator verified the manual publication externally',
+      externalUrl: 'https://manual.example/post',
+    });
     check('K mark published succeeds', !('error' in marked));
     check('K publishedAt persisted', Boolean(marked.item.publishedAt));
   }

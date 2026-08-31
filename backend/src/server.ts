@@ -1,6 +1,6 @@
+import 'dotenv/config';
 import './integrations/bootstrap';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import express from 'express';
 import { initDatabase } from './db/database';
 import { campaignsRouter } from './routes/campaigns';
@@ -9,7 +9,7 @@ import { campaignPlansRouter } from './routes/campaignPlans';
 import { contentPlansRouter } from './routes/contentPlans';
 import { campaignCreativeRouter } from './routes/campaignCreative';
 import { campaignScheduleRouter } from './routes/campaignSchedule';
-import { calendarScheduleRouter, calendarReadyRouter } from './routes/calendarSchedule';
+import { calendarScheduleRouter, calendarReadyRouter, calendarConfigRouter } from './routes/calendarSchedule';
 import { integrationsRouter } from './routes/integrations';
 import { publishingDestinationsRouter } from './routes/publishingDestinations';
 import { contentRouter } from './routes/content';
@@ -27,8 +27,6 @@ import { archiveRouter } from './routes/archive';
 import { campaignExperimentsRouter } from './routes/campaignExperiments';
 import { dashboardRouter, attentionRouter } from './routes/dashboard';
 import { publishingSchedulerService } from './services/publishing/PublishingSchedulerService';
-
-dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -48,6 +46,7 @@ app.use('/api/campaigns/:campaignId/performance', campaignPerformanceRouter);
 app.use('/api/campaigns/:campaignId/experiments', campaignExperimentsRouter);
 app.use('/api/calendar/schedule', calendarScheduleRouter);
 app.use('/api/calendar/ready', calendarReadyRouter);
+app.use('/api/calendar/config', calendarConfigRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/publishing/destinations', publishingDestinationsRouter);
 app.use('/api/content', contentRouter);

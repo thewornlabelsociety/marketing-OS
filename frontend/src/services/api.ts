@@ -297,13 +297,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
     }),
-  markSchedulePublished: (campaignId: string, scheduleId: string, workspaceId: string, payload?: { externalUrl?: string; notes?: string }) =>
+  resolveSchedulePublished: (campaignId: string, scheduleId: string, workspaceId: string, payload: {
+    evidence: string;
+    externalPublishId?: string;
+    externalUrl?: string;
+  }) =>
     request<ScheduledContentItem>(`/campaigns/${campaignId}/schedule/${scheduleId}/mark-published`, {
       method: 'POST',
       body: JSON.stringify({ workspaceId, ...payload }),
     }),
   getWorkspaceSchedule: (workspaceId: string) =>
     request<ScheduledContentItem[]>(`/calendar/schedule?workspaceId=${encodeURIComponent(workspaceId)}`),
+  getCalendarConfig: () => request<{ timezone: string }>('/calendar/config'),
   getReadyToSchedule: (workspaceId: string) =>
     request<ReadyToScheduleItem[]>(`/calendar/ready?workspaceId=${encodeURIComponent(workspaceId)}`),
   rescheduleItem: (campaignId: string, scheduleId: string, workspaceId: string, scheduledFor: string, timezone?: string) =>

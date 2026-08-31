@@ -82,7 +82,7 @@ async function main() {
       db.prepare(`UPDATE scheduled_content_items SET source_creative_artifact_id = ?, source_creative_version = ?, channel = ? WHERE id = ?`)
         .run(artifactId, version, channel, sched.item.id);
     }
-    publishingService.markPublished(sched.item.id, campaignId, { externalUrl: `https://example.com/${contentKey}` });
+    publishingService.markPublished(sched.item.id, campaignId, { evidence: 'Verified externally', externalUrl: `https://example.com/${contentKey}` });
     return sched.item.id;
   }
 

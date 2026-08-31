@@ -1,8 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database';
 import { schedulingService } from '../services/publishing/SchedulingService';
+import { DEFAULT_SCHEDULE_TIMEZONE } from '../services/publishing/publishingUtils';
 
 export const calendarScheduleRouter = Router();
+export const calendarConfigRouter = Router();
+
+calendarConfigRouter.get('/', (_req: Request, res: Response) => {
+  res.json({ timezone: DEFAULT_SCHEDULE_TIMEZONE });
+});
 
 calendarScheduleRouter.get('/', (req: Request, res: Response) => {
   const workspaceId = (req.query as { workspaceId?: string }).workspaceId;

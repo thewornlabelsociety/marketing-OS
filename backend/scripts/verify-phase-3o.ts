@@ -8,6 +8,8 @@ import { LOCAL_TENANT_ID } from '../src/config/constants';
 import { randomUUID } from 'crypto';
 import { schedulingService } from '../src/services/publishing/SchedulingService';
 import { publishingService } from '../src/services/publishing/PublishingService';
+import { DEFAULT_SCHEDULE_TIMEZONE } from '../src/services/publishing/publishingUtils';
+import { formatTimeInTz, getDateStrInTz, wallClockToISO } from '../../packages/scheduling-timezone';
 
 async function main() {
   initDatabase();
@@ -512,16 +514,14 @@ async function main() {
   // Y — markPublished resolves UNKNOWN publish attempt to SUCCEEDED
   {
     const artY = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-y' });
+    insertApproval(C3, 'post-y', artY, 1, WS);
     const sciY = insertScheduleItem({
       campaignId: C3, workspaceId: WS, contentKey: 'post-y', artifactId: artY,
       status: 'FAILED',
       blockReason: 'Publish outcome unknown — reconcile before retrying.',
     });
     insertPublishAttempt(sciY, C3, WS, artY, 'UNKNOWN');
-    // Simulate markPublished resolving the UNKNOWN attempt
-    const now = new Date().toISOString();
-    db.prepare(`UPDATE scheduled_content_items SET status = 'PUBLISHED', published_at = ? WHERE id = ?`).run(now, sciY);
-    db.prepare(`UPDATE publish_attempts SET status = 'SUCCEEDED', provider_status = 'MANUALLY_RESOLVED', completed_at = ? WHERE schedule_id = ? AND status = 'UNKNOWN'`).run(now, sciY);
+    publishingService.markPublished(sciY, C3, { evidence: 'Verified on external profile', externalUrl: 'https://example.test/post-y' });
     const attempt = db.prepare(`SELECT status FROM publish_attempts WHERE schedule_id = ? AND provider_status = 'MANUALLY_RESOLVED'`).get(sciY) as { status: string } | undefined;
     check('Y — markPublished resolves UNKNOWN attempt to SUCCEEDED', attempt?.status === 'SUCCEEDED');
   }
@@ -530,13 +530,13 @@ async function main() {
   {
     // sciY from test Y is now PUBLISHED — verify no UNKNOWN attempt remains
     const artZ = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-z' });
+    insertApproval(C3, 'post-z', artZ, 1, WS);
     const sciZ = insertScheduleItem({
       campaignId: C3, workspaceId: WS, contentKey: 'post-z', artifactId: artZ,
       status: 'FAILED',
     });
     insertPublishAttempt(sciZ, C3, WS, artZ, 'UNKNOWN');
-    // Resolve the UNKNOWN attempt
-    db.prepare(`UPDATE publish_attempts SET status = 'SUCCEEDED', provider_status = 'MANUALLY_RESOLVED', completed_at = ? WHERE schedule_id = ? AND status = 'UNKNOWN'`).run(new Date().toISOString(), sciZ);
+    publishingService.markPublished(sciZ, C3, { evidence: 'Verified externally' });
     const hasUnknown = !!db.prepare(`SELECT id FROM publish_attempts WHERE schedule_id = ? AND status = 'UNKNOWN' LIMIT 1`).get(sciZ);
     check('Z — after UNKNOWN attempt resolved, hasUnknownAttempt = false', !hasUnknown);
   }
@@ -684,6 +684,85 @@ async function main() {
     `).all(WS) as { artifact_id: string }[];
     check('AJ — clean FAILED artifact eligible in ready list', rows.some(r => r.artifact_id === artAJClean));
     check('AK — reconciliation-required FAILED artifact excluded from ready list', !rows.some(r => r.artifact_id === artAJUnknown));
+  }
+
+  // AL–AS — Canonical timezone round-trip, DST, and truthful reconciliation lineage
+  {
+    const tz = DEFAULT_SCHEDULE_TIMEZONE;
+    check('AL — canonical timezone comes from DEFAULT_SCHEDULE_TIMEZONE', tz === 'Pacific/Auckland');
+
+    const summerUtc = wallClockToISO('2025-01-15', 9, 0, tz);
+    const winterUtc = wallClockToISO('2025-07-15', 9, 0, tz);
+    check('AM — Auckland summer 9am converts to UTC+13 instant', summerUtc === '2025-01-14T20:00:00.000Z', summerUtc);
+    check('AN — Auckland winter 9am converts to UTC+12 instant', winterUtc === '2025-07-14T21:00:00.000Z', winterUtc);
+    check('AO — persisted summer instant displays as same 9am wall-clock', formatTimeInTz(summerUtc, tz) === '9:00 AM');
+    check('AP — persisted winter instant displays as same 9am wall-clock', formatTimeInTz(winterUtc, tz) === '9:00 AM');
+
+    const boundaryUtc = wallClockToISO('2025-09-28', 9, 0, tz);
+    check('AQ — DST-start boundary day preserves 9am after conversion',
+      getDateStrInTz(boundaryUtc, tz) === '2025-09-28' && formatTimeInTz(boundaryUtc, tz) === '9:00 AM', boundaryUtc);
+
+    const artRound = insertArtifact({ campaignId: C2, workspaceId: WS, contentKey: 'post-roundtrip' });
+    insertApproval(C2, 'post-roundtrip', artRound, 1, WS);
+    const created = schedulingService.create(C2, WS, {
+      contentKey: 'post-roundtrip', scheduledFor: summerUtc, timezone: 'UTC', publicationMode: 'MANUAL',
+    });
+    if ('item' in created) {
+      const reloaded = schedulingService.getById(created.item.id, C2);
+      check('AR — create persists backend-authoritative timezone', reloaded?.timezone === tz);
+      check('AR2 — reload round-trip retains 9am display', !!reloaded && formatTimeInTz(reloaded.scheduledFor, tz) === '9:00 AM');
+
+      const dragUtc = wallClockToISO('2025-07-20', 9, 0, tz);
+      schedulingService.update(created.item.id, C2, { scheduledFor: dragUtc, timezone: 'UTC' });
+      const afterDrag = schedulingService.getById(created.item.id, C2);
+      check('AR3 — drag reschedule round-trip retains 9am', !!afterDrag && formatTimeInTz(afterDrag.scheduledFor, tz) === '9:00 AM' && afterDrag.timezone === tz);
+
+      const formUtc = wallClockToISO('2025-10-05', 9, 0, tz);
+      schedulingService.update(created.item.id, C2, { scheduledFor: formUtc, timezone: 'UTC' });
+      const afterForm = schedulingService.getById(created.item.id, C2);
+      check('AR4 — non-drag reschedule round-trip retains 9am', !!afterForm && formatTimeInTz(afterForm.scheduledFor, tz) === '9:00 AM' && afterForm.timezone === tz);
+    } else {
+      check('AR — create persists backend-authoritative timezone', false, created.error);
+      check('AR2 — reload round-trip retains 9am display', false);
+      check('AR3 — drag reschedule round-trip retains 9am', false);
+      check('AR4 — non-drag reschedule round-trip retains 9am', false);
+    }
+
+    const artUnknown = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-resolve-unknown' });
+    insertApproval(C3, 'post-resolve-unknown', artUnknown, 1, WS);
+    const sciUnknown = insertScheduleItem({ campaignId: C3, workspaceId: WS, contentKey: 'post-resolve-unknown', artifactId: artUnknown, status: 'FAILED', blockReason: 'Legacy wording irrelevant' });
+    insertPublishAttempt(sciUnknown, C3, WS, artUnknown, 'UNKNOWN');
+    const originalAttempt = db.prepare('SELECT id FROM publish_attempts WHERE schedule_id = ?').get(sciUnknown) as { id: string };
+    const missingEvidence = publishingService.markPublished(sciUnknown, C3, { evidence: '' });
+    check('AS — reconciliation rejects missing evidence', 'error' in missingEvidence && missingEvidence.code === 'PUBLISH_VALIDATION_FAILED');
+    const resolvedUnknown = publishingService.markPublished(sciUnknown, C3, {
+      evidence: 'Operator verified visible post in Meta Business Suite',
+      externalPublishId: 'external-real-reference',
+      externalUrl: 'https://example.test/resolved-post',
+    });
+    const resolvedAttempt = db.prepare(`SELECT * FROM publish_attempts WHERE schedule_id = ?`).get(sciUnknown) as Record<string, unknown>;
+    const resolvedItem = schedulingService.getById(sciUnknown, C3);
+    check('AS2 — UNKNOWN resolution preserves attempt identity', resolvedAttempt.id === originalAttempt.id);
+    check('AS3 — UNKNOWN resolution records manual provenance and evidence',
+      resolvedAttempt.provider_status === 'MANUALLY_RESOLVED' &&
+      resolvedAttempt.resolution_method === 'OPERATOR_CONFIRMED_EXTERNAL' &&
+      resolvedAttempt.resolution_evidence === 'Operator verified visible post in Meta Business Suite' &&
+      typeof resolvedAttempt.resolved_at === 'string');
+    check('AS4 — UNKNOWN resolution stores supplied external reference without fabrication',
+      resolvedAttempt.external_publish_id === 'external-real-reference' && resolvedAttempt.external_url === 'https://example.test/resolved-post');
+    const retryAfterResolution = await publishingService.retry(sciUnknown, C3);
+    check('AS5 — resolved UNKNOWN is published, immutable, and retry remains unavailable',
+      !('error' in resolvedUnknown) && resolvedItem?.status === 'PUBLISHED' && !resolvedItem.reconciliationRequired &&
+      'error' in retryAfterResolution && retryAfterResolution.code === 'ALREADY_PUBLISHED');
+
+    const artManual = insertArtifact({ campaignId: C3, workspaceId: WS, contentKey: 'post-resolve-manual' });
+    insertApproval(C3, 'post-resolve-manual', artManual, 1, WS);
+    const sciManual = insertScheduleItem({ campaignId: C3, workspaceId: WS, contentKey: 'post-resolve-manual', artifactId: artManual, status: 'SCHEDULED' });
+    const manualResult = publishingService.markPublished(sciManual, C3, { evidence: 'Operator verified exported post on platform' });
+    const manualAttempt = db.prepare('SELECT * FROM publish_attempts WHERE schedule_id = ?').get(sciManual) as Record<string, unknown> | undefined;
+    check('AS6 — MANUAL/EXPORT resolution creates truthful lineage',
+      !('error' in manualResult) && manualAttempt?.provider_key === 'manual_reconciliation' &&
+      manualAttempt?.provider_status === 'MANUALLY_RESOLVED' && manualAttempt?.status === 'SUCCEEDED');
   }
 
   // ─── Summary ──────────────────────────────────────────────────────────────
