@@ -60,7 +60,7 @@ export function ScheduleItemDrawer(props: Props) {
       setPublicationMode(props.item.publicationMode);
       setDestinationId(props.item.destinationId ?? '');
       const asset = props.item.mediaAssets[0];
-      if (asset) setPinnedMedia({ id: asset.id, type: asset.type, mimeType: asset.mimeType, storageKey: asset.storageKey });
+      if (asset) setPinnedMedia({ id: asset.id, type: asset.type, mimeType: asset.mimeType });
     } else {
       setDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
     }

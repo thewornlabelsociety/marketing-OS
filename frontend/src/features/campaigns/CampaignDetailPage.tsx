@@ -4,19 +4,22 @@ import {
   Loader2,
   MoreHorizontal,
   Sparkles,
-  Target,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SopDrawerTrigger } from '../../components/drawers/SopDrawer';
 import { PlanReviewDrawer } from '../../components/drawers/PlanReviewDrawer';
 import { CampaignEditDrawer } from './CampaignEditDrawer';
+import { CampaignCommandCentre } from './CampaignCommandCentre';
+import type { PlanStatusData, ContentStatusData } from './CampaignCommandCentre';
 import { ContentPlanTab } from './ContentPlanTab';
 import { CampaignScheduleTab } from './CampaignScheduleTab';
 import { CampaignPerformanceTab } from './CampaignPerformanceTab';
 import { CampaignExperimentsTab } from './CampaignExperimentsTab';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
-import type { Campaign, CampaignBrief, CampaignCreativeSummary, CampaignPlan, CampaignPublishingSummary, CampaignStatus, ContentPlanStatus } from '../../types';
+import type { Campaign, CampaignBrief, CampaignCreativeSummary, CampaignPlan, CampaignPerformanceSummary, CampaignPublishingSummary, CampaignStatus, ContentPlanStatus } from '../../types';
+import type { AttentionSignal } from '../../types/dashboard';
+import type { Experiment } from '../../types/experiment';
 
 interface Props {
   campaignId: string | null;
@@ -556,6 +559,16 @@ export default function CampaignDetailPage({ campaignId }: Props) {
   const [creativeSummary, setCreativeSummary] = useState<CampaignCreativeSummary | null>(null);
   const [publishingSummary, setPublishingSummary] = useState<CampaignPublishingSummary | null>(null);
 
+  // Command centre parallel data
+  const [cmdPlanStatus, setCmdPlanStatus] = useState<PlanStatusData | null>(null);
+  const [cmdContentStatus, setCmdContentStatus] = useState<ContentStatusData | null>(null);
+  const [cmdCreativeSummary, setCmdCreativeSummary] = useState<CampaignCreativeSummary | null>(null);
+  const [cmdPerformance, setCmdPerformance] = useState<CampaignPerformanceSummary | null>(null);
+  const [cmdPerformanceError, setCmdPerformanceError] = useState(false);
+  const [cmdExperiments, setCmdExperiments] = useState<Experiment[]>([]);
+  const [cmdAttentionSignals, setCmdAttentionSignals] = useState<AttentionSignal[]>([]);
+  const [cmdLoading, setCmdLoading] = useState(false);
+
   function loadCampaign() {
     if (!campaignId) return;
     setLoading(true);
@@ -582,6 +595,47 @@ export default function CampaignDetailPage({ campaignId }: Props) {
       .then((s) => setContentPlanStatus((s.contentPlanStatus as ContentPlanStatus | null) ?? null))
       .catch(() => {});
   }, [campaignId, campaign?.id, campaign?.workspaceId]);
+
+  // Load all command centre data in parallel
+  useEffect(() => {
+    if (!campaign) return;
+    setCmdLoading(true);
+    setCmdPerformanceError(false);
+    Promise.allSettled([
+      api.getCampaignPlanStatus(campaign.id, campaign.workspaceId),
+      api.getContentPlanStatus(campaign.id, campaign.workspaceId),
+      api.getCampaignPerformance(campaign.id, campaign.workspaceId),
+      api.getCampaignExperiments(campaign.id, campaign.workspaceId),
+      api.getAttentionSignals(campaign.workspaceId, 'OPEN'),
+    ]).then(([ps, cs, perf, exps, attn]) => {
+      if (ps.status === 'fulfilled') setCmdPlanStatus(ps.value);
+      if (cs.status === 'fulfilled') {
+        const s = cs.value;
+        setCmdContentStatus({
+          hasContentPlan: s.hasContentPlan,
+          contentPlanStatus: s.contentPlanStatus,
+          strategyApproved: s.strategyApproved,
+          contentPlanApproved: s.contentPlanApproved,
+          aiConfigured: s.aiConfigured,
+        });
+        setHasPlan(false); // will be set by PlanSection callback if plan exists
+      }
+      if (perf.status === 'fulfilled') setCmdPerformance(perf.value);
+      else setCmdPerformanceError(true);
+      if (exps.status === 'fulfilled') setCmdExperiments(exps.value);
+      if (attn.status === 'fulfilled') {
+        setCmdAttentionSignals(attn.value.filter((s) => s.campaignId === campaign.id));
+      }
+    }).finally(() => setCmdLoading(false));
+  }, [campaign?.id, campaign?.workspaceId]);
+
+  // Load creative summary for command centre when content plan is approved
+  useEffect(() => {
+    if (!campaign || !cmdContentStatus?.contentPlanApproved) return;
+    api.getCampaignCreative(campaign.id, campaign.workspaceId)
+      .then(setCmdCreativeSummary)
+      .catch(() => {});
+  }, [campaign?.id, campaign?.workspaceId, cmdContentStatus?.contentPlanApproved]);
 
   useEffect(() => {
     if (!campaignId || !campaign) return;
@@ -650,7 +704,13 @@ export default function CampaignDetailPage({ campaignId }: Props) {
         <div className="flex items-center gap-2">
           <SopDrawerTrigger
             context={`Campaign: ${campaign.name}`}
-            steps={deriveSopSteps(campaign, hasPlan, contentPlanStatus, creativeSummary, publishingSummary)}
+            steps={deriveSopSteps(
+              campaign,
+              cmdPlanStatus?.hasPlan ?? hasPlan,
+              (cmdContentStatus?.contentPlanStatus as ContentPlanStatus | null) ?? contentPlanStatus,
+              cmdCreativeSummary ?? creativeSummary,
+              publishingSummary,
+            )}
           />
           <OverflowMenu campaign={campaign} onCancelled={loadCampaign} onEdit={() => setShowEdit(true)} />
         </div>
@@ -679,93 +739,76 @@ export default function CampaignDetailPage({ campaignId }: Props) {
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-6">
         {tab === 'overview' && (
-          <div className="mx-auto max-w-xl space-y-6">
-            {/* Objective */}
-            <section>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
-                Objective
-              </p>
-              <div className="flex items-start gap-3 rounded-xl border border-[#E4E4E7] bg-white p-4">
-                <Target className="mt-0.5 h-4 w-4 shrink-0 text-[#71717A]" />
-                <div>
-                  <p className="text-sm font-medium text-[#09090B]">
-                    {campaign.objectiveName ?? '—'}
-                  </p>
-                  {campaign.objectivePrimaryKpi && (
-                    <p className="mt-0.5 text-xs text-[#71717A]">
-                      Primary KPI: {campaign.objectivePrimaryKpi}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </section>
+          <div className="space-y-10">
+            <CampaignCommandCentre
+              campaign={campaign}
+              planStatus={cmdPlanStatus}
+              contentStatus={cmdContentStatus}
+              creativeSummary={cmdCreativeSummary}
+              scheduleSummary={publishingSummary}
+              performance={cmdPerformance}
+              performanceUnavailable={cmdPerformanceError}
+              experiments={cmdExperiments}
+              attentionSignals={cmdAttentionSignals}
+              loading={cmdLoading}
+              onNavigate={setTab}
+            />
 
-            {/* What we're marketing */}
-            <section>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
-                What we're marketing
-              </p>
-              <div className="divide-y divide-[#F4F4F5] rounded-xl border border-[#E4E4E7] bg-white px-4">
-                <MetaRow label="Type" value={sourceLabel} />
-                <MetaRow label="Source" value={campaign.sourceTitle} />
-                {campaign.sourceDescription && (
-                  <MetaRow label="Details" value={campaign.sourceDescription} />
-                )}
-                {campaign.channels.length > 0 && (
-                  <MetaRow label="Channels" value={campaign.channels.join(', ')} />
-                )}
-              </div>
-            </section>
-
-            {/* Campaign brief */}
-            <section>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
-                Campaign brief
-              </p>
-              {briefLoading ? (
-                <div className="flex items-center gap-2 py-3 text-sm text-[#71717A]">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Assembling brief…
-                </div>
-              ) : brief ? (
-                <div className="space-y-3">
-                  <BriefCompletenessNotice brief={brief} workspaceId={campaign.workspaceId} onSaved={setBrief} />
-                  <BriefSummary brief={brief} />
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-[#E4E4E7] px-4 py-3">
-                  <p className="text-sm text-[#A1A1AA]">Brief could not be assembled.</p>
-                </div>
-              )}
-            </section>
-
-            {/* Campaign plan */}
+            {/* Campaign details — brief + plan for early-stage campaigns */}
             {canPlan && (
-              <section>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
-                  Campaign plan
+              <div className="mx-auto max-w-2xl space-y-6 border-t border-[#E4E4E7] pt-8">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
+                  Campaign Details
                 </p>
-                <PlanSection
-                  campaignId={campaign.id}
-                  workspaceId={campaign.workspaceId}
-                  canPlan={canPlan}
-                  brief={brief}
-                  onCampaignUpdate={loadCampaign}
-                  onHasPlanChange={setHasPlan}
-                />
-              </section>
-            )}
 
-            {/* Timestamps */}
-            <section>
-              <div className="divide-y divide-[#F4F4F5] rounded-xl border border-[#E4E4E7] bg-white px-4">
-                <MetaRow label="Created" value={new Date(campaign.createdAt).toLocaleDateString()} />
-                <MetaRow label="Updated" value={new Date(campaign.updatedAt).toLocaleDateString()} />
-                {campaign.cancellationReason && (
-                  <MetaRow label="Cancelled because" value={campaign.cancellationReason} />
-                )}
+                {/* Brief */}
+                <section>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
+                    Campaign Brief
+                  </p>
+                  {briefLoading ? (
+                    <div className="flex items-center gap-2 py-3 text-sm text-[#71717A]">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Assembling brief…
+                    </div>
+                  ) : brief ? (
+                    <div className="space-y-3">
+                      <BriefCompletenessNotice brief={brief} workspaceId={campaign.workspaceId} onSaved={setBrief} />
+                      <BriefSummary brief={brief} />
+                    </div>
+                  ) : null}
+                </section>
+
+                {/* Plan */}
+                <section>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">
+                    Campaign Plan
+                  </p>
+                  <PlanSection
+                    campaignId={campaign.id}
+                    workspaceId={campaign.workspaceId}
+                    canPlan={canPlan}
+                    brief={brief}
+                    onCampaignUpdate={loadCampaign}
+                    onHasPlanChange={(hp) => {
+                      setHasPlan(hp);
+                      if (hp) setCmdPlanStatus((p) => p ? { ...p, hasPlan: true } : { aiConfigured: false, hasPlan: true });
+                    }}
+                  />
+                </section>
+
+                {/* Timestamps */}
+                <section>
+                  <div className="divide-y divide-[#F4F4F5] rounded-xl border border-[#E4E4E7] bg-white px-4">
+                    <MetaRow label="Created" value={new Date(campaign.createdAt).toLocaleDateString()} />
+                    <MetaRow label="Updated" value={new Date(campaign.updatedAt).toLocaleDateString()} />
+                    {campaign.cancellationReason && (
+                      <MetaRow label="Cancelled because" value={campaign.cancellationReason} />
+                    )}
+                  </div>
+                </section>
               </div>
-            </section>
+            )}
           </div>
         )}
 
