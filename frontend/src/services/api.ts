@@ -228,6 +228,11 @@ export const api = {
     request<CreativeApprovalRecord>(
       `/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}/approval?workspaceId=${encodeURIComponent(workspaceId)}`
     ),
+  patchCreative: (campaignId: string, contentKey: string, workspaceId: string, content: unknown) =>
+    request<CreativeArtifact>(`/campaigns/${campaignId}/creative/${encodeURIComponent(contentKey)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content, workspaceId }),
+    }),
 
   // Schedule & Publishing
   getCampaignScheduleSummary: (campaignId: string, workspaceId: string) =>

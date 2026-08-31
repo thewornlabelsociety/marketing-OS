@@ -2,6 +2,7 @@ import { FileText, Loader2, MoreHorizontal, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { ContentPlanPreviewDrawer, DeliverablePreviewButton } from '../../components/drawers/ContentPlanPreviewDrawer';
 import { ContentPlanReviewDrawer } from '../../components/drawers/ContentPlanReviewDrawer';
+import { ContentStudioDrawer } from '../../components/drawers/ContentStudioDrawer';
 import { CreativePreviewDrawer } from '../../components/drawers/CreativePreviewDrawer';
 import { CreativeReviewDrawer } from '../../components/drawers/CreativeReviewDrawer';
 import { api } from '../../services/api';
@@ -64,6 +65,7 @@ export function ContentPlanTab({ campaignId, workspaceId, onReviewStrategy, onSt
   const [creativePreviewKey, setCreativePreviewKey] = useState<string | null>(null);
   const [reviewCreativeKey, setReviewCreativeKey] = useState<string | null>(null);
   const [reviewArtifact, setReviewArtifact] = useState<CreativeArtifact | null>(null);
+  const [studioKey, setStudioKey] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [approvingCreative, setApprovingCreative] = useState(false);
   const [requesting, setRequesting] = useState(false);
@@ -347,6 +349,7 @@ export function ContentPlanTab({ campaignId, workspaceId, onReviewStrategy, onSt
               onGenerateOne={(key) => void generateCreative(key)}
               onReview={openCreativeReview}
               onPreview={setCreativePreviewKey}
+              onEdit={setStudioKey}
             />
           )}
         </div>
@@ -395,6 +398,17 @@ export function ContentPlanTab({ campaignId, workspaceId, onReviewStrategy, onSt
           locked={reviewArtifact.status === 'APPROVED'}
         />
       )}
+
+      {studioKey && (
+        <ContentStudioDrawer
+          campaignId={campaignId}
+          workspaceId={workspaceId}
+          contentKey={studioKey}
+          aiConfigured={aiConfigured}
+          onClose={() => setStudioKey(null)}
+          onSaved={() => void loadCreative()}
+        />
+      )}
     </div>
   );
 }
@@ -408,6 +422,7 @@ function CreativeSection({
   onGenerateOne,
   onReview,
   onPreview,
+  onEdit,
 }: {
   summary: CampaignCreativeSummary | null;
   aiConfigured: boolean;
@@ -417,6 +432,7 @@ function CreativeSection({
   onGenerateOne: (contentKey: string) => void;
   onReview: (contentKey: string) => void;
   onPreview: (contentKey: string) => void;
+  onEdit: (contentKey: string) => void;
 }) {
   if (!summary) {
     return (
@@ -517,6 +533,13 @@ function CreativeSection({
                 </button>
               ) : (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(row.contentKey)}
+                    className="rounded-md border border-[#E4E4E7] px-2.5 py-1 text-xs text-[#09090B] hover:bg-[#FAFAFA]"
+                  >
+                    Edit
+                  </button>
                   <button
                     type="button"
                     onClick={() => onPreview(row.contentKey)}

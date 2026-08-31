@@ -162,3 +162,46 @@ campaignCreativeRouter.get('/:contentKey/approval', (req: CreativeReq, res: Resp
   }
   res.json(approval);
 });
+
+// Manual content edit — updates content in place; resets APPROVED → READY_FOR_REVIEW and clears stale approval
+campaignCreativeRouter.patch('/:contentKey', (req: CreativeReq, res: Response) => {
+  const { campaignId, contentKey } = req.params;
+  const { content, workspaceId } = req.body as { content?: unknown; workspaceId?: string };
+
+  if (!content || typeof content !== 'object' || Array.isArray(content)) {
+    res.status(400).json({ error: 'content is required and must be an object' });
+    return;
+  }
+  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+
+  interface ArtifactStatusRow { id: string; status: string }
+  const row = db.prepare(
+    'SELECT id, status FROM creative_artifacts WHERE campaign_id = ? AND content_key = ? AND is_current = 1',
+  ).get(campaignId, contentKey!) as ArtifactStatusRow | undefined;
+
+  if (!row) {
+    res.status(404).json({ error: 'No current creative artifact found for this deliverable' });
+    return;
+  }
+
+  const wasApproved = row.status === 'APPROVED';
+  const newStatus = wasApproved ? 'READY_FOR_REVIEW' : row.status;
+  const now = new Date().toISOString();
+
+  db.prepare(
+    'UPDATE creative_artifacts SET content = ?, status = ?, updated_at = ? WHERE id = ?',
+  ).run(JSON.stringify(content), newStatus, now, row.id);
+
+  if (wasApproved) {
+    db.prepare(
+      'DELETE FROM creative_approvals WHERE campaign_id = ? AND content_key = ?',
+    ).run(campaignId, contentKey!);
+  }
+
+  const updated = creativeGeneratorService.getCurrent(campaignId, contentKey!);
+  if (!updated) {
+    res.status(500).json({ error: 'Failed to retrieve updated artifact' });
+    return;
+  }
+  res.json(updated);
+});
