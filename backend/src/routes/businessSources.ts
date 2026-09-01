@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { requireLocalOperatorSession } from '../middleware/localOperatorSession';
 import { businessIntegrationService } from '../services/business/BusinessIntegrationService';
 import { sourceRecordService } from '../services/business/SourceRecordService';
-import { operatorStudioService, type StudioFormat } from '../services/business/OperatorStudioService';
+import { operatorStudioService } from '../services/business/OperatorStudioService';
+import { db } from '../db/database';
 
 export const businessSourcesRouter = Router();
 businessSourcesRouter.use(requireLocalOperatorSession);
@@ -27,6 +28,83 @@ businessSourcesRouter.get('/products/:id/usage', (req, res) => {
   res.json(usage);
 });
 
+businessSourcesRouter.get('/studio/library', (req, res) => {
+  const workspaceId = String(req.query.workspaceId ?? '');
+  if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required' });
+
+  const contentTypeToFormat: Record<string, 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL'> = {
+    STATIC_POST: 'POST',
+    CAROUSEL: 'CAROUSEL',
+    STORY: 'STORY',
+    EMAIL: 'EMAIL',
+    NEWSLETTER: 'EMAIL',
+  };
+
+  const rows = db.prepare(`
+    SELECT ca.id AS artifactId, ca.campaign_id AS campaignId, ca.content_key AS contentKey,
+           ca.channel, ca.content_type AS contentType, ca.format, ca.title, ca.status,
+           ca.content, ca.created_at AS createdAt, ca.updated_at AS updatedAt,
+           c.name AS campaignName, c.status AS campaignStatus
+    FROM creative_artifacts ca
+    JOIN campaigns c ON c.id = ca.campaign_id
+    WHERE ca.workspace_id = ? AND ca.is_current = 1
+    ORDER BY ca.created_at DESC
+    LIMIT 100
+  `).all(workspaceId) as Array<{
+    artifactId: string; campaignId: string; contentKey: string;
+    channel: string; contentType: string; format: string;
+    title: string | null; status: string; content: string;
+    createdAt: string; updatedAt: string;
+    campaignName: string; campaignStatus: string;
+  }>;
+
+  const enriched = rows.map(a => {
+    const products = (db.prepare(`
+      SELECT sr.id, sr.title, sr.image_urls, sr.price_amount, sr.price_currency, sr.payload
+      FROM creative_source_links csl
+      JOIN source_records sr ON sr.id = csl.source_record_id
+      WHERE csl.creative_artifact_id = ?
+      ORDER BY csl.position
+    `).all(a.artifactId) as Array<{
+      id: string; title: string; image_urls: string;
+      price_amount: number | null; price_currency: string | null; payload: string;
+    }>).map(p => {
+      const payload = JSON.parse(p.payload || '{}') as Record<string, unknown>;
+      return {
+        id: p.id,
+        title: p.title,
+        brand: (payload.brand as string | null) ?? null,
+        imageUrls: JSON.parse(p.image_urls || '[]') as string[],
+        price: p.price_amount,
+        currency: p.price_currency,
+      };
+    });
+
+    let content: unknown;
+    try { content = JSON.parse(a.content); } catch { content = {}; }
+
+    return {
+      artifactId: a.artifactId,
+      campaignId: a.campaignId,
+      contentKey: a.contentKey,
+      channel: a.channel,
+      contentType: a.contentType,
+      format: a.format,
+      studioFormat: contentTypeToFormat[a.contentType] ?? 'POST',
+      title: a.title,
+      status: a.status,
+      campaignName: a.campaignName,
+      campaignStatus: a.campaignStatus,
+      content,
+      products,
+      createdAt: a.createdAt,
+      updatedAt: a.updatedAt,
+    };
+  });
+
+  res.json(enriched);
+});
+
 businessSourcesRouter.post('/studio', async (req, res) => {
   const { workspaceId, sourceProductIds, format } = req.body as {
     workspaceId?: string;
@@ -37,7 +115,16 @@ businessSourcesRouter.post('/studio', async (req, res) => {
   if (!sourceProductIds?.length) return res.status(400).json({ error: 'At least one product must be selected', code: 'BAD_REQUEST' });
   if (!format) return res.status(400).json({ error: 'format is required', code: 'BAD_REQUEST' });
 
-  const result = await operatorStudioService.setup({ workspaceId, sourceProductIds, format: format as StudioFormat });
+  if (format === 'WHOLE_SET') {
+    const result = await operatorStudioService.setupWholeSet({ workspaceId, sourceProductIds });
+    if ('error' in result) {
+      const status = result.code === 'NOT_FOUND' ? 404 : 400;
+      return res.status(status).json(result);
+    }
+    return res.json(result);
+  }
+
+  const result = await operatorStudioService.setup({ workspaceId, sourceProductIds, format: format as 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL' });
   if ('error' in result) {
     const status = result.code === 'NOT_FOUND' ? 404 : 400;
     return res.status(status).json(result);

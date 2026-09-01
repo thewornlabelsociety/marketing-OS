@@ -1,7 +1,7 @@
 import {
   BarChart3,
   CalendarDays,
-  CirclePlus,
+  Layers,
   LayoutDashboard,
   Rocket,
 } from 'lucide-react';
@@ -16,7 +16,7 @@ interface NavItem {
 
 const PRIMARY_NAV: NavItem[] = [
   { id: 'dashboard', label: 'Today', icon: LayoutDashboard },
-  { id: 'create', label: 'Create', icon: CirclePlus },
+  { id: 'creative-studio', label: 'Creative Studio', icon: Layers },
   { id: 'campaigns', label: 'Campaigns', icon: Rocket },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
   { id: 'learn', label: 'Learn', icon: BarChart3 },
@@ -29,7 +29,9 @@ export function SidebarNav() {
     <nav className="flex w-52 shrink-0 flex-col border-r border-[#E4E4E7] bg-[#FAFAFA]">
       <div className="space-y-1 p-3 pt-5">
         {PRIMARY_NAV.map(({ id, label, icon: Icon }) => {
-          const active = activeTab === id || (id === 'campaigns' && activeTab === 'campaign-detail');
+          const active = activeTab === id
+            || (id === 'campaigns' && activeTab === 'campaign-detail')
+            || (id === 'creative-studio' && activeTab === 'operator-studio');
           return (
             <button
               key={id}

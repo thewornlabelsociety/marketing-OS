@@ -3,20 +3,29 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  GripVertical,
   ImageOff,
   Loader2,
   RefreshCw,
   Sparkles,
-  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../../app/AppContext';
 import { ScheduleItemDrawer } from '../../components/drawers/ScheduleItemDrawer';
 import { api } from '../../services/api';
+import type { SourceProduct } from '../../types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL';
+
+interface WholeSetResult {
+  campaignId: string;
+  campaignName: string;
+  formats: Array<{ format: StudioFormat; contentKey: string; artifact: Artifact }>;
+  products: StudioProduct[];
+  aiGenerated: boolean;
+}
 
 interface StudioProduct {
   id: string;
@@ -70,6 +79,8 @@ interface Artifact {
   format: string;
   status: string;
   content: ArtifactContent;
+  sourceContentPlanId?: string;
+  sourceContentPlanVersion?: number;
 }
 
 interface Session {
@@ -90,12 +101,6 @@ const FORMAT_LABELS: Record<StudioFormat, string> = {
   EMAIL: 'Email',
 };
 
-const FORMAT_RATIO: Record<StudioFormat, string> = {
-  POST: 'aspect-[4/5]',
-  CAROUSEL: 'aspect-[4/5]',
-  STORY: 'aspect-[9/16]',
-  EMAIL: 'aspect-auto',
-};
 
 function formatPrice(price: number | null, currency: string | null) {
   if (price == null) return '';
@@ -122,9 +127,11 @@ const FORMAT_DESCRIPTIONS: Record<StudioFormat, string> = {
 function FormatPicker({
   products,
   onSelect,
+  onWholeSet,
 }: {
   products: StudioProduct[];
   onSelect: (format: StudioFormat) => void;
+  onWholeSet: () => void;
 }) {
   const formats: StudioFormat[] = ['POST', 'CAROUSEL', 'STORY', 'EMAIL'];
   const count = products.length;
@@ -133,7 +140,7 @@ function FormatPicker({
     <div className="mx-auto max-w-2xl px-6 py-12">
       <p className="mos-eyebrow mb-1">New from Worn Label</p>
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">
-        {count === 1 ? products[0].title : `${count} products selected`}
+        {count === 1 ? (products[0]?.title || 'Product selected') : `${count} products selected`}
       </h1>
       <p className="mt-1 text-sm text-zinc-500">
         {count === 1 ? '1 product' : `${count} products`} · Choose a format to continue
@@ -179,11 +186,197 @@ function FormatPicker({
           </button>
         ))}
         <button
-          disabled
-          className="col-span-2 cursor-not-allowed rounded-2xl border border-dashed border-zinc-200 p-4 text-center text-xs text-zinc-400"
+          onClick={onWholeSet}
+          className="col-span-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-center text-sm font-medium text-zinc-700 transition hover:border-zinc-950 hover:bg-white hover:shadow-sm"
         >
-          Make whole set — coming soon
+          <span className="font-semibold">Make whole set</span>
+          <span className="ml-2 text-xs text-zinc-400">Post · Carousel · Story · Email</span>
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Source Product Picker ────────────────────────────────────────────────────
+
+function SourceProductPicker({ onContinue }: { onContinue: (ids: string[]) => void }) {
+  const { activeEntity } = useApp();
+  const [products, setProducts] = useState<SourceProduct[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!activeEntity) return;
+    api.establishLocalOperatorSession()
+      .then(() => api.getSourceProducts(activeEntity.id, 'new'))
+      .then(setProducts)
+      .catch(() => setProducts([]))
+      .finally(() => setLoading(false));
+  }, [activeEntity]);
+
+  const toggle = (id: string) => {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : prev.length < 6 ? [...prev, id] : prev
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center gap-3 text-sm text-zinc-400">
+        <Loader2 className="h-5 w-5 animate-spin" /> Loading products…
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl px-6 py-10">
+      <p className="mos-eyebrow mb-1">New from Worn Label</p>
+      <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">Select products</h1>
+      <p className="mt-1 text-sm text-zinc-500">Choose up to 6 products to create content for.</p>
+
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {products.map(p => {
+          const isSelected = selected.includes(p.id);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => toggle(p.id)}
+              className={`group relative overflow-hidden rounded-2xl border text-left transition ${
+                isSelected ? 'border-zinc-950 shadow-md' : 'border-zinc-200 hover:border-zinc-400'
+              }`}
+            >
+              <div className="aspect-[4/5] w-full bg-zinc-100">
+                {p.imageUrls[0] ? (
+                  <img src={p.imageUrls[0]} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <ImageOff className="h-6 w-6 text-zinc-300" />
+                  </div>
+                )}
+              </div>
+              <div className="p-2.5">
+                <p className="truncate text-[11px] font-semibold text-zinc-900">{p.title}</p>
+                {p.attributes?.brand && (
+                  <p className="truncate text-[10px] text-zinc-400">{p.attributes.brand}</p>
+                )}
+              </div>
+              {isSelected && (
+                <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950 text-white shadow">
+                  <Check className="h-3.5 w-3.5" />
+                </div>
+              )}
+              {p.marketingBucket === 'NEW' && (
+                <span className="absolute left-2 top-2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                  NEW
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {products.length === 0 && (
+        <p className="mt-8 text-sm text-zinc-400">No new products found. Try syncing your Worn Label integration.</p>
+      )}
+
+      <div className="sticky bottom-0 mt-8 border-t border-zinc-100 bg-white pt-4">
+        <button
+          type="button"
+          disabled={selected.length === 0}
+          onClick={() => onContinue(selected)}
+          className="w-full rounded-2xl bg-zinc-950 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-40"
+        >
+          Continue with {selected.length} {selected.length === 1 ? 'product' : 'products'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Whole Set Overview ───────────────────────────────────────────────────────
+
+const WHOLE_SET_FORMAT_LABELS: Record<StudioFormat, { label: string; desc: string }> = {
+  POST: { label: 'Instagram Post', desc: 'Single hero image, 4:5' },
+  CAROUSEL: { label: 'Carousel', desc: 'Swipeable slides per product' },
+  STORY: { label: 'Stories', desc: 'Vertical 9:16 frame sequence' },
+  EMAIL: { label: 'Email', desc: 'Newsletter with subject line' },
+};
+
+function WholeSetOverview({
+  result,
+  onOpenFormat,
+  onBack,
+}: {
+  result: WholeSetResult;
+  onOpenFormat: (fmt: StudioFormat) => void;
+  onBack: () => void;
+}) {
+  const hero = result.products[0];
+  const heroImage = hero?.imageUrls[0] ?? null;
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center gap-3 border-b border-zinc-100 bg-white px-4 py-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back
+        </button>
+        <span className="text-xs font-semibold text-zinc-950">{result.campaignName}</span>
+        <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">
+          Whole Set
+        </span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-8">
+        <p className="mos-eyebrow mb-1">Content set ready</p>
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-950">{result.campaignName}</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          {result.products.length} {result.products.length === 1 ? 'product' : 'products'} · 4 formats generated
+          {!result.aiGenerated && ' · Template copy'}
+        </p>
+
+        <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {result.formats.map(({ format: fmt, artifact }) => {
+            const cfg = WHOLE_SET_FORMAT_LABELS[fmt];
+            return (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => onOpenFormat(fmt)}
+                className="group flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition hover:border-zinc-950 hover:shadow-md"
+              >
+                {/* Mini preview */}
+                <div className={`relative w-full overflow-hidden bg-zinc-100 ${fmt === 'STORY' ? 'aspect-[9/16]' : 'aspect-[4/5]'}`}>
+                  {heroImage ? (
+                    <img src={heroImage} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <ImageOff className="h-8 w-8 text-zinc-300" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                  <span className="absolute bottom-2 left-2 text-xs font-bold text-white drop-shadow">
+                    {cfg.label}
+                  </span>
+                  <span className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                    artifact.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-800/70 text-white'
+                  }`}>
+                    {artifact.status === 'APPROVED' ? 'Ready' : 'Draft'}
+                  </span>
+                </div>
+                <div className="p-3">
+                  <p className="text-[10px] text-zinc-500">{cfg.desc}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-zinc-700 group-hover:text-zinc-950">
+                    Open to edit →
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -442,40 +635,64 @@ function CopyEditor({
               className="mos-field w-full resize-none"
             />
           </Field>
-          {(content as CarouselContent).slides.map((slide, i) => (
-            <details key={i} className="group rounded-xl border border-zinc-200">
-              <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-xs font-semibold text-zinc-700 marker:hidden">
-                <span>Slide {i + 1} · {slide.headline.slice(0, 40)}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-zinc-400 transition group-open:rotate-180" />
-              </summary>
-              <div className="space-y-2 px-4 pb-4">
-                <Field label="Headline">
-                  <input
-                    type="text"
-                    value={slide.headline}
-                    onChange={(e) => {
-                      const slides = [...(content as CarouselContent).slides];
-                      slides[i] = { ...slide, headline: e.target.value };
-                      onContentChange({ ...(content as CarouselContent), slides });
-                    }}
-                    className="mos-field w-full"
-                  />
-                </Field>
-                <Field label="Body">
-                  <textarea
-                    rows={2}
-                    value={slide.body}
-                    onChange={(e) => {
-                      const slides = [...(content as CarouselContent).slides];
-                      slides[i] = { ...slide, body: e.target.value };
-                      onContentChange({ ...(content as CarouselContent), slides });
-                    }}
-                    className="mos-field w-full resize-none"
-                  />
-                </Field>
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Slides — drag to reorder</p>
+            {(content as CarouselContent).slides.map((slide, i) => (
+              <div
+                key={i}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('slideIndex', String(i))}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const from = Number(e.dataTransfer.getData('slideIndex'));
+                  if (from === i) return;
+                  const slides = [...(content as CarouselContent).slides];
+                  const [moved] = slides.splice(from, 1);
+                  slides.splice(i, 0, moved);
+                  const renumbered = slides.map((s, idx) => ({ ...s, slideNumber: idx + 1 }));
+                  onContentChange({ ...(content as CarouselContent), slides: renumbered });
+                }}
+                className="group mb-2 rounded-xl border border-zinc-200"
+              >
+                <details>
+                  <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-xs font-semibold text-zinc-700 marker:hidden">
+                    <div className="flex items-center gap-2">
+                      <GripVertical className="h-3.5 w-3.5 cursor-grab text-zinc-300 active:cursor-grabbing" />
+                      <span>Slide {i + 1} · {slide.headline.slice(0, 40)}</span>
+                    </div>
+                    <ChevronDown className="h-3.5 w-3.5 text-zinc-400 transition group-open:rotate-180" />
+                  </summary>
+                  <div className="space-y-2 px-4 pb-4">
+                    <Field label="Headline">
+                      <input
+                        type="text"
+                        value={slide.headline}
+                        onChange={(e) => {
+                          const slides = [...(content as CarouselContent).slides];
+                          slides[i] = { ...slide, headline: e.target.value };
+                          onContentChange({ ...(content as CarouselContent), slides });
+                        }}
+                        className="mos-field w-full"
+                      />
+                    </Field>
+                    <Field label="Body">
+                      <textarea
+                        rows={2}
+                        value={slide.body}
+                        onChange={(e) => {
+                          const slides = [...(content as CarouselContent).slides];
+                          slides[i] = { ...slide, body: e.target.value };
+                          onContentChange({ ...(content as CarouselContent), slides });
+                        }}
+                        className="mos-field w-full resize-none"
+                      />
+                    </Field>
+                  </div>
+                </details>
               </div>
-            </details>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
@@ -611,14 +828,27 @@ function LivePreview({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type PageStep = 'format' | 'setup' | 'studio' | 'error';
+type PageStep = 'source-select' | 'format' | 'setup' | 'studio' | 'whole-set' | 'error';
 
 export default function OperatorStudioPage() {
-  const { activeEntity, selectedSourceProductIds, setSelectedSourceProductIds, setActiveTab, setActiveCampaignId } = useApp();
+  const {
+    activeEntity,
+    selectedSourceProductIds,
+    setSelectedSourceProductIds,
+    setActiveTab,
+    setActiveCampaignId,
+    studioReturnTarget,
+    setStudioReturnTarget,
+  } = useApp();
 
-  const [step, setStep] = useState<PageStep>('format');
+  // If studioReturnTarget is set, we load from it; if IDs are set but no target, show format picker
+  const hasProducts = selectedSourceProductIds.length > 0;
+  const initialStep: PageStep = studioReturnTarget ? 'studio' : hasProducts ? 'format' : 'source-select';
+
+  const [step, setStep] = useState<PageStep>(initialStep);
   const [format, setFormat] = useState<StudioFormat | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [wholeSetResult, setWholeSetResult] = useState<WholeSetResult | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
 
   // Studio editing state
@@ -631,16 +861,59 @@ export default function OperatorStudioPage() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Products to display in the format picker — from context
-  const products = selectedSourceProductIds;
-
   // Placeholder product state for format picker (we fetch from the session after setup)
   const [pickerProducts, setPickerProducts] = useState<StudioProduct[]>([]);
 
-  // When we have product IDs but no product data, build minimal preview items
+  // Populate picker products from return target or IDs
   useEffect(() => {
+    if (studioReturnTarget) {
+      // Return flow: build session directly from library item
+      const item = studioReturnTarget;
+      const sessionProducts: StudioProduct[] = item.products.map(p => ({
+        id: p.id,
+        title: p.title,
+        brand: p.brand,
+        price: p.price,
+        currency: p.currency,
+        imageUrls: p.imageUrls,
+        availability: 'AVAILABLE',
+        marketingBucket: null,
+        size: null,
+        category: null,
+        publicUrl: null,
+      }));
+      const reconstructed: Session = {
+        campaignId: item.campaignId,
+        campaignName: item.campaignName,
+        contentKey: item.contentKey,
+        artifact: {
+          id: item.artifactId,
+          workspaceId: activeEntity?.id ?? '',
+          campaignId: item.campaignId,
+          contentKey: item.contentKey,
+          deliverableId: '',
+          version: 1,
+          channel: item.channel,
+          contentType: item.contentType,
+          format: item.format,
+          status: item.status,
+          content: item.content as ArtifactContent,
+          sourceContentPlanId: '',
+          sourceContentPlanVersion: 1,
+        },
+        products: sessionProducts,
+        aiGenerated: true,
+      };
+      setFormat(item.studioFormat);
+      setSession(reconstructed);
+      setContent(item.content as ArtifactContent);
+      setApproved(item.status === 'APPROVED');
+      setStep('studio');
+      setStudioReturnTarget(null);
+      return;
+    }
+
     if (selectedSourceProductIds.length === 0) return;
-    // We build minimal cards from IDs only — the API will return full data in session
     setPickerProducts(
       selectedSourceProductIds.map((id) => ({
         id,
@@ -656,7 +929,8 @@ export default function OperatorStudioPage() {
         publicUrl: null,
       })),
     );
-  }, [selectedSourceProductIds]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setupStudio = useCallback(
     async (selectedFormat: StudioFormat) => {
@@ -691,6 +965,32 @@ export default function OperatorStudioPage() {
     },
     [activeEntity, selectedSourceProductIds],
   );
+
+  const setupWholeSet = useCallback(async () => {
+    if (!activeEntity) return;
+    setStep('setup');
+    setSetupError(null);
+    try {
+      await api.establishLocalOperatorSession();
+      const result = await api.createWholeSet(activeEntity.id, selectedSourceProductIds);
+      const ws: WholeSetResult = {
+        campaignId: result.campaignId,
+        campaignName: result.campaignName,
+        formats: result.formats.map(f => ({
+          format: f.format as StudioFormat,
+          contentKey: f.contentKey,
+          artifact: f.artifact as unknown as Artifact,
+        })),
+        products: result.products as unknown as StudioProduct[],
+        aiGenerated: result.aiGenerated,
+      };
+      setWholeSetResult(ws);
+      setStep('whole-set');
+    } catch (err) {
+      setSetupError((err as Error).message);
+      setStep('error');
+    }
+  }, [activeEntity, selectedSourceProductIds]);
 
   // Auto-save edits to backend
   const persistEdit = useCallback(
@@ -745,22 +1045,65 @@ export default function OperatorStudioPage() {
     }
   }, [session, activeEntity, approving]);
 
+  const openFormatFromWholeSet = (fmt: StudioFormat) => {
+    if (!wholeSetResult) return;
+    const entry = wholeSetResult.formats.find(f => f.format === fmt);
+    if (!entry) return;
+    const s: Session = {
+      campaignId: wholeSetResult.campaignId,
+      campaignName: wholeSetResult.campaignName,
+      contentKey: entry.contentKey,
+      artifact: entry.artifact,
+      products: wholeSetResult.products,
+      aiGenerated: wholeSetResult.aiGenerated,
+    };
+    setSession(s);
+    setContent(entry.artifact.content);
+    setFormat(fmt);
+    setActiveSlide(0);
+    setApproved(entry.artifact.status === 'APPROVED');
+    setStep('studio');
+  };
+
   const handleBack = () => {
-    if (step === 'studio' || step === 'format' || step === 'error') {
-      setSelectedSourceProductIds([]);
-      setActiveTab('create');
-    } else {
+    if (step === 'studio' && wholeSetResult) {
+      setStep('whole-set');
+    } else if (step === 'whole-set') {
       setStep('format');
+    } else if (step === 'source-select') {
+      setSelectedSourceProductIds([]);
+      setActiveTab('creative-studio');
+    } else {
+      setSelectedSourceProductIds([]);
+      setWholeSetResult(null);
+      setActiveTab('creative-studio');
     }
   };
 
-  if (selectedSourceProductIds.length === 0 && step === 'format') {
+  // ─── Source Select Step ────────────────────────────────────────────────────
+
+  if (step === 'source-select') {
     return (
-      <div className="flex h-full items-center justify-center p-10 text-sm text-zinc-500">
-        No products selected.{' '}
-        <button onClick={() => setActiveTab('create')} className="ml-1 underline hover:text-zinc-800">
-          Go back
-        </button>
+      <div className="relative h-full overflow-y-auto">
+        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-100 bg-white px-4 py-3">
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back
+          </button>
+          <span className="text-xs font-semibold text-zinc-950">Create content</span>
+        </div>
+        <SourceProductPicker
+          onContinue={(ids) => {
+            setSelectedSourceProductIds(ids);
+            setPickerProducts(ids.map(id => ({
+              id, title: '', brand: null, price: null, currency: null, imageUrls: [],
+              availability: 'AVAILABLE', marketingBucket: null, size: null, category: null, publicUrl: null,
+            })));
+            setStep('format');
+          }}
+        />
       </div>
     );
   }
@@ -777,9 +1120,13 @@ export default function OperatorStudioPage() {
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
-          <span className="text-xs font-semibold text-zinc-950">Operator Studio</span>
+          <span className="text-xs font-semibold text-zinc-950">Choose format</span>
         </div>
-        <FormatPicker products={pickerProducts} onSelect={(f) => void setupStudio(f)} />
+        <FormatPicker
+          products={pickerProducts}
+          onSelect={(f) => void setupStudio(f)}
+          onWholeSet={() => void setupWholeSet()}
+        />
       </div>
     );
   }
@@ -792,9 +1139,21 @@ export default function OperatorStudioPage() {
         <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
         <p className="text-sm font-medium text-zinc-600">Creating your content…</p>
         <p className="text-xs text-zinc-400">
-          {format ? `${FORMAT_LABELS[format]} · ` : ''}AI is writing from your brand voice
+          {format ? `${FORMAT_LABELS[format]} · ` : !format ? 'Whole set · ' : ''}AI is writing from your brand voice
         </p>
       </div>
+    );
+  }
+
+  // ─── Whole Set Step ────────────────────────────────────────────────────────
+
+  if (step === 'whole-set' && wholeSetResult) {
+    return (
+      <WholeSetOverview
+        result={wholeSetResult}
+        onOpenFormat={openFormatFromWholeSet}
+        onBack={() => setStep('format')}
+      />
     );
   }
 
@@ -841,6 +1200,9 @@ export default function OperatorStudioPage() {
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
           <span className="hidden text-xs text-zinc-400 sm:inline">|</span>
+          {wholeSetResult && (
+            <span className="hidden text-xs text-zinc-400 sm:inline">Whole Set ·</span>
+          )}
           <span className="hidden truncate text-xs font-semibold text-zinc-950 sm:inline max-w-[200px]">
             {session.campaignName}
           </span>

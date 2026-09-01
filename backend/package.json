@@ -16,6 +16,8 @@
     "verify:phase-3j": "node scripts/run-verify-phase-3j.cjs",
     "verify:phase-3k": "node scripts/run-verify-phase-3k.cjs",
     "verify:phase-3q-a": "node scripts/run-verify-phase-3q-a.cjs",
+    "verify:phase-3q-b": "node scripts/run-verify-phase-3q-b.cjs",
+    "verify:phase-3q-c": "node scripts/run-verify-phase-3q-c.cjs",
     "sync:worn-label": "node scripts/sync-business-integrations.cjs",
     "postbuild": "node -e \"const fs=require('fs');const p='dist/db';fs.mkdirSync(p,{recursive:true});fs.copyFileSync('src/db/schema.sql',p+'/schema.sql')\"",
     "start": "node dist/server.js"

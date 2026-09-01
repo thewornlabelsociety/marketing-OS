@@ -3,7 +3,7 @@ import { db } from '../../db/database';
 import { aiEnv } from '../../config/aiEnvironment';
 import { getAIProvider } from '../../integrations/adapters/AIProviderFactory';
 
-export type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL';
+export type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL' | 'WHOLE_SET';
 
 interface StudioProduct {
   id: string;
@@ -17,6 +17,20 @@ interface StudioProduct {
   size: string | null;
   category: string | null;
   publicUrl: string | null;
+}
+
+export interface WholeSetFormatResult {
+  format: 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL';
+  contentKey: string;
+  artifact: StudioSetupResult['artifact'];
+}
+
+export interface WholeSetSetupResult {
+  campaignId: string;
+  campaignName: string;
+  formats: WholeSetFormatResult[];
+  products: StudioProduct[];
+  aiGenerated: boolean;
 }
 
 export interface StudioSetupResult {
@@ -49,7 +63,10 @@ export interface StudioSetupResult {
 
 type ServiceError = { error: string; code: string };
 
-const FORMAT_META: Record<StudioFormat, { channel: string; contentType: string; format: string; contentKey: string; title: string }> = {
+type SingleFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL';
+const SINGLE_FORMATS: SingleFormat[] = ['POST', 'CAROUSEL', 'STORY', 'EMAIL'];
+
+const FORMAT_META: Record<SingleFormat, { channel: string; contentType: string; format: string; contentKey: string; title: string }> = {
   POST:     { channel: 'INSTAGRAM', contentType: 'STATIC_POST',  format: 'PORTRAIT_4_5',  contentKey: 'new-arrivals-ig-post',     title: 'New Arrivals — Instagram Post' },
   CAROUSEL: { channel: 'INSTAGRAM', contentType: 'CAROUSEL',     format: 'PORTRAIT_4_5',  contentKey: 'new-arrivals-ig-carousel',  title: 'New Arrivals — Instagram Carousel' },
   STORY:    { channel: 'INSTAGRAM', contentType: 'STORY',         format: 'VERTICAL_9_16', contentKey: 'new-arrivals-ig-story',    title: 'New Arrivals — Instagram Story' },
@@ -71,7 +88,7 @@ CRITICAL RULES:
 7. Do not include placeholder text or "[insert here]" style copy.`;
 }
 
-function buildUserPrompt(products: StudioProduct[], format: StudioFormat, brandBrain: Record<string, unknown>): string {
+function buildUserPrompt(products: StudioProduct[], format: SingleFormat, brandBrain: Record<string, unknown>): string {
   const meta = FORMAT_META[format];
   const productLines = products.map((p, i) => {
     const parts = [
@@ -97,7 +114,7 @@ function buildUserPrompt(products: StudioProduct[], format: StudioFormat, brandB
     bb.language?.exampleCopy ? `Example copy: ${bb.language.exampleCopy}` : null,
   ].filter(Boolean).join('\n');
 
-  const schemas: Record<StudioFormat, string> = {
+  const schemas: Record<SingleFormat, string> = {
     POST: `{ "kind": "STATIC_POST", "caption": "string (Instagram caption, 2-4 sentences, with hashtags)", "hook": "string (first line that stops the scroll)", "cta": "string (specific product CTA)" }`,
     CAROUSEL: `{ "kind": "CAROUSEL", "caption": "string (opening Instagram caption for the carousel, with hashtags)", "slides": [{ "slideNumber": 1, "headline": "string (brand + key detail, max 6 words)", "body": "string (1-2 sentences about this piece)" }, ...], "cta": "string" }`,
     STORY: `{ "kind": "STORY", "frames": [{ "frameNumber": 1, "headline": "string (punchy, max 5 words)", "body": "string (optional, 1 sentence)", "cta": "string (optional)" }] }`,
@@ -132,7 +149,7 @@ function buildUserPrompt(products: StudioProduct[], format: StudioFormat, brandB
   ].filter(s => s !== undefined).join('\n');
 }
 
-function templateContent(products: StudioProduct[], format: StudioFormat): unknown {
+function templateContent(products: StudioProduct[], format: SingleFormat): unknown {
   const names = products.map(p => p.title).join(', ');
   switch (format) {
     case 'CAROUSEL':
@@ -181,14 +198,14 @@ class OperatorStudioService {
   async setup(params: {
     workspaceId: string;
     sourceProductIds: string[];
-    format: StudioFormat;
+    format: SingleFormat;
   }): Promise<StudioSetupResult | ServiceError> {
     const { workspaceId, sourceProductIds, format } = params;
 
     if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
     if (!sourceProductIds?.length) return { error: 'At least one product must be selected', code: 'BAD_REQUEST' };
     if (sourceProductIds.length > 6) return { error: 'Select up to 6 products at a time', code: 'BAD_REQUEST' };
-    if (!FORMAT_META[format]) return { error: `Invalid format. Use: ${Object.keys(FORMAT_META).join(', ')}`, code: 'BAD_REQUEST' };
+    if (!FORMAT_META[format]) return { error: `Invalid format. Use: ${SINGLE_FORMATS.join(', ')}, WHOLE_SET`, code: 'BAD_REQUEST' };
 
     const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
       | { id: string; name: string; brand_kit: string } | undefined;
@@ -420,6 +437,256 @@ class OperatorStudioService {
       products,
       aiGenerated,
     };
+  }
+
+  async setupWholeSet(params: {
+    workspaceId: string;
+    sourceProductIds: string[];
+  }): Promise<WholeSetSetupResult | ServiceError> {
+    const { workspaceId, sourceProductIds } = params;
+
+    if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
+    if (!sourceProductIds?.length) return { error: 'At least one product must be selected', code: 'BAD_REQUEST' };
+    if (sourceProductIds.length > 6) return { error: 'Select up to 6 products at a time', code: 'BAD_REQUEST' };
+
+    const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
+      | { id: string; name: string; brand_kit: string } | undefined;
+    if (!entity) return { error: 'Workspace not found', code: 'NOT_FOUND' };
+
+    const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown> };
+    const brandBrain = brandKit.brandBrain ?? {};
+
+    const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as
+      | { id: string } | undefined;
+    if (!objective) return { error: 'System sales objective not found.', code: 'NOT_FOUND' };
+
+    const sourceRows = sourceProductIds.map(id =>
+      db.prepare('SELECT * FROM source_records WHERE id = ? AND workspace_id = ?').get(id, workspaceId) as
+        | { id: string; title: string; image_urls: string; price_amount: number | null; price_currency: string | null; availability: string; payload: string; occurred_at: string | null } | undefined
+    ).filter((r): r is NonNullable<typeof r> => r != null);
+
+    if (sourceRows.length === 0) return { error: 'No matching products found', code: 'NOT_FOUND' };
+
+    const products: StudioProduct[] = sourceRows.map(r => {
+      const payload = JSON.parse(r.payload || '{}') as Record<string, unknown>;
+      const imgUrls = JSON.parse(r.image_urls || '[]') as string[];
+      const bucket: 'NEW' | 'CURRENT' | 'SALE' | null = (() => {
+        if (r.occurred_at) {
+          const age = (Date.now() - new Date(r.occurred_at).getTime()) / (1000 * 60 * 60 * 24);
+          if (age <= 14) return 'NEW';
+        }
+        return null;
+      })();
+      return {
+        id: r.id,
+        title: r.title,
+        brand: (payload.brand as string | null) ?? null,
+        price: r.price_amount,
+        currency: r.price_currency,
+        imageUrls: imgUrls,
+        availability: r.availability,
+        marketingBucket: bucket,
+        size: (payload.size as string | null) ?? null,
+        category: (payload.category as string | null) ?? null,
+        publicUrl: (payload.publicUrl as string | null) ?? null,
+      };
+    });
+
+    const productTitles = products.map(p => p.title).slice(0, 2).join(' & ');
+    const campaignName = products.length === 1 ? products[0].title : `New Arrivals — ${productTitles}`;
+    const now = new Date().toISOString();
+    const campaignId = `campaign_${randomUUID()}`;
+    const planId = `plan_${randomUUID()}`;
+    const planApprovalId = `plnapp_${randomUUID()}`;
+    const contentPlanId = `cp_${randomUUID()}`;
+    const contentPlanApprovalId = `cpapp_${randomUUID()}`;
+    const conceptId = `con_${randomUUID()}`;
+    const quality = JSON.stringify({ passed: true, checks: [], warnings: [] });
+
+    // Generate content for each format (sequential, with template fallback)
+    const ai = getAIProvider();
+    let aiGenerated = false;
+    const formatContents: Record<SingleFormat, unknown> = {
+      POST: templateContent(products, 'POST'),
+      CAROUSEL: templateContent(products, 'CAROUSEL'),
+      STORY: templateContent(products, 'STORY'),
+      EMAIL: templateContent(products, 'EMAIL'),
+    };
+
+    for (const fmt of SINGLE_FORMATS) {
+      if (ai && aiEnv.isConfigured) {
+        try {
+          const rawJson = await ai.generateStructured({
+            systemPrompt: buildSystemPrompt(),
+            userPrompt: buildUserPrompt(products, fmt, brandBrain),
+            model: aiEnv.revisionModel,
+            maxTokens: 4096,
+          });
+          formatContents[fmt] = JSON.parse(rawJson) as unknown;
+          aiGenerated = true;
+        } catch {
+          // keep template
+        }
+      }
+    }
+
+    // IDs for each format
+    const formatIds = SINGLE_FORMATS.map(fmt => ({
+      fmt,
+      deliverableId: `del_${randomUUID()}`,
+      artifactId: `cart_${randomUUID()}`,
+    }));
+
+    const contentPlanBody = JSON.stringify({
+      summary: {
+        campaignNarrative: `${campaignName} — full content set for immediate publishing`,
+        contentStrategy: 'Coordinated set across Instagram Post, Carousel, Stories, and Email',
+      },
+      concepts: [{
+        id: conceptId,
+        contentKey: 'product-showcase',
+        name: 'Product Showcase',
+        strategicPurpose: 'Showcase curated new arrivals across all channels',
+        coreMessage: 'Fresh finds at Worn Label',
+        proofPoints: ['Curated pre-loved', 'Sustainable fashion'],
+      }],
+      deliverables: formatIds.map(({ fmt, deliverableId }) => {
+        const meta = FORMAT_META[fmt];
+        return {
+          id: deliverableId,
+          contentKey: meta.contentKey,
+          title: meta.title,
+          purpose: 'Drive product discovery and sales',
+          campaignRole: 'Channel-specific awareness',
+          channel: meta.channel,
+          contentType: meta.contentType,
+          format: meta.format,
+          objectiveRole: 'Drive product discovery and purchase intent',
+          primaryMessage: `${campaignName} — now available`,
+          supportingMessages: products.map(p => p.title),
+          proofPoints: ['Curated pre-loved fashion'],
+          creativeDirection: 'Editorial, clean product focus',
+          assetRequirements: products.map((p, i) => ({ id: `req-${i + 1}`, type: 'IMAGE', description: `Product image for ${p.title}`, required: true })),
+          sourceConceptId: conceptId,
+        };
+      }),
+      cadence: { phases: [] },
+    });
+
+    db.transaction(() => {
+      // Campaign
+      db.prepare(`
+        INSERT INTO campaigns (id, workspace_id, objective_id, name, status, source_type, source_title, channels, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
+      `).run(campaignId, workspaceId, objective.id, campaignName, campaignName, JSON.stringify(['INSTAGRAM', 'EMAIL']), now, now);
+
+      // Campaign plan
+      db.prepare(`
+        INSERT INTO campaign_plans
+          (id, campaign_id, workspace_id, version, status, is_current,
+           strategy_campaign_angle, strategy_core_message, strategy_proposition, strategy_audience_focus,
+           hooks, proof_points, cta_primary, cta_alternatives,
+           channels, content_mix, cadence_summary, cadence_duration,
+           creative_visual_direction, creative_copy_direction,
+           measurement_objective, measurement_primary_kpi, measurement_supporting_kpis,
+           rationale_summary, created_at, updated_at)
+        VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
+      `).run(
+        planId, campaignId, workspaceId,
+        'New Arrivals full-set showcase',
+        'Fresh curated finds — full channel set',
+        'Curated pre-loved fashion',
+        'Fashion-conscious shoppers',
+        JSON.stringify({ primary: `Shop ${campaignName}`, supporting: [] }),
+        `Shop ${campaignName}`,
+        'Immediate publishing across all channels',
+        'Editorial, clean product focus',
+        'Brand-authentic, product-specific',
+        'Sales', 'conversions',
+        `Full-set new arrivals for immediate publishing`,
+        now, now,
+      );
+
+      // Plan approval
+      db.prepare(`
+        INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `).run(planApprovalId, campaignId, workspaceId, planId, now, now);
+
+      // Content plan
+      db.prepare(`
+        INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)
+      `).run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
+
+      // Content plan approval
+      db.prepare(`
+        INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `).run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
+
+      // 4 creative artifacts
+      for (const { fmt, deliverableId, artifactId } of formatIds) {
+        const meta = FORMAT_META[fmt];
+        db.prepare(`
+          INSERT INTO creative_artifacts
+            (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
+             content_key, deliverable_id, version, status, is_current, channel, content_type, format,
+             title, content, quality, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          artifactId, workspaceId, campaignId, contentPlanId,
+          meta.contentKey, deliverableId,
+          meta.channel, meta.contentType, meta.format,
+          meta.title, JSON.stringify(formatContents[fmt]), quality,
+          now, now,
+        );
+
+        // Source links for each artifact
+        sourceRows.forEach((row, position) => {
+          db.prepare(`
+            INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at)
+            VALUES (?, ?, ?, ?)
+          `).run(artifactId, row.id, position, now);
+        });
+      }
+    })();
+
+    // Read back artifacts
+    const formats: WholeSetFormatResult[] = formatIds.map(({ fmt, artifactId }) => {
+      const row = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
+        id: string; workspace_id: string; campaign_id: string; source_content_plan_id: string;
+        source_content_plan_version: number; content_key: string; deliverable_id: string; version: number;
+        status: string; is_current: number; channel: string; content_type: string; format: string;
+        title: string | null; content: string; quality: string; created_at: string; updated_at: string;
+      };
+      return {
+        format: fmt,
+        contentKey: row.content_key,
+        artifact: {
+          id: row.id,
+          workspaceId: row.workspace_id,
+          campaignId: row.campaign_id,
+          sourceContentPlanId: row.source_content_plan_id,
+          sourceContentPlanVersion: row.source_content_plan_version,
+          contentKey: row.content_key,
+          deliverableId: row.deliverable_id,
+          version: row.version,
+          channel: row.channel,
+          contentType: row.content_type,
+          format: row.format,
+          title: row.title,
+          content: JSON.parse(row.content) as unknown,
+          quality: JSON.parse(row.quality) as unknown,
+          status: row.status,
+          isCurrent: row.is_current === 1,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        },
+      };
+    });
+
+    return { campaignId, campaignName, formats, products, aiGenerated };
   }
 }
 

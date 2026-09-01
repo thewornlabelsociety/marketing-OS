@@ -27,6 +27,7 @@ import type {
   ReadyToScheduleItem,
   BusinessIntegration,
   SourceProduct,
+  StudioLibraryItem,
 } from '../types';
 import type {
   Experiment,
@@ -78,6 +79,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ workspaceId, sourceProductIds, format }),
     }),
+  createWholeSet: (workspaceId: string, sourceProductIds: string[]) =>
+    request<{
+      campaignId: string;
+      campaignName: string;
+      formats: Array<{ format: string; contentKey: string; artifact: Record<string, unknown> }>;
+      products: Array<Record<string, unknown>>;
+      aiGenerated: boolean;
+    }>('/business-sources/studio', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, sourceProductIds, format: 'WHOLE_SET' }),
+    }),
+  getStudioLibrary: (workspaceId: string) =>
+    request<StudioLibraryItem[]>(`/business-sources/studio/library?workspaceId=${encodeURIComponent(workspaceId)}`),
   // Entities / Workspaces
   getEntities: () => request<Entity[]>('/entities'),
   createEntity: (payload: { id: string; name: string; slug: string; brand_kit?: BrandKit }) =>

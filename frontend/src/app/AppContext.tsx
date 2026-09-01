@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { api } from '../services/api';
 import { useDeepLink } from '../hooks/useDeepLink';
-import type { AppTab, DropDraft, Entity } from '../types';
+import type { AppTab, DropDraft, Entity, StudioLibraryItem } from '../types';
 
 interface AppContextValue {
   entities: Entity[];
@@ -28,6 +28,10 @@ interface AppContextValue {
   error: string | null;
   selectedSourceProductIds: string[];
   setSelectedSourceProductIds: (ids: string[]) => void;
+  studioReturnTarget: StudioLibraryItem | null;
+  setStudioReturnTarget: (target: StudioLibraryItem | null) => void;
+  studioKey: number;
+  newStudioSession: () => void;
 }
 
 const defaultDraft: DropDraft = {
@@ -52,6 +56,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSourceProductIds, setSelectedSourceProductIds] = useState<string[]>([]);
+  const [studioReturnTarget, setStudioReturnTarget] = useState<StudioLibraryItem | null>(null);
+  const [studioKey, setStudioKey] = useState(0);
+
+  const newStudioSession = useCallback(() => {
+    setSelectedSourceProductIds([]);
+    setStudioReturnTarget(null);
+    setStudioKey((k) => k + 1);
+    setActiveTab('operator-studio');
+  }, []);
 
   const refreshEntities = useCallback(async () => {
     setLoading(true);
@@ -152,6 +165,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     error,
     selectedSourceProductIds,
     setSelectedSourceProductIds,
+    studioReturnTarget,
+    setStudioReturnTarget,
+    studioKey,
+    newStudioSession,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -798,7 +798,35 @@ export type AppTab =
   | 'integrations'
   | 'studio'
   | 'operator-studio'
+  | 'creative-studio'
   | 'learn';
+
+export interface StudioLibraryProduct {
+  id: string;
+  title: string;
+  brand: string | null;
+  imageUrls: string[];
+  price: number | null;
+  currency: string | null;
+}
+
+export interface StudioLibraryItem {
+  artifactId: string;
+  campaignId: string;
+  contentKey: string;
+  channel: string;
+  contentType: string;
+  format: string;
+  studioFormat: 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL';
+  title: string | null;
+  status: string;
+  campaignName: string;
+  campaignStatus: string;
+  content: unknown;
+  products: StudioLibraryProduct[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface DeepLinkParams {
   entity?: string;

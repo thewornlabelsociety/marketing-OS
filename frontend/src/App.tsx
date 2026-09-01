@@ -19,9 +19,10 @@ import IntegrationsPage from './features/integrations/IntegrationsPage';
 import CreatePage from './features/create/CreatePage';
 import LearnPage from './features/learn/LearnPage';
 import OperatorStudioPage from './features/studio/OperatorStudioPage';
+import CreativeStudioPage from './features/studio/CreativeStudioPage';
 
 function AppShell() {
-  const { activeTab, activeCampaignId, entities, loading, error } = useApp();
+  const { activeTab, activeCampaignId, entities, loading, error, studioKey } = useApp();
   const [showWizard, setShowWizard] = useState(false);
 
   const hasEntities = entities.length > 0;
@@ -69,7 +70,8 @@ function AppShell() {
               {activeTab === 'library' && <CampaignLibraryPage />}
               {activeTab === 'integrations' && <IntegrationsPage />}
               {activeTab === 'studio' && <StudioTab />}
-              {activeTab === 'operator-studio' && <OperatorStudioPage />}
+              {activeTab === 'operator-studio' && <OperatorStudioPage key={studioKey} />}
+              {activeTab === 'creative-studio' && <CreativeStudioPage />}
               {activeTab === 'learn' && <LearnPage />}
             </>
           )}
