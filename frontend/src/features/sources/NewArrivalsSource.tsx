@@ -15,11 +15,11 @@ const primaryFilters = [
 const secondaryFilters = [['sold','History']] as const;
 
 export function NewArrivalsSource() {
-  const { activeEntity,setActiveTab }=useApp(); const [products,setProducts]=useState<SourceProduct[]>([]); const [integration,setIntegration]=useState<BusinessIntegration|null>(null);
+  const { activeEntity,setActiveTab,setSelectedSourceProductIds }=useApp(); const [products,setProducts]=useState<SourceProduct[]>([]); const [integration,setIntegration]=useState<BusinessIntegration|null>(null);
   const [filter,setFilter]=useState('all'); const [selected,setSelected]=useState<string[]>([]); const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const workspaceId=activeEntity?.id??'';
   const load=useCallback(async()=>{if(!workspaceId)return;setLoading(true);setError('');try{await api.establishLocalOperatorSession();const [items,integrations]=await Promise.all([api.getSourceProducts(workspaceId,filter),api.getBusinessIntegrations(workspaceId)]);setProducts(items);setIntegration(integrations.find(item=>item.integrationType==='WORN_LABEL')??null);}catch(cause){setError((cause as Error).message);}finally{setLoading(false);}},[workspaceId,filter]);
   useEffect(()=>{void load();},[load]); const toggle=(id:string)=>setSelected(current=>current.includes(id)?current.filter(value=>value!==id):[...current,id]);
-  const continueToCreate=()=>{sessionStorage.setItem('selectedSourceProductIds',JSON.stringify(selected));setActiveTab('create');};
+  const continueToCreate=()=>{setSelectedSourceProductIds(selected);setActiveTab('operator-studio');};
   const isSoldFilter=filter==='sold'; const isAvailableFilter=!isSoldFilter;
   const emptyTitle=!integration?'Worn Label is not configured':isSoldFilter?'No sold history in this source':'No products match this filter';
   const emptyDescription=!integration?'Add the server-side Worn Label settings to enable this read-only source. MarketingOS remains available.'

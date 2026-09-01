@@ -797,6 +797,7 @@ export type AppTab =
   | 'objectives'
   | 'integrations'
   | 'studio'
+  | 'operator-studio'
   | 'learn';
 
 export interface DeepLinkParams {

@@ -66,6 +66,18 @@ export const api = {
   getBusinessIntegrations: (workspaceId: string) => request<BusinessIntegration[]>(`/business-sources/integrations?workspaceId=${encodeURIComponent(workspaceId)}`),
   getSourceProducts: (workspaceId: string, filter = 'all') => request<SourceProduct[]>(`/business-sources/products?workspaceId=${encodeURIComponent(workspaceId)}&filter=${encodeURIComponent(filter)}`),
   getSourceProductUsage: (id: string, workspaceId: string) => request<Array<Record<string, unknown>>>(`/business-sources/products/${encodeURIComponent(id)}/usage?workspaceId=${encodeURIComponent(workspaceId)}`),
+  createStudioSession: (workspaceId: string, sourceProductIds: string[], format: string) =>
+    request<{
+      campaignId: string;
+      campaignName: string;
+      contentKey: string;
+      artifact: Record<string, unknown>;
+      products: Array<Record<string, unknown>>;
+      aiGenerated: boolean;
+    }>('/business-sources/studio', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, sourceProductIds, format }),
+    }),
   // Entities / Workspaces
   getEntities: () => request<Entity[]>('/entities'),
   createEntity: (payload: { id: string; name: string; slug: string; brand_kit?: BrandKit }) =>

@@ -26,6 +26,8 @@ interface AppContextValue {
   refreshEntities: () => Promise<void>;
   loading: boolean;
   error: string | null;
+  selectedSourceProductIds: string[];
+  setSelectedSourceProductIds: (ids: string[]) => void;
 }
 
 const defaultDraft: DropDraft = {
@@ -49,6 +51,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dropDraft, setDropDraft] = useState<DropDraft>(defaultDraft);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSourceProductIds, setSelectedSourceProductIds] = useState<string[]>([]);
 
   const refreshEntities = useCallback(async () => {
     setLoading(true);
@@ -147,6 +150,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshEntities,
     loading,
     error,
+    selectedSourceProductIds,
+    setSelectedSourceProductIds,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

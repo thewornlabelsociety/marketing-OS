@@ -18,6 +18,7 @@ import DashboardPage from './features/dashboard/DashboardPage';
 import IntegrationsPage from './features/integrations/IntegrationsPage';
 import CreatePage from './features/create/CreatePage';
 import LearnPage from './features/learn/LearnPage';
+import OperatorStudioPage from './features/studio/OperatorStudioPage';
 
 function AppShell() {
   const { activeTab, activeCampaignId, entities, loading, error } = useApp();
@@ -68,6 +69,7 @@ function AppShell() {
               {activeTab === 'library' && <CampaignLibraryPage />}
               {activeTab === 'integrations' && <IntegrationsPage />}
               {activeTab === 'studio' && <StudioTab />}
+              {activeTab === 'operator-studio' && <OperatorStudioPage />}
               {activeTab === 'learn' && <LearnPage />}
             </>
           )}
