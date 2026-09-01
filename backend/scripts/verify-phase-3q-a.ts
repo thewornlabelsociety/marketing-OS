@@ -72,6 +72,43 @@ check('business source routes require operator middleware',()=>assert.match(rout
 check('local session is loopback-only and HTTP-only',()=>{assert.match(sessionSource,/isLoopback/);assert.match(sessionSource,/HttpOnly/);assert.match(sessionSource,/SameSite=Strict/);});
 check('Worn Label connector has no write capability',()=>assert.equal(integration.capabilities.some((c:string)=>c.startsWith('WRITE_')),false));
 
+// === SOURCE-TARGET SWITCH TESTS ===
+db.prepare("INSERT INTO entities (id,tenant_id,name,slug,brand_kit) VALUES ('switcher','tenant_local','Switcher','switcher','{}')").run();
+process.env.WORN_LABEL_API_BASE_URL = 'https://worn-label.test';
+mode = 'first';
+const sw = businessIntegrationService.connectWornLabelFromEnvironment('switcher');
+await businessIntegrationService.sync(sw.id, 'switcher');
+
+// 1. baseUrl unchanged: reconnect with same URL — records and checkpoint survive
+const checkpointBefore = (db.prepare('SELECT sync_checkpoint FROM business_integrations WHERE id=?').get(sw.id) as {sync_checkpoint:string|null}).sync_checkpoint;
+businessIntegrationService.connectWornLabelFromEnvironment('switcher');
+check('baseUrl unchanged: source records retained',()=>assert.equal(db.prepare('SELECT COUNT(*) n FROM source_records WHERE integration_id=?').get(sw.id).n,1));
+check('baseUrl unchanged: checkpoint retained',()=>assert.equal((db.prepare('SELECT sync_checkpoint FROM business_integrations WHERE id=?').get(sw.id) as {sync_checkpoint:string|null}).sync_checkpoint,checkpointBefore));
+
+// 2. baseUrl changed + no downstream refs: orphaned records deleted, checkpoint reset
+process.env.WORN_LABEL_API_BASE_URL = 'https://worn-label-production.test';
+businessIntegrationService.connectWornLabelFromEnvironment('switcher');
+check('baseUrl changed, no refs: orphaned source records deleted',()=>assert.equal(db.prepare('SELECT COUNT(*) n FROM source_records WHERE integration_id=?').get(sw.id).n,0));
+check('baseUrl changed, no refs: checkpoint reset',()=>assert.equal((db.prepare('SELECT sync_checkpoint FROM business_integrations WHERE id=?').get(sw.id) as {sync_checkpoint:string|null}).sync_checkpoint,null));
+
+// 3. baseUrl changed + downstream refs: referenced records preserved, checkpoint still reset
+process.env.WORN_LABEL_API_BASE_URL = 'https://worn-label.test';
+mode = 'first';
+businessIntegrationService.connectWornLabelFromEnvironment('switcher');
+await businessIntegrationService.sync(sw.id, 'switcher');
+const swSrcId = `source_${sw.id}_101`;
+const t3 = new Date().toISOString();
+db.prepare("INSERT INTO campaigns (id,workspace_id,objective_id,name,status,source_type,source_title,channels,created_at,updated_at) VALUES ('sw-camp','switcher','obj_sys_sales','Switch Camp','DRAFTING','PRODUCT','Test','[]',?,?)").run(t3,t3);
+db.prepare("INSERT INTO creative_artifacts (id,workspace_id,campaign_id,source_content_plan_id,source_content_plan_version,content_key,deliverable_id,version,status,is_current,channel,content_type,format,title,content,quality,created_at,updated_at) VALUES ('sw-art','switcher','sw-camp','plan',1,'sw-101','sw-del',1,'READY_FOR_REVIEW',1,'instagram','STATIC_POST','FEED_4_5','Test','{}','{}',?,?)").run(t3,t3);
+db.prepare('INSERT INTO creative_source_links (creative_artifact_id,source_record_id,position,created_at) VALUES (?,?,0,?)').run('sw-art',swSrcId,t3);
+process.env.WORN_LABEL_API_BASE_URL = 'https://worn-label-v2.test';
+businessIntegrationService.connectWornLabelFromEnvironment('switcher');
+check('baseUrl changed, with refs: referenced record preserved',()=>assert.equal(db.prepare('SELECT COUNT(*) n FROM source_records WHERE id=?').get(swSrcId).n,1));
+check('baseUrl changed, with refs: checkpoint still reset',()=>assert.equal((db.prepare('SELECT sync_checkpoint FROM business_integrations WHERE id=?').get(sw.id) as {sync_checkpoint:string|null}).sync_checkpoint,null));
+
+// Restore URL for remaining state
+process.env.WORN_LABEL_API_BASE_URL = 'https://worn-label.test';
+
 console.log(`\nPhase 3Q-A verification: ${passed} passed, ${failed} failed`);
 db.close(); for(const suffix of['','-wal','-shm'])try{fs.unlinkSync(tmp+suffix)}catch{}
 }

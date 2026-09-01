@@ -30,6 +30,30 @@ export class BusinessIntegrationService {
     return (db.prepare('SELECT * FROM business_integrations WHERE workspace_id = ? ORDER BY created_at').all(workspaceId) as IntegrationRow[]).map(publicIntegration);
   }
 
+  // When a source target (baseUrl) changes, retire source records from the previous target.
+  // Records with downstream creative references are preserved as historical provenance.
+  // Records with no references are removed transactionally — they are orphaned by the switch.
+  private retireObsoleteSourceRecords(integrationId: string, workspaceId: string): void {
+    const all = db.prepare('SELECT id FROM source_records WHERE integration_id = ? AND workspace_id = ?')
+      .all(integrationId, workspaceId) as { id: string }[];
+    if (all.length === 0) return;
+    const orphaned: string[] = [];
+    let retained = 0;
+    for (const record of all) {
+      const refs = db.prepare('SELECT COUNT(*) as c FROM creative_source_links WHERE source_record_id = ?')
+        .get(record.id) as { c: number };
+      if (refs.c === 0) orphaned.push(record.id);
+      else retained++;
+    }
+    if (orphaned.length > 0) {
+      const del = db.prepare('DELETE FROM source_records WHERE id = ?');
+      db.transaction(() => orphaned.forEach(rid => del.run(rid)))();
+    }
+    if (retained > 0) {
+      console.warn(`[business-integration] ${retained} source record(s) from the previous source target have downstream creative references and have been preserved as historical provenance.`);
+    }
+  }
+
   connectWornLabelFromEnvironment(workspaceId: string) {
     const baseUrl = process.env.WORN_LABEL_API_BASE_URL?.trim();
     const serviceToken = process.env.WORN_LABEL_SERVICE_TOKEN?.trim();
@@ -44,6 +68,7 @@ export class BusinessIntegrationService {
       const baseUrlChanged = prevConfig.baseUrl !== baseUrl;
       db.prepare(`UPDATE business_integrations SET display_name = 'Worn Label', status = 'CONNECTED', capabilities = ?, config = ?, last_error_summary = NULL${baseUrlChanged ? ', sync_checkpoint = NULL' : ''}, updated_at = ? WHERE id = ? AND workspace_id = ?`)
         .run(JSON.stringify(connector.capabilities), JSON.stringify({ baseUrl }), now, id, workspaceId);
+      if (baseUrlChanged) this.retireObsoleteSourceRecords(id, workspaceId);
     } else {
       db.prepare("INSERT INTO business_integrations (id, workspace_id, integration_type, display_name, status, capabilities, config, created_at, updated_at) VALUES (?, ?, 'WORN_LABEL', 'Worn Label', 'CONNECTED', ?, ?, ?, ?)")
         .run(id, workspaceId, JSON.stringify(connector.capabilities), JSON.stringify({ baseUrl }), now, now);
