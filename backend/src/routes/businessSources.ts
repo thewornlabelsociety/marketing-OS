@@ -3,6 +3,7 @@ import { requireLocalOperatorSession } from '../middleware/localOperatorSession'
 import { businessIntegrationService } from '../services/business/BusinessIntegrationService';
 import { sourceRecordService } from '../services/business/SourceRecordService';
 import { operatorStudioService } from '../services/business/OperatorStudioService';
+import { creativeGeneratorService } from '../services/creative/CreativeGeneratorService';
 import { db } from '../db/database';
 
 export const businessSourcesRouter = Router();
@@ -43,7 +44,8 @@ businessSourcesRouter.get('/studio/library', (req, res) => {
   const rows = db.prepare(`
     SELECT ca.id AS artifactId, ca.campaign_id AS campaignId, ca.content_key AS contentKey,
            ca.channel, ca.content_type AS contentType, ca.format, ca.title, ca.status,
-           ca.content, ca.created_at AS createdAt, ca.updated_at AS updatedAt,
+           ca.content, ca.creative_direction AS creativeDirection,
+           ca.created_at AS createdAt, ca.updated_at AS updatedAt,
            c.name AS campaignName, c.status AS campaignStatus
     FROM creative_artifacts ca
     JOIN campaigns c ON c.id = ca.campaign_id
@@ -54,6 +56,7 @@ businessSourcesRouter.get('/studio/library', (req, res) => {
     artifactId: string; campaignId: string; contentKey: string;
     channel: string; contentType: string; format: string;
     title: string | null; status: string; content: string;
+    creativeDirection: string | null;
     createdAt: string; updatedAt: string;
     campaignName: string; campaignStatus: string;
   }>;
@@ -97,6 +100,7 @@ businessSourcesRouter.get('/studio/library', (req, res) => {
       campaignStatus: a.campaignStatus,
       content,
       products,
+      creativeDirection: a.creativeDirection ?? null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
     };
@@ -106,17 +110,20 @@ businessSourcesRouter.get('/studio/library', (req, res) => {
 });
 
 businessSourcesRouter.post('/studio', async (req, res) => {
-  const { workspaceId, sourceProductIds, format } = req.body as {
+  const { workspaceId, sourceProductIds, format, creativeDirection } = req.body as {
     workspaceId?: string;
     sourceProductIds?: string[];
     format?: string;
+    creativeDirection?: 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL' | null;
   };
   if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required', code: 'BAD_REQUEST' });
   if (!sourceProductIds?.length) return res.status(400).json({ error: 'At least one product must be selected', code: 'BAD_REQUEST' });
   if (!format) return res.status(400).json({ error: 'format is required', code: 'BAD_REQUEST' });
 
+  const direction = creativeDirection ?? null;
+
   if (format === 'WHOLE_SET') {
-    const result = await operatorStudioService.setupWholeSet({ workspaceId, sourceProductIds });
+    const result = await operatorStudioService.setupWholeSet({ workspaceId, sourceProductIds, creativeDirection: direction });
     if ('error' in result) {
       const status = result.code === 'NOT_FOUND' ? 404 : 400;
       return res.status(status).json(result);
@@ -124,10 +131,51 @@ businessSourcesRouter.post('/studio', async (req, res) => {
     return res.json(result);
   }
 
-  const result = await operatorStudioService.setup({ workspaceId, sourceProductIds, format: format as 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL' });
+  const result = await operatorStudioService.setup({
+    workspaceId,
+    sourceProductIds,
+    format: format as 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL',
+    creativeDirection: direction,
+  });
   if ('error' in result) {
     const status = result.code === 'NOT_FOUND' ? 404 : 400;
     return res.status(status).json(result);
   }
   res.json(result);
+});
+
+// Approve all artifacts in a whole-set — uses existing approval semantics per artifact
+businessSourcesRouter.post('/studio/approve-all', async (req, res) => {
+  const { workspaceId, campaignId, artifacts } = req.body as {
+    workspaceId?: string;
+    campaignId?: string;
+    artifacts?: Array<{ artifactId: string; contentKey: string }>;
+  };
+
+  if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required' });
+  if (!campaignId) return res.status(400).json({ error: 'campaignId is required' });
+  if (!Array.isArray(artifacts) || artifacts.length === 0) return res.status(400).json({ error: 'artifacts must be a non-empty array' });
+
+  const results: Array<{ artifactId: string; contentKey: string; success: boolean; error?: string }> = [];
+
+  for (const { artifactId, contentKey } of artifacts) {
+    // Verify the artifact belongs to this workspace and campaign
+    const row = db.prepare(
+      'SELECT id FROM creative_artifacts WHERE id = ? AND campaign_id = ? AND workspace_id = ? AND is_current = 1'
+    ).get(artifactId, campaignId, workspaceId);
+
+    if (!row) {
+      results.push({ artifactId, contentKey, success: false, error: 'Artifact not found or not accessible' });
+      continue;
+    }
+
+    const outcome = creativeGeneratorService.approve(campaignId, contentKey, artifactId);
+    if (outcome.error) {
+      results.push({ artifactId, contentKey, success: false, error: outcome.error });
+    } else {
+      results.push({ artifactId, contentKey, success: true });
+    }
+  }
+
+  res.json({ results });
 });

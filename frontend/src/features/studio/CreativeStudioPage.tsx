@@ -91,7 +91,14 @@ function LibraryCard({ item, onOpen }: { item: StudioLibraryItem; onOpen: () => 
           {item.title ?? item.campaignName}
         </p>
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-[10px] text-zinc-400">{item.campaignName}</p>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="truncate text-[10px] text-zinc-400">{item.campaignName}</p>
+            {item.creativeDirection && (
+              <span className="shrink-0 rounded-full border border-zinc-200 px-1.5 py-0.5 text-[9px] font-medium text-zinc-500">
+                {item.creativeDirection === 'EDITORIAL' ? 'Ed.' : item.creativeDirection === 'PRODUCT_LED' ? 'PL' : 'Min.'}
+              </span>
+            )}
+          </div>
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusCfg.className}`}>
             {statusCfg.label}
           </span>

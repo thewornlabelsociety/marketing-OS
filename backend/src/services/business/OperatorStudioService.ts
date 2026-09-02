@@ -4,6 +4,7 @@ import { aiEnv } from '../../config/aiEnvironment';
 import { getAIProvider } from '../../integrations/adapters/AIProviderFactory';
 
 export type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL' | 'WHOLE_SET';
+export type CreativeDirection = 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL';
 
 interface StudioProduct {
   id: string;
@@ -31,6 +32,7 @@ export interface WholeSetSetupResult {
   formats: WholeSetFormatResult[];
   products: StudioProduct[];
   aiGenerated: boolean;
+  creativeDirection: CreativeDirection | null;
 }
 
 export interface StudioSetupResult {
@@ -59,6 +61,7 @@ export interface StudioSetupResult {
   };
   products: StudioProduct[];
   aiGenerated: boolean;
+  creativeDirection: CreativeDirection | null;
 }
 
 type ServiceError = { error: string; code: string };
@@ -73,28 +76,62 @@ const FORMAT_META: Record<SingleFormat, { channel: string; contentType: string; 
   EMAIL:    { channel: 'EMAIL',     contentType: 'EMAIL',         format: 'NEWSLETTER',    contentKey: 'new-arrivals-email',       title: 'New Arrivals — Email' },
 };
 
-function buildSystemPrompt(): string {
-  return `You are a marketing copywriter for Worn Label, a curated pre-loved fashion marketplace in New Zealand.
+function directionSystemNote(direction: CreativeDirection | null): string {
+  switch (direction) {
+    case 'EDITORIAL':
+      return '\n\nDIRECTION: EDITORIAL — Write narrative, mood-led copy focused on aesthetic and story. Do not mention prices. Write as if for a fashion editorial magazine. Prioritise feel over specification.';
+    case 'PRODUCT_LED':
+      return '\n\nDIRECTION: PRODUCT-LED — Lead with specific product details: name, brand, price, size. Be informative and direct so shoppers know exactly what they are buying. Include prices where provided.';
+    case 'MINIMAL':
+      return '\n\nDIRECTION: MINIMAL — Write exceptionally concise copy. Hooks must be 5-8 words maximum. Captions must be 1-2 sentences maximum. No hashtags unless essential. Powerful restraint over elaboration.';
+    default:
+      return '';
+  }
+}
 
-ROLE: Write authentic, editorial Instagram/email copy for specific products the operator has selected.
+function directionUserNote(direction: CreativeDirection | null): string {
+  switch (direction) {
+    case 'EDITORIAL':
+      return '\nWRITING APPROACH: Editorial fashion copy — focus on mood, narrative, aesthetic. Avoid mentioning prices. Make it feel like a magazine editorial, not an advertisement.';
+    case 'PRODUCT_LED':
+      return '\nWRITING APPROACH: Product-forward — lead with item specifics (name, brand, price, size). Be clear and informative. Help shoppers understand exactly what they are looking at.';
+    case 'MINIMAL':
+      return '\nWRITING APPROACH: Extreme brevity. Hooks = 5 words max. Captions = 1 sentence. Cut every non-essential word. No hashtag blocks. Essential message only.';
+    default:
+      return '\nWrite authentic, human-feeling copy that celebrates the specific items.';
+  }
+}
+
+function buildSystemPrompt(brandName: string, market: string | null, direction: CreativeDirection | null): string {
+  return `You are a marketing copywriter for ${brandName}${market ? `, ${market}` : ''}.
+
+ROLE: Write authentic, on-brand Instagram/email copy for specific products the operator has selected.
 
 CRITICAL RULES:
 1. Write copy based ONLY on the product details provided — never invent facts, prices, or details not given.
-2. Match the Worn Label brand voice: editorial, considered, authentic, sustainability-conscious.
+2. Match the brand voice from the Brand Brain provided.
 3. Instagram copy must feel human and native — not like an ad.
 4. Never use banned words/phrases if provided.
-5. Use product-specific CTAs ("Shop the [item]") not generic ones ("Click here").
+5. Use product-specific CTAs not generic ones ("Click here").
 6. Return VALID JSON ONLY matching the required schema exactly.
-7. Do not include placeholder text or "[insert here]" style copy.`;
+7. Do not include placeholder text or "[insert here]" style copy.${directionSystemNote(direction)}`;
 }
 
-function buildUserPrompt(products: StudioProduct[], format: SingleFormat, brandBrain: Record<string, unknown>): string {
+function buildUserPrompt(
+  products: StudioProduct[],
+  format: SingleFormat,
+  brandBrain: Record<string, unknown>,
+  brandName: string,
+  direction: CreativeDirection | null,
+): string {
   const meta = FORMAT_META[format];
   const productLines = products.map((p, i) => {
     const parts = [
       `Product ${i + 1}: ${p.title}`,
       p.brand ? `  Brand: ${p.brand}` : null,
-      p.price != null ? `  Price: ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: p.currency ?? 'NZD', maximumFractionDigits: 0 }).format(p.price)}` : null,
+      (direction !== 'EDITORIAL' && p.price != null)
+        ? `  Price: ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: p.currency ?? 'NZD', maximumFractionDigits: 0 }).format(p.price)}`
+        : null,
       p.size ? `  Size: ${p.size}` : null,
       p.category ? `  Category: ${p.category}` : null,
       p.marketingBucket === 'NEW' ? '  Status: New arrival' : p.marketingBucket === 'SALE' ? '  Status: On sale' : null,
@@ -102,7 +139,7 @@ function buildUserPrompt(products: StudioProduct[], format: SingleFormat, brandB
     return parts.join('\n');
   }).join('\n\n');
 
-  const bb = brandBrain as { personality?: { traits?: string[]; archetype?: string }; language?: { preferredWords?: string[]; bannedWords?: string[]; ctaStyle?: string; exampleCopy?: string }; audience?: { primaryAudience?: string } };
+  const bb = brandBrain as { personality?: { traits?: string[]; archetype?: string }; language?: { preferredWords?: string[]; bannedWords?: string[]; ctaStyle?: string; exampleCopy?: string }; audience?: { primaryAudience?: string }; identity?: { market?: string } };
 
   const brandLines = [
     bb.personality?.archetype ? `Brand archetype: ${bb.personality.archetype}` : null,
@@ -135,8 +172,8 @@ function buildUserPrompt(products: StudioProduct[], format: SingleFormat, brandB
     '=== SELECTED PRODUCTS ===',
     productLines,
     '',
-    '=== WORN LABEL BRAND BRAIN ===',
-    brandLines || 'Editorial, curated fashion marketplace. Authentic, sustainable.',
+    `=== ${brandName.toUpperCase()} BRAND BRAIN ===`,
+    brandLines || 'Match the existing brand personality and voice.',
     '',
     `=== FORMAT: ${meta.contentType} (${meta.channel}) ===`,
     slideNote,
@@ -145,32 +182,43 @@ function buildUserPrompt(products: StudioProduct[], format: SingleFormat, brandB
     '=== REQUIRED JSON SCHEMA ===',
     schemas[format],
     '',
-    'Write as Worn Label — editorial, considered, human. Celebrate the specific items.',
+    directionUserNote(direction),
   ].filter(s => s !== undefined).join('\n');
 }
 
-function templateContent(products: StudioProduct[], format: SingleFormat): unknown {
+function templateContent(products: StudioProduct[], format: SingleFormat, direction: CreativeDirection | null): unknown {
   const names = products.map(p => p.title).join(', ');
+
   switch (format) {
     case 'CAROUSEL':
       return {
         kind: 'CAROUSEL',
-        caption: `New arrivals — ${names}. Now available on Worn Label. Shop via the link in bio. #wornlabel #sustainablefashion #preloved #newzealand`,
+        caption: direction === 'MINIMAL'
+          ? `New arrivals. #preloved`
+          : direction === 'EDITORIAL'
+          ? `Thoughtfully curated — each piece with a story. Discover the latest edit. #preloved #sustainablefashion`
+          : `New arrivals — ${names}. Now available. Shop via the link in bio. #sustainablefashion #preloved #newzealand`,
         slides: products.map((p, i) => ({
           slideNumber: i + 1,
-          headline: `${p.brand ?? 'Worn Label'} · ${p.size ?? 'One size'}`,
-          body: `${p.title}${p.price != null ? ` — ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: p.currency ?? 'NZD', maximumFractionDigits: 0 }).format(p.price)}` : ''}`,
+          headline: direction === 'PRODUCT_LED'
+            ? `${p.brand ?? 'Unknown'} · ${p.size ?? 'One size'}${p.price != null ? ` — ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: p.currency ?? 'NZD', maximumFractionDigits: 0 }).format(p.price)}` : ''}`
+            : `${p.brand ?? ''} · ${p.title.slice(0, 30)}`,
+          body: p.title,
         })),
-        cta: 'Shop via link in bio',
+        cta: direction === 'MINIMAL' ? 'Shop now' : 'Shop via link in bio',
       };
     case 'STORY':
       return {
         kind: 'STORY',
         frames: [
-          { frameNumber: 1, headline: 'New arrivals', body: 'Just dropped on Worn Label.' },
+          {
+            frameNumber: 1,
+            headline: direction === 'EDITORIAL' ? 'The new edit' : direction === 'MINIMAL' ? 'Just arrived.' : 'New arrivals',
+            body: direction === 'MINIMAL' ? null : direction === 'EDITORIAL' ? 'Thoughtfully chosen.' : 'Just dropped.',
+          },
           ...products.slice(0, 3).map((p, i) => ({
             frameNumber: i + 2,
-            headline: p.title.slice(0, 30),
+            headline: direction === 'MINIMAL' ? p.title.slice(0, 20) : p.title.slice(0, 30),
             cta: 'Shop now',
           })),
         ],
@@ -178,18 +226,34 @@ function templateContent(products: StudioProduct[], format: SingleFormat): unkno
     case 'EMAIL':
       return {
         kind: 'EMAIL',
-        subject: `New arrivals: ${names.slice(0, 60)}`,
-        preheader: 'Freshly curated pieces now available.',
-        headline: 'New Arrivals',
-        body: `We've just added some beautiful pieces to the shop. Discover ${names} — each carefully curated and ready to find its next owner.`,
-        cta: { label: 'Shop now', destinationDescription: 'Worn Label marketplace' },
+        subject: direction === 'MINIMAL'
+          ? `New: ${names.slice(0, 40)}`
+          : direction === 'EDITORIAL'
+          ? `The new edit — pieces worth finding`
+          : `New arrivals: ${names.slice(0, 60)}`,
+        preheader: direction === 'MINIMAL' ? 'Now available.' : 'Freshly curated pieces now available.',
+        headline: direction === 'EDITORIAL' ? 'The New Edit' : direction === 'MINIMAL' ? 'Just In' : 'New Arrivals',
+        body: direction === 'EDITORIAL'
+          ? `Some pieces arrive with a quiet certainty. Each has been chosen with care — pre-loved, considered, ready for what comes next.\n\nDiscover ${names} in the shop.`
+          : direction === 'MINIMAL'
+          ? `${names}. Available now.`
+          : `We've just added some beautiful pieces to the shop. Discover ${names} — each carefully curated and ready to find its next owner.`,
+        cta: { label: direction === 'MINIMAL' ? 'Shop now' : 'Shop the new arrivals', destinationDescription: 'marketplace' },
       };
     default:
       return {
         kind: 'STATIC_POST',
-        caption: `New arrivals — ${names}. Available now on Worn Label. #wornlabel #sustainablefashion #preloved`,
-        hook: `Just arrived: ${names.slice(0, 60)}`,
-        cta: `Shop via link in bio`,
+        caption: direction === 'MINIMAL'
+          ? `New arrival. Shop via link in bio.`
+          : direction === 'EDITORIAL'
+          ? `${names.slice(0, 60)}. Pre-loved and ready for its next chapter. #preloved #sustainablefashion`
+          : `New arrivals — ${names}. Available now. #sustainablefashion #preloved`,
+        hook: direction === 'MINIMAL'
+          ? names.slice(0, 30)
+          : direction === 'EDITORIAL'
+          ? `The one you didn't know you needed.`
+          : `Just arrived: ${names.slice(0, 60)}`,
+        cta: 'Shop via link in bio',
       };
   }
 }
@@ -199,26 +263,27 @@ class OperatorStudioService {
     workspaceId: string;
     sourceProductIds: string[];
     format: SingleFormat;
+    creativeDirection?: CreativeDirection | null;
   }): Promise<StudioSetupResult | ServiceError> {
-    const { workspaceId, sourceProductIds, format } = params;
+    const { workspaceId, sourceProductIds, format, creativeDirection = null } = params;
 
     if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
     if (!sourceProductIds?.length) return { error: 'At least one product must be selected', code: 'BAD_REQUEST' };
     if (sourceProductIds.length > 6) return { error: 'Select up to 6 products at a time', code: 'BAD_REQUEST' };
-    if (!FORMAT_META[format]) return { error: `Invalid format. Use: ${SINGLE_FORMATS.join(', ')}, WHOLE_SET`, code: 'BAD_REQUEST' };
+    if (!FORMAT_META[format]) return { error: `Invalid format. Use: ${SINGLE_FORMATS.join(', ')}`, code: 'BAD_REQUEST' };
 
     const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
       | { id: string; name: string; brand_kit: string } | undefined;
     if (!entity) return { error: 'Workspace not found', code: 'NOT_FOUND' };
 
-    const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown> };
+    const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown>; identity?: { market?: string } };
     const brandBrain = brandKit.brandBrain ?? {};
+    const market = (brandBrain as { identity?: { market?: string } }).identity?.market ?? null;
 
     const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as
       | { id: string } | undefined;
     if (!objective) return { error: 'System sales objective not found. Database may need seeding.', code: 'NOT_FOUND' };
 
-    // Fetch source products in the specified order
     const sourceRows = sourceProductIds.map(id =>
       db.prepare('SELECT * FROM source_records WHERE id = ? AND workspace_id = ?').get(id, workspaceId) as
         | { id: string; title: string; image_urls: string; price_amount: number | null; price_currency: string | null; availability: string; payload: string; occurred_at: string | null } | undefined
@@ -264,76 +329,54 @@ class OperatorStudioService {
     const deliverableId = `del_${randomUUID()}`;
     const conceptId = `con_${randomUUID()}`;
     const artifactId = `cart_${randomUUID()}`;
-
     const contentKey = meta.contentKey;
 
-    // Build minimal content plan body
     const contentPlanBody = JSON.stringify({
       summary: {
-        campaignNarrative: `${campaignName} — new stock ready to market via Worn Label`,
+        campaignNarrative: `${campaignName} — new stock ready to market`,
         contentStrategy: `Showcase the selected products with on-brand copy for ${meta.channel}`,
       },
-      concepts: [{
-        id: conceptId,
-        contentKey: 'product-showcase',
-        name: 'Product Showcase',
-        strategicPurpose: 'Showcase curated new arrivals',
-        coreMessage: 'Fresh finds at Worn Label',
-        proofPoints: ['Curated pre-loved', 'Sustainable fashion'],
-      }],
+      concepts: [{ id: conceptId, contentKey: 'product-showcase', name: 'Product Showcase', strategicPurpose: 'Showcase curated new arrivals', coreMessage: 'Fresh finds', proofPoints: ['Curated pre-loved', 'Sustainable fashion'] }],
       deliverables: [{
-        id: deliverableId,
-        contentKey,
-        title: meta.title,
-        purpose: 'Drive product discovery and sales',
-        campaignRole: 'Primary awareness',
-        channel: meta.channel,
-        contentType: meta.contentType,
-        format: meta.format,
-        objectiveRole: 'Drive product discovery and purchase intent',
-        primaryMessage: `${campaignName} — now available`,
-        supportingMessages: products.map(p => p.title),
-        proofPoints: ['Curated pre-loved fashion', 'Free local pickup available'],
-        creativeDirection: 'Editorial, clean product focus',
+        id: deliverableId, contentKey, title: meta.title, purpose: 'Drive product discovery and sales',
+        campaignRole: 'Primary awareness', channel: meta.channel, contentType: meta.contentType, format: meta.format,
+        objectiveRole: 'Drive product discovery and purchase intent', primaryMessage: `${campaignName} — now available`,
+        supportingMessages: products.map(p => p.title), proofPoints: ['Curated pre-loved fashion'],
+        creativeDirection: creativeDirection ?? 'Editorial, clean product focus',
         assetRequirements: products.map((p, i) => ({ id: `req-${i + 1}`, type: 'IMAGE', description: `Product image for ${p.title}`, required: true })),
         sourceConceptId: conceptId,
       }],
       cadence: { phases: [] },
     });
 
-    // Generate creative content
     let content: unknown;
     let aiGenerated = false;
-
     const ai = getAIProvider();
     if (ai && aiEnv.isConfigured) {
       try {
         const rawJson = await ai.generateStructured({
-          systemPrompt: buildSystemPrompt(),
-          userPrompt: buildUserPrompt(products, format, brandBrain),
+          systemPrompt: buildSystemPrompt(entity.name, market, creativeDirection),
+          userPrompt: buildUserPrompt(products, format, brandBrain, entity.name, creativeDirection),
           model: aiEnv.revisionModel,
           maxTokens: 4096,
         });
         content = JSON.parse(rawJson) as unknown;
         aiGenerated = true;
       } catch {
-        content = templateContent(products, format);
+        content = templateContent(products, format, creativeDirection);
       }
     } else {
-      content = templateContent(products, format);
+      content = templateContent(products, format, creativeDirection);
     }
 
     const quality = JSON.stringify({ passed: true, checks: [], warnings: [] });
 
-    // Write all records in a single transaction
     db.transaction(() => {
-      // Campaign
       db.prepare(`
         INSERT INTO campaigns (id, workspace_id, objective_id, name, status, source_type, source_title, channels, created_at, updated_at)
         VALUES (?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
       `).run(campaignId, workspaceId, objective.id, campaignName, campaignName, JSON.stringify([meta.channel]), now, now);
 
-      // Campaign plan (minimal strategy)
       db.prepare(`
         INSERT INTO campaign_plans
           (id, campaign_id, workspace_id, version, status, is_current,
@@ -346,60 +389,42 @@ class OperatorStudioService {
         VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
       `).run(
         planId, campaignId, workspaceId,
-        'New Arrivals showcase',
-        'Fresh curated finds ready to market',
-        'Curated pre-loved fashion',
-        'Fashion-conscious shoppers looking for unique pieces',
+        'New Arrivals showcase', 'Fresh curated finds ready to market',
+        'Curated pre-loved fashion', 'Fashion-conscious shoppers',
         JSON.stringify({ primary: `Shop ${campaignName}`, supporting: [] }),
-        `Shop ${campaignName}`,
-        'Immediate publishing',
-        'Editorial, clean product focus',
-        'Brand-authentic, product-specific',
-        'Sales',
-        'conversions',
+        `Shop ${campaignName}`, 'Immediate publishing',
+        creativeDirection ? `${creativeDirection} direction — ${meta.channel}` : 'Editorial, clean product focus',
+        'Brand-authentic, product-specific', 'Sales', 'conversions',
         `Operator-selected new arrivals for immediate publishing`,
         now, now,
       );
 
-      // Plan approval
-      db.prepare(`
-        INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?)
-      `).run(planApprovalId, campaignId, workspaceId, planId, now, now);
+      db.prepare(`INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+        .run(planApprovalId, campaignId, workspaceId, planId, now, now);
 
-      // Content plan
-      db.prepare(`
-        INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)
-      `).run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
+      db.prepare(`INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)`)
+        .run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
 
-      // Content plan approval
-      db.prepare(`
-        INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?)
-      `).run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
+      db.prepare(`INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+        .run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
 
-      // Creative artifact
       db.prepare(`
         INSERT INTO creative_artifacts
           (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
            content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-           title, content, quality, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?)
+           title, content, quality, creative_direction, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         artifactId, workspaceId, campaignId, contentPlanId,
         contentKey, deliverableId,
         meta.channel, meta.contentType, meta.format,
-        meta.title, JSON.stringify(content), quality,
+        meta.title, JSON.stringify(content), quality, creativeDirection ?? null,
         now, now,
       );
 
-      // Creative source links
       sourceRows.forEach((row, position) => {
-        db.prepare(`
-          INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at)
-          VALUES (?, ?, ?, ?)
-        `).run(artifactId, row.id, position, now);
+        db.prepare(`INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at) VALUES (?, ?, ?, ?)`)
+          .run(artifactId, row.id, position, now);
       });
     })();
 
@@ -411,39 +436,28 @@ class OperatorStudioService {
     };
 
     return {
-      campaignId,
-      campaignName,
-      contentKey,
+      campaignId, campaignName, contentKey,
       artifact: {
-        id: artifactRow.id,
-        workspaceId: artifactRow.workspace_id,
-        campaignId: artifactRow.campaign_id,
-        sourceContentPlanId: artifactRow.source_content_plan_id,
-        sourceContentPlanVersion: artifactRow.source_content_plan_version,
-        contentKey: artifactRow.content_key,
-        deliverableId: artifactRow.deliverable_id,
-        version: artifactRow.version,
-        channel: artifactRow.channel,
-        contentType: artifactRow.content_type,
-        format: artifactRow.format,
-        title: artifactRow.title,
-        content: JSON.parse(artifactRow.content) as unknown,
-        quality: JSON.parse(artifactRow.quality) as unknown,
-        status: artifactRow.status,
-        isCurrent: artifactRow.is_current === 1,
-        createdAt: artifactRow.created_at,
-        updatedAt: artifactRow.updated_at,
+        id: artifactRow.id, workspaceId: artifactRow.workspace_id, campaignId: artifactRow.campaign_id,
+        sourceContentPlanId: artifactRow.source_content_plan_id, sourceContentPlanVersion: artifactRow.source_content_plan_version,
+        contentKey: artifactRow.content_key, deliverableId: artifactRow.deliverable_id, version: artifactRow.version,
+        channel: artifactRow.channel, contentType: artifactRow.content_type, format: artifactRow.format,
+        title: artifactRow.title, content: JSON.parse(artifactRow.content) as unknown, quality: JSON.parse(artifactRow.quality) as unknown,
+        status: artifactRow.status, isCurrent: artifactRow.is_current === 1,
+        createdAt: artifactRow.created_at, updatedAt: artifactRow.updated_at,
       },
       products,
       aiGenerated,
+      creativeDirection,
     };
   }
 
   async setupWholeSet(params: {
     workspaceId: string;
     sourceProductIds: string[];
+    creativeDirection?: CreativeDirection | null;
   }): Promise<WholeSetSetupResult | ServiceError> {
-    const { workspaceId, sourceProductIds } = params;
+    const { workspaceId, sourceProductIds, creativeDirection = null } = params;
 
     if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
     if (!sourceProductIds?.length) return { error: 'At least one product must be selected', code: 'BAD_REQUEST' };
@@ -455,6 +469,7 @@ class OperatorStudioService {
 
     const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown> };
     const brandBrain = brandKit.brandBrain ?? {};
+    const market = (brandBrain as { identity?: { market?: string } }).identity?.market ?? null;
 
     const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as
       | { id: string } | undefined;
@@ -478,14 +493,10 @@ class OperatorStudioService {
         return null;
       })();
       return {
-        id: r.id,
-        title: r.title,
+        id: r.id, title: r.title,
         brand: (payload.brand as string | null) ?? null,
-        price: r.price_amount,
-        currency: r.price_currency,
-        imageUrls: imgUrls,
-        availability: r.availability,
-        marketingBucket: bucket,
+        price: r.price_amount, currency: r.price_currency,
+        imageUrls: imgUrls, availability: r.availability, marketingBucket: bucket,
         size: (payload.size as string | null) ?? null,
         category: (payload.category as string | null) ?? null,
         publicUrl: (payload.publicUrl as string | null) ?? null,
@@ -503,22 +514,21 @@ class OperatorStudioService {
     const conceptId = `con_${randomUUID()}`;
     const quality = JSON.stringify({ passed: true, checks: [], warnings: [] });
 
-    // Generate content for each format (sequential, with template fallback)
     const ai = getAIProvider();
     let aiGenerated = false;
     const formatContents: Record<SingleFormat, unknown> = {
-      POST: templateContent(products, 'POST'),
-      CAROUSEL: templateContent(products, 'CAROUSEL'),
-      STORY: templateContent(products, 'STORY'),
-      EMAIL: templateContent(products, 'EMAIL'),
+      POST: templateContent(products, 'POST', creativeDirection),
+      CAROUSEL: templateContent(products, 'CAROUSEL', creativeDirection),
+      STORY: templateContent(products, 'STORY', creativeDirection),
+      EMAIL: templateContent(products, 'EMAIL', creativeDirection),
     };
 
     for (const fmt of SINGLE_FORMATS) {
       if (ai && aiEnv.isConfigured) {
         try {
           const rawJson = await ai.generateStructured({
-            systemPrompt: buildSystemPrompt(),
-            userPrompt: buildUserPrompt(products, fmt, brandBrain),
+            systemPrompt: buildSystemPrompt(entity.name, market, creativeDirection),
+            userPrompt: buildUserPrompt(products, fmt, brandBrain, entity.name, creativeDirection),
             model: aiEnv.revisionModel,
             maxTokens: 4096,
           });
@@ -530,7 +540,6 @@ class OperatorStudioService {
       }
     }
 
-    // IDs for each format
     const formatIds = SINGLE_FORMATS.map(fmt => ({
       fmt,
       deliverableId: `del_${randomUUID()}`,
@@ -542,30 +551,16 @@ class OperatorStudioService {
         campaignNarrative: `${campaignName} — full content set for immediate publishing`,
         contentStrategy: 'Coordinated set across Instagram Post, Carousel, Stories, and Email',
       },
-      concepts: [{
-        id: conceptId,
-        contentKey: 'product-showcase',
-        name: 'Product Showcase',
-        strategicPurpose: 'Showcase curated new arrivals across all channels',
-        coreMessage: 'Fresh finds at Worn Label',
-        proofPoints: ['Curated pre-loved', 'Sustainable fashion'],
-      }],
+      concepts: [{ id: conceptId, contentKey: 'product-showcase', name: 'Product Showcase', strategicPurpose: 'Showcase curated new arrivals across all channels', coreMessage: 'Fresh finds', proofPoints: ['Curated pre-loved', 'Sustainable fashion'] }],
       deliverables: formatIds.map(({ fmt, deliverableId }) => {
         const meta = FORMAT_META[fmt];
         return {
-          id: deliverableId,
-          contentKey: meta.contentKey,
-          title: meta.title,
-          purpose: 'Drive product discovery and sales',
-          campaignRole: 'Channel-specific awareness',
-          channel: meta.channel,
-          contentType: meta.contentType,
-          format: meta.format,
-          objectiveRole: 'Drive product discovery and purchase intent',
-          primaryMessage: `${campaignName} — now available`,
-          supportingMessages: products.map(p => p.title),
-          proofPoints: ['Curated pre-loved fashion'],
-          creativeDirection: 'Editorial, clean product focus',
+          id: deliverableId, contentKey: meta.contentKey, title: meta.title,
+          purpose: 'Drive product discovery and sales', campaignRole: 'Channel-specific awareness',
+          channel: meta.channel, contentType: meta.contentType, format: meta.format,
+          objectiveRole: 'Drive product discovery and purchase intent', primaryMessage: `${campaignName} — now available`,
+          supportingMessages: products.map(p => p.title), proofPoints: ['Curated pre-loved fashion'],
+          creativeDirection: creativeDirection ?? 'Editorial, clean product focus',
           assetRequirements: products.map((p, i) => ({ id: `req-${i + 1}`, type: 'IMAGE', description: `Product image for ${p.title}`, required: true })),
           sourceConceptId: conceptId,
         };
@@ -574,13 +569,11 @@ class OperatorStudioService {
     });
 
     db.transaction(() => {
-      // Campaign
       db.prepare(`
         INSERT INTO campaigns (id, workspace_id, objective_id, name, status, source_type, source_title, channels, created_at, updated_at)
         VALUES (?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
       `).run(campaignId, workspaceId, objective.id, campaignName, campaignName, JSON.stringify(['INSTAGRAM', 'EMAIL']), now, now);
 
-      // Campaign plan
       db.prepare(`
         INSERT INTO campaign_plans
           (id, campaign_id, workspace_id, version, status, is_current,
@@ -593,66 +586,48 @@ class OperatorStudioService {
         VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
       `).run(
         planId, campaignId, workspaceId,
-        'New Arrivals full-set showcase',
-        'Fresh curated finds — full channel set',
-        'Curated pre-loved fashion',
-        'Fashion-conscious shoppers',
+        'New Arrivals full-set showcase', 'Fresh curated finds — full channel set',
+        'Curated pre-loved fashion', 'Fashion-conscious shoppers',
         JSON.stringify({ primary: `Shop ${campaignName}`, supporting: [] }),
-        `Shop ${campaignName}`,
-        'Immediate publishing across all channels',
-        'Editorial, clean product focus',
-        'Brand-authentic, product-specific',
-        'Sales', 'conversions',
+        `Shop ${campaignName}`, 'Immediate publishing across all channels',
+        creativeDirection ? `${creativeDirection} direction` : 'Editorial, clean product focus',
+        'Brand-authentic, product-specific', 'Sales', 'conversions',
         `Full-set new arrivals for immediate publishing`,
         now, now,
       );
 
-      // Plan approval
-      db.prepare(`
-        INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?)
-      `).run(planApprovalId, campaignId, workspaceId, planId, now, now);
+      db.prepare(`INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+        .run(planApprovalId, campaignId, workspaceId, planId, now, now);
 
-      // Content plan
-      db.prepare(`
-        INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)
-      `).run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
+      db.prepare(`INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)`)
+        .run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
 
-      // Content plan approval
-      db.prepare(`
-        INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?)
-      `).run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
+      db.prepare(`INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+        .run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
 
-      // 4 creative artifacts
       for (const { fmt, deliverableId, artifactId } of formatIds) {
         const meta = FORMAT_META[fmt];
         db.prepare(`
           INSERT INTO creative_artifacts
             (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
              content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-             title, content, quality, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?)
+             title, content, quality, creative_direction, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           artifactId, workspaceId, campaignId, contentPlanId,
           meta.contentKey, deliverableId,
           meta.channel, meta.contentType, meta.format,
-          meta.title, JSON.stringify(formatContents[fmt]), quality,
+          meta.title, JSON.stringify(formatContents[fmt]), quality, creativeDirection ?? null,
           now, now,
         );
 
-        // Source links for each artifact
         sourceRows.forEach((row, position) => {
-          db.prepare(`
-            INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at)
-            VALUES (?, ?, ?, ?)
-          `).run(artifactId, row.id, position, now);
+          db.prepare(`INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at) VALUES (?, ?, ?, ?)`)
+            .run(artifactId, row.id, position, now);
         });
       }
     })();
 
-    // Read back artifacts
     const formats: WholeSetFormatResult[] = formatIds.map(({ fmt, artifactId }) => {
       const row = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
         id: string; workspace_id: string; campaign_id: string; source_content_plan_id: string;
@@ -664,29 +639,18 @@ class OperatorStudioService {
         format: fmt,
         contentKey: row.content_key,
         artifact: {
-          id: row.id,
-          workspaceId: row.workspace_id,
-          campaignId: row.campaign_id,
-          sourceContentPlanId: row.source_content_plan_id,
-          sourceContentPlanVersion: row.source_content_plan_version,
-          contentKey: row.content_key,
-          deliverableId: row.deliverable_id,
-          version: row.version,
-          channel: row.channel,
-          contentType: row.content_type,
-          format: row.format,
-          title: row.title,
-          content: JSON.parse(row.content) as unknown,
-          quality: JSON.parse(row.quality) as unknown,
-          status: row.status,
-          isCurrent: row.is_current === 1,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
+          id: row.id, workspaceId: row.workspace_id, campaignId: row.campaign_id,
+          sourceContentPlanId: row.source_content_plan_id, sourceContentPlanVersion: row.source_content_plan_version,
+          contentKey: row.content_key, deliverableId: row.deliverable_id, version: row.version,
+          channel: row.channel, contentType: row.content_type, format: row.format,
+          title: row.title, content: JSON.parse(row.content) as unknown, quality: JSON.parse(row.quality) as unknown,
+          status: row.status, isCurrent: row.is_current === 1,
+          createdAt: row.created_at, updatedAt: row.updated_at,
         },
       };
     });
 
-    return { campaignId, campaignName, formats, products, aiGenerated };
+    return { campaignId, campaignName, formats, products, aiGenerated, creativeDirection };
   }
 }
 

@@ -2,6 +2,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
+  CheckCircle2,
   ChevronDown,
   GripVertical,
   ImageOff,
@@ -9,7 +10,7 @@ import {
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../../app/AppContext';
 import { ScheduleItemDrawer } from '../../components/drawers/ScheduleItemDrawer';
 import { api } from '../../services/api';
@@ -18,6 +19,7 @@ import type { SourceProduct } from '../../types';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL';
+type CreativeDirection = 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL';
 
 interface WholeSetResult {
   campaignId: string;
@@ -25,6 +27,7 @@ interface WholeSetResult {
   formats: Array<{ format: StudioFormat; contentKey: string; artifact: Artifact }>;
   products: StudioProduct[];
   aiGenerated: boolean;
+  creativeDirection: CreativeDirection | null;
 }
 
 interface StudioProduct {
@@ -90,9 +93,10 @@ interface Session {
   artifact: Artifact;
   products: StudioProduct[];
   aiGenerated: boolean;
+  creativeDirection: CreativeDirection | null;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const FORMAT_LABELS: Record<StudioFormat, string> = {
   POST: 'Instagram Post',
@@ -101,6 +105,24 @@ const FORMAT_LABELS: Record<StudioFormat, string> = {
   EMAIL: 'Email',
 };
 
+const DIRECTION_LABELS: Record<CreativeDirection, string> = {
+  EDITORIAL: 'Editorial',
+  PRODUCT_LED: 'Product-led',
+  MINIMAL: 'Minimal',
+};
+
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  READY_FOR_REVIEW:  { label: 'Draft',      className: 'bg-zinc-100 text-zinc-600' },
+  CHANGES_REQUESTED: { label: 'Changes',    className: 'bg-amber-50 text-amber-700' },
+  REVISING:          { label: 'Revising',   className: 'bg-blue-50 text-blue-700' },
+  READY_FOR_APPROVAL:{ label: 'Ready',      className: 'bg-emerald-50 text-emerald-700' },
+  APPROVED:          { label: 'Approved',   className: 'bg-emerald-100 text-emerald-800' },
+  GENERATING:        { label: 'Generating', className: 'bg-zinc-100 text-zinc-500' },
+};
+
+function statusLabel(status: string): string {
+  return STATUS_CONFIG[status]?.label ?? status;
+}
 
 function formatPrice(price: number | null, currency: string | null) {
   if (price == null) return '';
@@ -111,46 +133,100 @@ function formatPrice(price: number | null, currency: string | null) {
   }).format(price);
 }
 
-function channelFor(format: StudioFormat) {
-  return format === 'EMAIL' ? 'EMAIL' : 'INSTAGRAM';
-}
-
 // ─── Format Picker ────────────────────────────────────────────────────────────
 
 const FORMAT_DESCRIPTIONS: Record<StudioFormat, string> = {
-  POST: 'Single image, 4:5 ratio — best for hero products',
-  CAROUSEL: 'Swipeable slides, one product per slide',
-  STORY: '9:16 vertical format with frames',
-  EMAIL: 'Email newsletter layout with subject and body',
+  POST: 'Single image · 4:5 portrait',
+  CAROUSEL: 'Swipeable slides · one per product',
+  STORY: 'Vertical frames · 9:16',
+  EMAIL: 'Newsletter layout · subject + body',
 };
+
+// CSS-only aspect-ratio thumbnails representing each format
+function FormatThumb({ format }: { format: StudioFormat | 'WHOLE_SET' }) {
+  if (format === 'POST') {
+    return (
+      <div className="mb-3 flex justify-center">
+        <div className="h-12 w-[38px] rounded-md bg-zinc-200 ring-1 ring-inset ring-zinc-300" />
+      </div>
+    );
+  }
+  if (format === 'CAROUSEL') {
+    return (
+      <div className="mb-3 flex items-end justify-center gap-0.5">
+        <div className="h-12 w-[35px] rounded-md bg-zinc-200 ring-1 ring-inset ring-zinc-300" />
+        <div className="h-10 w-[32px] rounded-md bg-zinc-100 ring-1 ring-inset ring-zinc-200" />
+        <div className="h-8 w-[28px] rounded-md bg-zinc-100 ring-1 ring-inset ring-zinc-200" />
+      </div>
+    );
+  }
+  if (format === 'STORY') {
+    return (
+      <div className="mb-3 flex justify-center">
+        <div className="h-14 w-[32px] rounded-md bg-zinc-200 ring-1 ring-inset ring-zinc-300" />
+      </div>
+    );
+  }
+  if (format === 'EMAIL') {
+    return (
+      <div className="mb-3 flex justify-center">
+        <div className="h-12 w-[52px] overflow-hidden rounded-md bg-zinc-200 ring-1 ring-inset ring-zinc-300">
+          <div className="mx-1 mt-1 h-2.5 rounded-sm bg-zinc-300" />
+          <div className="mx-1 mt-1 space-y-0.5">
+            <div className="h-1 rounded-sm bg-zinc-300/60" />
+            <div className="h-1 w-3/4 rounded-sm bg-zinc-300/60" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // WHOLE_SET
+  return (
+    <div className="mb-3 flex items-end justify-center gap-1">
+      <div className="h-10 w-[22px] rounded-sm bg-zinc-200 ring-1 ring-inset ring-zinc-300" />
+      <div className="h-12 w-[18px] rounded-sm bg-zinc-200 ring-1 ring-inset ring-zinc-300" />
+      <div className="h-14 w-[14px] rounded-sm bg-zinc-200 ring-1 ring-inset ring-zinc-300" />
+      <div className="h-10 w-[22px] rounded-sm bg-zinc-200 ring-1 ring-inset ring-zinc-300" />
+    </div>
+  );
+}
 
 function FormatPicker({
   products,
   onSelect,
   onWholeSet,
+  direction,
+  onDirectionChange,
 }: {
   products: StudioProduct[];
   onSelect: (format: StudioFormat) => void;
   onWholeSet: () => void;
+  direction: CreativeDirection | null;
+  onDirectionChange: (d: CreativeDirection | null) => void;
 }) {
   const formats: StudioFormat[] = ['POST', 'CAROUSEL', 'STORY', 'EMAIL'];
   const count = products.length;
+  const directions: { id: CreativeDirection; label: string; desc: string }[] = [
+    { id: 'EDITORIAL', label: 'Editorial', desc: 'Narrative, mood-led — no prices' },
+    { id: 'PRODUCT_LED', label: 'Product-led', desc: 'Details first — name, price, size' },
+    { id: 'MINIMAL', label: 'Minimal', desc: 'Short and restrained — less is more' },
+  ];
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-12">
-      <p className="mos-eyebrow mb-1">New from Worn Label</p>
+    <div className="mx-auto max-w-2xl px-6 py-10">
+      <p className="mos-eyebrow mb-1">Studio</p>
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">
         {count === 1 ? (products[0]?.title || 'Product selected') : `${count} products selected`}
       </h1>
       <p className="mt-1 text-sm text-zinc-500">
-        {count === 1 ? '1 product' : `${count} products`} · Choose a format to continue
+        {count} {count === 1 ? 'product' : 'products'} · Choose a format to continue
       </p>
 
-      {/* Selected product strip */}
-      <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
+      {/* Product strip */}
+      <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
         {products.map((p) => (
           <div key={p.id} className="relative flex-shrink-0">
-            <div className="h-16 w-16 overflow-hidden rounded-xl bg-zinc-100">
+            <div className="h-14 w-14 overflow-hidden rounded-xl bg-zinc-100">
               {p.imageUrls[0] ? (
                 <img src={p.imageUrls[0]} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -173,24 +249,53 @@ function FormatPicker({
         ))}
       </div>
 
+      {/* Creative direction */}
+      <div className="mt-8">
+        <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">Creative direction</p>
+        <div className="grid grid-cols-3 gap-2">
+          {directions.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => onDirectionChange(direction === d.id ? null : d.id)}
+              className={`rounded-xl border p-3 text-left transition ${
+                direction === d.id
+                  ? 'border-zinc-950 bg-zinc-950 text-white shadow-sm'
+                  : 'border-zinc-200 bg-white hover:border-zinc-400'
+              }`}
+            >
+              <p className="text-xs font-semibold">{d.label}</p>
+              <p className={`mt-0.5 text-[10px] leading-relaxed ${direction === d.id ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                {d.desc}
+              </p>
+            </button>
+          ))}
+        </div>
+        {!direction && (
+          <p className="mt-1.5 text-[10px] text-zinc-400">No direction selected — AI will choose based on your brand voice.</p>
+        )}
+      </div>
+
       {/* Format cards */}
       <div className="mt-8 grid grid-cols-2 gap-3">
         {formats.map((fmt) => (
           <button
             key={fmt}
             onClick={() => onSelect(fmt)}
-            className="group rounded-2xl border border-zinc-200 bg-white p-5 text-left transition hover:border-zinc-950 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-zinc-950"
+            className="group rounded-2xl border border-zinc-200 bg-white p-4 text-left transition hover:border-zinc-950 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-zinc-950"
           >
+            <FormatThumb format={fmt} />
             <p className="text-sm font-semibold text-zinc-950">{FORMAT_LABELS[fmt]}</p>
-            <p className="mt-1 text-xs text-zinc-500">{FORMAT_DESCRIPTIONS[fmt]}</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500">{FORMAT_DESCRIPTIONS[fmt]}</p>
           </button>
         ))}
         <button
           onClick={onWholeSet}
-          className="col-span-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-center text-sm font-medium text-zinc-700 transition hover:border-zinc-950 hover:bg-white hover:shadow-sm"
+          className="col-span-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-center transition hover:border-zinc-950 hover:bg-white hover:shadow-sm"
         >
-          <span className="font-semibold">Make whole set</span>
-          <span className="ml-2 text-xs text-zinc-400">Post · Carousel · Story · Email</span>
+          <FormatThumb format="WHOLE_SET" />
+          <p className="text-sm font-semibold text-zinc-950">Make whole set</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">Post · Carousel · Story · Email — all at once</p>
         </button>
       </div>
     </div>
@@ -199,7 +304,11 @@ function FormatPicker({
 
 // ─── Source Product Picker ────────────────────────────────────────────────────
 
-function SourceProductPicker({ onContinue }: { onContinue: (ids: string[]) => void }) {
+function SourceProductPicker({
+  onContinue,
+}: {
+  onContinue: (ids: string[], products: SourceProduct[]) => void;
+}) {
   const { activeEntity } = useApp();
   const [products, setProducts] = useState<SourceProduct[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -230,7 +339,7 @@ function SourceProductPicker({ onContinue }: { onContinue: (ids: string[]) => vo
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
-      <p className="mos-eyebrow mb-1">New from Worn Label</p>
+      <p className="mos-eyebrow mb-1">Studio</p>
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">Select products</h1>
       <p className="mt-1 text-sm text-zinc-500">Choose up to 6 products to create content for.</p>
 
@@ -266,7 +375,7 @@ function SourceProductPicker({ onContinue }: { onContinue: (ids: string[]) => vo
                   <Check className="h-3.5 w-3.5" />
                 </div>
               )}
-              {p.marketingBucket === 'NEW' && (
+              {p.marketingBucket === 'NEW' && !isSelected && (
                 <span className="absolute left-2 top-2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
                   NEW
                 </span>
@@ -277,14 +386,14 @@ function SourceProductPicker({ onContinue }: { onContinue: (ids: string[]) => vo
       </div>
 
       {products.length === 0 && (
-        <p className="mt-8 text-sm text-zinc-400">No new products found. Try syncing your Worn Label integration.</p>
+        <p className="mt-8 text-sm text-zinc-400">No new products found. Try syncing your integration.</p>
       )}
 
       <div className="sticky bottom-0 mt-8 border-t border-zinc-100 bg-white pt-4">
         <button
           type="button"
           disabled={selected.length === 0}
-          onClick={() => onContinue(selected)}
+          onClick={() => onContinue(selected, products.filter(p => selected.includes(p.id)))}
           className="w-full rounded-2xl bg-zinc-950 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-40"
         >
           Continue with {selected.length} {selected.length === 1 ? 'product' : 'products'}
@@ -296,12 +405,7 @@ function SourceProductPicker({ onContinue }: { onContinue: (ids: string[]) => vo
 
 // ─── Whole Set Overview ───────────────────────────────────────────────────────
 
-const WHOLE_SET_FORMAT_LABELS: Record<StudioFormat, { label: string; desc: string }> = {
-  POST: { label: 'Instagram Post', desc: 'Single hero image, 4:5' },
-  CAROUSEL: { label: 'Carousel', desc: 'Swipeable slides per product' },
-  STORY: { label: 'Stories', desc: 'Vertical 9:16 frame sequence' },
-  EMAIL: { label: 'Email', desc: 'Newsletter with subject line' },
-};
+type ApproveAllState = 'idle' | 'approving' | 'done' | 'partial';
 
 function WholeSetOverview({
   result,
@@ -312,35 +416,131 @@ function WholeSetOverview({
   onOpenFormat: (fmt: StudioFormat) => void;
   onBack: () => void;
 }) {
-  const hero = result.products[0];
-  const heroImage = hero?.imageUrls[0] ?? null;
+  const { activeEntity } = useApp();
+  const [approveState, setApproveState] = useState<ApproveAllState>('idle');
+  const [localStatuses, setLocalStatuses] = useState<Record<string, string>>(() =>
+    Object.fromEntries(result.formats.map(f => [f.format, f.artifact.status]))
+  );
+  const [partialErrors, setPartialErrors] = useState<string[]>([]);
+
+  const allApproved = result.formats.every(f => localStatuses[f.format] === 'APPROVED');
+
+  const handleApproveAll = async () => {
+    if (!activeEntity || approveState === 'approving') return;
+    setApproveState('approving');
+    setPartialErrors([]);
+    try {
+      await api.establishLocalOperatorSession();
+      const artifacts = result.formats.map(f => ({ artifactId: f.artifact.id, contentKey: f.artifact.contentKey }));
+      const { results } = await api.approveWholeSet(activeEntity.id, result.campaignId, artifacts);
+      const errors: string[] = [];
+      const updated = { ...localStatuses };
+      for (const r of results) {
+        if (r.success) {
+          const fmt = result.formats.find(f => f.artifact.id === r.artifactId);
+          if (fmt) updated[fmt.format] = 'APPROVED';
+        } else {
+          errors.push(`${r.contentKey}: ${r.error ?? 'Unknown error'}`);
+        }
+      }
+      setLocalStatuses(updated);
+      setPartialErrors(errors);
+      setApproveState(errors.length > 0 ? 'partial' : 'done');
+    } catch (err) {
+      setPartialErrors([(err as Error).message]);
+      setApproveState('partial');
+    }
+  };
+
+  // Format-specific content extraction for mini-preview
+  const getFormatPreviewText = (fmt: StudioFormat, artifact: Artifact): string => {
+    const c = artifact.content;
+    if (fmt === 'POST' && c.kind === 'STATIC_POST') return c.hook ?? c.caption.slice(0, 60);
+    if (fmt === 'CAROUSEL' && c.kind === 'CAROUSEL') return `${c.slides.length} slides`;
+    if (fmt === 'STORY' && c.kind === 'STORY') return `${c.frames.length} frames`;
+    if (fmt === 'EMAIL' && c.kind === 'EMAIL') return c.subject;
+    return '';
+  };
+
+  const FORMAT_VISUAL: Record<StudioFormat, { aspect: string; badge: string; bgHint: string }> = {
+    POST:     { aspect: 'aspect-[4/5]',  badge: '4:5',  bgHint: '' },
+    CAROUSEL: { aspect: 'aspect-[4/5]',  badge: '4:5',  bgHint: '' },
+    STORY:    { aspect: 'aspect-[4/5]',  badge: '9:16', bgHint: '' },
+    EMAIL:    { aspect: 'aspect-[4/5]',  badge: 'Email', bgHint: 'bg-white' },
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-3 border-b border-zinc-100 bg-white px-4 py-3">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back
-        </button>
-        <span className="text-xs font-semibold text-zinc-950">{result.campaignName}</span>
-        <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">
-          Whole Set
-        </span>
+      <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 bg-white px-4 py-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back
+          </button>
+          <span className="text-xs font-semibold text-zinc-950">{result.campaignName}</span>
+          <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">
+            Whole Set
+          </span>
+          {result.creativeDirection && (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-600">
+              {DIRECTION_LABELS[result.creativeDirection]}
+            </span>
+          )}
+        </div>
+        {/* Approve all */}
+        {!allApproved && approveState !== 'done' ? (
+          <button
+            onClick={() => void handleApproveAll()}
+            disabled={approveState === 'approving'}
+            className="flex items-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50"
+          >
+            {approveState === 'approving' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            )}
+            Looks good to all
+          </button>
+        ) : (
+          <div className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" /> All approved
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-8">
+        {!result.aiGenerated && (
+          <div className="mb-5 flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-600">
+            <Sparkles className="h-4 w-4 shrink-0 text-zinc-400" />
+            Starter copy generated — edit each format to personalise. AI rewriting will be available once the connection is restored.
+          </div>
+        )}
+
+        {partialErrors.length > 0 && (
+          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            <p className="font-semibold">Some approvals were not completed:</p>
+            {partialErrors.map((e, i) => <p key={i} className="mt-0.5">{e}</p>)}
+          </div>
+        )}
+
         <p className="mos-eyebrow mb-1">Content set ready</p>
         <h1 className="text-xl font-semibold tracking-tight text-zinc-950">{result.campaignName}</h1>
         <p className="mt-1 text-sm text-zinc-500">
           {result.products.length} {result.products.length === 1 ? 'product' : 'products'} · 4 formats generated
-          {!result.aiGenerated && ' · Template copy'}
         </p>
 
         <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {result.formats.map(({ format: fmt, artifact }) => {
-            const cfg = WHOLE_SET_FORMAT_LABELS[fmt];
+            const vis = FORMAT_VISUAL[fmt];
+            const status = localStatuses[fmt] ?? artifact.status;
+            const statusCfg = STATUS_CONFIG[status] ?? { label: statusLabel(status), className: 'bg-zinc-100 text-zinc-600' };
+            const hero = result.products[0];
+            const heroImage = hero?.imageUrls[0] ?? null;
+            const previewText = getFormatPreviewText(fmt, artifact);
+            const isEmail = fmt === 'EMAIL';
+
             return (
               <button
                 key={fmt}
@@ -349,27 +549,52 @@ function WholeSetOverview({
                 className="group flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition hover:border-zinc-950 hover:shadow-md"
               >
                 {/* Mini preview */}
-                <div className={`relative w-full overflow-hidden bg-zinc-100 ${fmt === 'STORY' ? 'aspect-[9/16]' : 'aspect-[4/5]'}`}>
-                  {heroImage ? (
+                <div className={`relative w-full overflow-hidden ${vis.bgHint || 'bg-zinc-100'} ${vis.aspect}`}>
+                  {isEmail ? (
+                    // Email: show subject line preview
+                    <div className="flex h-full flex-col bg-white p-3">
+                      <div className="mb-1.5 h-2 w-3/4 rounded-sm bg-zinc-200" />
+                      <div className="mb-1 h-1.5 rounded-sm bg-zinc-100" />
+                      <div className="h-1.5 w-2/3 rounded-sm bg-zinc-100" />
+                      {artifact.content.kind === 'EMAIL' && (
+                        <p className="mt-auto truncate text-[9px] font-medium text-zinc-600">
+                          {artifact.content.subject}
+                        </p>
+                      )}
+                    </div>
+                  ) : heroImage ? (
                     <img src={heroImage} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
                   ) : (
                     <div className="flex h-full items-center justify-center">
                       <ImageOff className="h-8 w-8 text-zinc-300" />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                  <span className="absolute bottom-2 left-2 text-xs font-bold text-white drop-shadow">
-                    {cfg.label}
+
+                  {!isEmail && <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />}
+
+                  {/* Format badge */}
+                  <span className="absolute left-2 top-2 rounded-lg bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white backdrop-blur-sm">
+                    {FORMAT_LABELS[fmt]}
                   </span>
-                  <span className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                    artifact.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-800/70 text-white'
-                  }`}>
-                    {artifact.status === 'APPROVED' ? 'Ready' : 'Draft'}
+                  {/* Ratio badge for story */}
+                  {fmt === 'STORY' && (
+                    <span className="absolute right-2 top-2 rounded bg-zinc-800/60 px-1 py-0.5 text-[8px] font-semibold text-white">
+                      9:16
+                    </span>
+                  )}
+                  {/* Status */}
+                  <span className={`absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-[9px] font-bold ${statusCfg.className}`}>
+                    {statusCfg.label}
                   </span>
+                  {/* Preview text overlay (non-email) */}
+                  {!isEmail && previewText && (
+                    <p className="absolute bottom-7 left-2 right-2 truncate text-[9px] font-medium text-white drop-shadow">
+                      {previewText}
+                    </p>
+                  )}
                 </div>
                 <div className="p-3">
-                  <p className="text-[10px] text-zinc-500">{cfg.desc}</p>
-                  <p className="mt-1 text-[11px] font-semibold text-zinc-700 group-hover:text-zinc-950">
+                  <p className="text-[11px] font-semibold text-zinc-700 group-hover:text-zinc-950">
                     Open to edit →
                   </p>
                 </div>
@@ -399,11 +624,7 @@ function CarouselPreview({
     <div className="flex flex-col gap-2">
       <div className="overflow-hidden rounded-2xl bg-zinc-100">
         {product?.imageUrls[0] ? (
-          <img
-            src={product.imageUrls[0]}
-            alt=""
-            className="aspect-[4/5] w-full object-cover"
-          />
+          <img src={product.imageUrls[0]} alt="" className="aspect-[4/5] w-full object-cover" />
         ) : (
           <div className="flex aspect-[4/5] w-full items-center justify-center">
             <ImageOff className="h-10 w-10 text-zinc-300" />
@@ -460,14 +681,16 @@ function StoryPreview({ content, products }: { content: StoryContent; products: 
     <div className="flex flex-col gap-2">
       <div className="relative overflow-hidden rounded-2xl bg-zinc-900">
         {product?.imageUrls[0] ? (
-          <img src={product.imageUrls[0]} alt="" className="aspect-[9/16] w-full object-cover opacity-80" />
+          <img src={product.imageUrls[0]} alt="" className="aspect-[9/16] w-full object-cover opacity-75" />
         ) : (
           <div className="aspect-[9/16] w-full" />
         )}
+        {/* Gradient for readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         {frame && (
-          <div className="absolute inset-x-4 bottom-6 text-white">
-            <p className="text-xl font-bold leading-tight drop-shadow">{frame.headline}</p>
-            {frame.body && <p className="mt-1 text-sm drop-shadow">{frame.body}</p>}
+          <div className="absolute inset-x-4 bottom-8 text-white">
+            <p className="text-lg font-bold leading-tight drop-shadow-md">{frame.headline}</p>
+            {frame.body && <p className="mt-1.5 text-sm leading-snug text-white/80 drop-shadow">{frame.body}</p>}
             {frame.cta && (
               <p className="mt-3 inline-block rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950">
                 {frame.cta}
@@ -475,13 +698,13 @@ function StoryPreview({ content, products }: { content: StoryContent; products: 
             )}
           </div>
         )}
-        {/* Frame progress bars */}
+        {/* Progress bars */}
         <div className="absolute inset-x-3 top-3 flex gap-1">
           {content.frames.map((_, i) => (
             <button
               key={i}
               onClick={() => setActiveFrame(i)}
-              className={`h-0.5 flex-1 rounded-full ${i === activeFrame ? 'bg-white' : 'bg-white/40'}`}
+              className={`h-0.5 flex-1 rounded-full transition-all ${i <= activeFrame ? 'bg-white' : 'bg-white/30'}`}
             />
           ))}
         </div>
@@ -490,26 +713,58 @@ function StoryPreview({ content, products }: { content: StoryContent; products: 
   );
 }
 
-function EmailPreview({ content }: { content: EmailContent }) {
+function EmailPreview({ content, products }: { content: EmailContent; products: StudioProduct[] }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white text-sm">
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white text-sm shadow-sm">
+      {/* Email client header */}
       <div className="border-b border-zinc-100 bg-zinc-50 px-4 py-3">
-        <p className="text-xs text-zinc-500">Subject</p>
-        <p className="mt-0.5 font-medium text-zinc-900">{content.subject}</p>
-        <p className="mt-0.5 text-xs text-zinc-400">{content.preheader}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Email preview</p>
+        <p className="mt-1 text-xs font-semibold text-zinc-900">{content.subject}</p>
+        <p className="mt-0.5 text-[10px] text-zinc-400">{content.preheader}</p>
       </div>
-      <div className="px-6 py-6">
-        <h2 className="text-xl font-bold text-zinc-950">{content.headline}</h2>
-        <div className="mt-4 space-y-3 text-sm leading-relaxed text-zinc-700">
+      {/* Brand header band */}
+      <div className="bg-zinc-950 px-6 py-5 text-white">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Newsletter</p>
+        <h2 className="mt-2 text-lg font-semibold leading-tight">{content.headline}</h2>
+      </div>
+      {/* Hero product image */}
+      {products[0]?.imageUrls[0] && (
+        <div className="aspect-[3/1] w-full overflow-hidden bg-zinc-100">
+          <img src={products[0].imageUrls[0]} alt="" className="h-full w-full object-cover" />
+        </div>
+      )}
+      {/* Body */}
+      <div className="px-6 py-5">
+        <div className="space-y-3 text-sm leading-relaxed text-zinc-700">
           {content.body.split('\n').filter(Boolean).map((para, i) => (
             <p key={i}>{para}</p>
           ))}
         </div>
+        {/* Product names */}
+        {products.length > 1 && (
+          <div className="mt-4 space-y-1">
+            {products.slice(0, 3).map((p, i) => (
+              <div key={i} className="flex items-center gap-2.5 rounded-lg border border-zinc-100 px-3 py-2">
+                {p.imageUrls[0] && (
+                  <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100">
+                    <img src={p.imageUrls[0]} alt="" className="h-full w-full object-cover" />
+                  </div>
+                )}
+                <p className="truncate text-xs font-medium text-zinc-800">{p.title}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* CTA */}
         <div className="mt-6">
           <span className="inline-block rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white">
             {content.cta.label}
           </span>
         </div>
+      </div>
+      {/* Footer */}
+      <div className="border-t border-zinc-100 px-6 py-4">
+        <p className="text-[10px] text-zinc-400">You received this email because you subscribed to updates.</p>
       </div>
     </div>
   );
@@ -519,19 +774,23 @@ function EmailPreview({ content }: { content: EmailContent }) {
 
 type QuickAction = 'brand-voice' | 'shorter' | 'editorial' | 'playful';
 
-const QUICK_ACTIONS: { id: QuickAction; label: string }[] = [
-  { id: 'brand-voice', label: 'More Worn Label' },
-  { id: 'shorter', label: 'Shorter' },
-  { id: 'editorial', label: 'More editorial' },
-  { id: 'playful', label: 'More playful' },
-];
+function getQuickActions(workspaceName: string): { id: QuickAction; label: string }[] {
+  return [
+    { id: 'brand-voice', label: `More ${workspaceName}` },
+    { id: 'shorter', label: 'Shorter' },
+    { id: 'editorial', label: 'More editorial' },
+    { id: 'playful', label: 'More playful' },
+  ];
+}
 
-const REVISION_PROMPTS: Record<QuickAction, string> = {
-  'brand-voice': 'Rewrite using a stronger Worn Label brand voice — more editorial, considered, and sustainability-conscious.',
-  'shorter': 'Shorten the copy by about 30%. Keep the most impactful lines.',
-  'editorial': 'Make the copy more editorial — read like a fashion magazine, not an ad.',
-  'playful': 'Make the copy more playful and human. Less formal, more personality.',
-};
+function getRevisionPrompts(workspaceName: string): Record<QuickAction, string> {
+  return {
+    'brand-voice': `Rewrite using a stronger ${workspaceName} brand voice — aligned to the brand personality and tone.`,
+    'shorter': 'Shorten the copy by about 30%. Keep the most impactful lines.',
+    'editorial': 'Make the copy more editorial — read like a fashion magazine, not an ad.',
+    'playful': 'Make the copy more playful and human. Less formal, more personality.',
+  };
+}
 
 function CopyEditor({
   content,
@@ -539,41 +798,59 @@ function CopyEditor({
   session,
   onContentChange,
   onRevising,
+  activeSlide,
+  onSlideActivate,
 }: {
   content: ArtifactContent;
   format: StudioFormat;
   session: Session;
   onContentChange: (c: ArtifactContent) => void;
   onRevising: (v: boolean) => void;
+  activeSlide: number;
+  onSlideActivate: (i: number) => void;
 }) {
   const { activeEntity } = useApp();
+  const workspaceName = activeEntity?.name ?? 'your brand';
   const [revisingAction, setRevisingAction] = useState<QuickAction | null>(null);
+  const slideRefs = useRef<(HTMLDetailsElement | null)[]>([]);
+
+  // Auto-open and scroll to active slide when changed externally (product strip click)
+  useEffect(() => {
+    if (format !== 'CAROUSEL') return;
+    const el = slideRefs.current[activeSlide];
+    if (el) {
+      el.open = true;
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [activeSlide, format]);
 
   const requestRevision = useCallback(
     async (action: QuickAction) => {
       if (!activeEntity) return;
       setRevisingAction(action);
       onRevising(true);
+      const prompts = getRevisionPrompts(workspaceName);
       try {
         await api.establishLocalOperatorSession();
         const result = await api.requestCreativeRevision(
           session.campaignId,
           session.artifact.contentKey,
           activeEntity.id,
-          REVISION_PROMPTS[action],
+          prompts[action],
         );
         const newContent = (result as { content?: ArtifactContent }).content;
         if (newContent) onContentChange(newContent);
       } catch {
-        // silent — user sees unchanged copy
+        // silent
       } finally {
         setRevisingAction(null);
         onRevising(false);
       }
     },
-    [activeEntity, session, onContentChange, onRevising],
+    [activeEntity, session, onContentChange, onRevising, workspaceName],
   );
 
+  const quickActions = getQuickActions(workspaceName);
   const isCarousel = format === 'CAROUSEL' && content.kind === 'CAROUSEL';
   const isPost = format === 'POST' && content.kind === 'STATIC_POST';
   const isEmail = format === 'EMAIL' && content.kind === 'EMAIL';
@@ -585,7 +862,7 @@ function CopyEditor({
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">AI quick actions</p>
         <div className="flex flex-wrap gap-2">
-          {QUICK_ACTIONS.map((action) => (
+          {quickActions.map((action) => (
             <button
               key={action.id}
               onClick={() => void requestRevision(action.id)}
@@ -637,28 +914,40 @@ function CopyEditor({
           </Field>
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Slides — drag to reorder</p>
-            {(content as CarouselContent).slides.map((slide, i) => (
-              <div
-                key={i}
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData('slideIndex', String(i))}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const from = Number(e.dataTransfer.getData('slideIndex'));
-                  if (from === i) return;
-                  const slides = [...(content as CarouselContent).slides];
-                  const [moved] = slides.splice(from, 1);
-                  slides.splice(i, 0, moved);
-                  const renumbered = slides.map((s, idx) => ({ ...s, slideNumber: idx + 1 }));
-                  onContentChange({ ...(content as CarouselContent), slides: renumbered });
-                }}
-                className="group mb-2 rounded-xl border border-zinc-200"
-              >
-                <details>
-                  <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-xs font-semibold text-zinc-700 marker:hidden">
+            {(content as CarouselContent).slides.map((slide, i) => {
+              const isActive = i === activeSlide;
+              return (
+                <details
+                  key={i}
+                  ref={el => { slideRefs.current[i] = el; }}
+                  className={`group mb-2 rounded-xl border transition ${
+                    isActive ? 'border-zinc-950 shadow-sm' : 'border-zinc-200'
+                  }`}
+                  onToggle={(e) => {
+                    if ((e.currentTarget as HTMLDetailsElement).open) onSlideActivate(i);
+                  }}
+                >
+                  <summary
+                    className="flex cursor-pointer items-center justify-between px-4 py-3 text-xs font-semibold text-zinc-700 marker:hidden"
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('slideIndex', String(i))}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const from = Number(e.dataTransfer.getData('slideIndex'));
+                      if (from === i) return;
+                      const slides = [...(content as CarouselContent).slides];
+                      const [moved] = slides.splice(from, 1);
+                      slides.splice(i, 0, moved);
+                      const renumbered = slides.map((s, idx) => ({ ...s, slideNumber: idx + 1 }));
+                      onContentChange({ ...(content as CarouselContent), slides: renumbered });
+                    }}
+                  >
                     <div className="flex items-center gap-2">
                       <GripVertical className="h-3.5 w-3.5 cursor-grab text-zinc-300 active:cursor-grabbing" />
+                      {isActive && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-950" />
+                      )}
                       <span>Slide {i + 1} · {slide.headline.slice(0, 40)}</span>
                     </div>
                     <ChevronDown className="h-3.5 w-3.5 text-zinc-400 transition group-open:rotate-180" />
@@ -690,8 +979,8 @@ function CopyEditor({
                     </Field>
                   </div>
                 </details>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -783,7 +1072,7 @@ function CopyEditor({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
       <label className="mb-1 block text-xs font-medium text-zinc-500">{label}</label>
@@ -806,9 +1095,9 @@ function LivePreview({
   activeSlide: number;
 }) {
   return (
-    <div className="sticky top-6">
+    <div className="sticky top-0 pt-1">
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Preview</p>
-      <div className={format !== 'EMAIL' ? 'max-w-[320px]' : 'max-w-[500px]'}>
+      <div className={format !== 'EMAIL' ? 'max-w-[260px] md:max-w-[300px]' : 'max-w-[400px]'}>
         {format === 'CAROUSEL' && content.kind === 'CAROUSEL' && (
           <CarouselPreview content={content} products={products} activeSlide={activeSlide} />
         )}
@@ -819,7 +1108,7 @@ function LivePreview({
           <StoryPreview content={content} products={products} />
         )}
         {format === 'EMAIL' && content.kind === 'EMAIL' && (
-          <EmailPreview content={content} />
+          <EmailPreview content={content} products={products} />
         )}
       </div>
     </div>
@@ -841,12 +1130,12 @@ export default function OperatorStudioPage() {
     setStudioReturnTarget,
   } = useApp();
 
-  // If studioReturnTarget is set, we load from it; if IDs are set but no target, show format picker
   const hasProducts = selectedSourceProductIds.length > 0;
   const initialStep: PageStep = studioReturnTarget ? 'studio' : hasProducts ? 'format' : 'source-select';
 
   const [step, setStep] = useState<PageStep>(initialStep);
   const [format, setFormat] = useState<StudioFormat | null>(null);
+  const [creativeDirection, setCreativeDirection] = useState<CreativeDirection | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [wholeSetResult, setWholeSetResult] = useState<WholeSetResult | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -859,28 +1148,19 @@ export default function OperatorStudioPage() {
   const [revising, setRevising] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [studioTab, setStudioTab] = useState<'edit' | 'preview'>('edit');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Placeholder product state for format picker (we fetch from the session after setup)
   const [pickerProducts, setPickerProducts] = useState<StudioProduct[]>([]);
 
   // Populate picker products from return target or IDs
   useEffect(() => {
     if (studioReturnTarget) {
-      // Return flow: build session directly from library item
       const item = studioReturnTarget;
       const sessionProducts: StudioProduct[] = item.products.map(p => ({
-        id: p.id,
-        title: p.title,
-        brand: p.brand,
-        price: p.price,
-        currency: p.currency,
-        imageUrls: p.imageUrls,
-        availability: 'AVAILABLE',
-        marketingBucket: null,
-        size: null,
-        category: null,
-        publicUrl: null,
+        id: p.id, title: p.title, brand: p.brand, price: p.price, currency: p.currency,
+        imageUrls: p.imageUrls, availability: 'AVAILABLE', marketingBucket: null,
+        size: null, category: null, publicUrl: null,
       }));
       const reconstructed: Session = {
         campaignId: item.campaignId,
@@ -903,8 +1183,10 @@ export default function OperatorStudioPage() {
         },
         products: sessionProducts,
         aiGenerated: true,
+        creativeDirection: item.creativeDirection as CreativeDirection | null,
       };
       setFormat(item.studioFormat);
+      setCreativeDirection(item.creativeDirection as CreativeDirection | null);
       setSession(reconstructed);
       setContent(item.content as ArtifactContent);
       setApproved(item.status === 'APPROVED');
@@ -916,17 +1198,8 @@ export default function OperatorStudioPage() {
     if (selectedSourceProductIds.length === 0) return;
     setPickerProducts(
       selectedSourceProductIds.map((id) => ({
-        id,
-        title: '',
-        brand: null,
-        price: null,
-        currency: null,
-        imageUrls: [],
-        availability: 'AVAILABLE',
-        marketingBucket: null,
-        size: null,
-        category: null,
-        publicUrl: null,
+        id, title: '', brand: null, price: null, currency: null, imageUrls: [],
+        availability: 'AVAILABLE', marketingBucket: null, size: null, category: null, publicUrl: null,
       })),
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -944,6 +1217,7 @@ export default function OperatorStudioPage() {
           activeEntity.id,
           selectedSourceProductIds,
           selectedFormat,
+          creativeDirection,
         );
         const s: Session = {
           campaignId: result.campaignId,
@@ -952,6 +1226,7 @@ export default function OperatorStudioPage() {
           artifact: result.artifact as unknown as Artifact,
           products: result.products as unknown as StudioProduct[],
           aiGenerated: result.aiGenerated,
+          creativeDirection,
         };
         setSession(s);
         setContent(s.artifact.content);
@@ -963,7 +1238,7 @@ export default function OperatorStudioPage() {
         setStep('error');
       }
     },
-    [activeEntity, selectedSourceProductIds],
+    [activeEntity, selectedSourceProductIds, creativeDirection],
   );
 
   const setupWholeSet = useCallback(async () => {
@@ -972,7 +1247,7 @@ export default function OperatorStudioPage() {
     setSetupError(null);
     try {
       await api.establishLocalOperatorSession();
-      const result = await api.createWholeSet(activeEntity.id, selectedSourceProductIds);
+      const result = await api.createWholeSet(activeEntity.id, selectedSourceProductIds, creativeDirection);
       const ws: WholeSetResult = {
         campaignId: result.campaignId,
         campaignName: result.campaignName,
@@ -983,6 +1258,7 @@ export default function OperatorStudioPage() {
         })),
         products: result.products as unknown as StudioProduct[],
         aiGenerated: result.aiGenerated,
+        creativeDirection,
       };
       setWholeSetResult(ws);
       setStep('whole-set');
@@ -990,9 +1266,8 @@ export default function OperatorStudioPage() {
       setSetupError((err as Error).message);
       setStep('error');
     }
-  }, [activeEntity, selectedSourceProductIds]);
+  }, [activeEntity, selectedSourceProductIds, creativeDirection]);
 
-  // Auto-save edits to backend
   const persistEdit = useCallback(
     async (newContent: ArtifactContent) => {
       if (!session || !activeEntity) return;
@@ -1007,7 +1282,7 @@ export default function OperatorStudioPage() {
             activeEntity.id,
             newContent,
           );
-          if (approved) setApproved(false); // edit resets approval
+          if (approved) setApproved(false);
           setSaveState('saved');
           setTimeout(() => setSaveState('idle'), 2000);
         } catch {
@@ -1056,6 +1331,7 @@ export default function OperatorStudioPage() {
       artifact: entry.artifact,
       products: wholeSetResult.products,
       aiGenerated: wholeSetResult.aiGenerated,
+      creativeDirection: wholeSetResult.creativeDirection,
     };
     setSession(s);
     setContent(entry.artifact.content);
@@ -1080,7 +1356,7 @@ export default function OperatorStudioPage() {
     }
   };
 
-  // ─── Source Select Step ────────────────────────────────────────────────────
+  // ─── Source Select Step ──────────────────────────────────────────────────────
 
   if (step === 'source-select') {
     return (
@@ -1092,14 +1368,23 @@ export default function OperatorStudioPage() {
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
-          <span className="text-xs font-semibold text-zinc-950">Create content</span>
+          <span className="text-xs font-semibold text-zinc-950">Select products</span>
         </div>
         <SourceProductPicker
-          onContinue={(ids) => {
+          onContinue={(ids, prods) => {
             setSelectedSourceProductIds(ids);
-            setPickerProducts(ids.map(id => ({
-              id, title: '', brand: null, price: null, currency: null, imageUrls: [],
-              availability: 'AVAILABLE', marketingBucket: null, size: null, category: null, publicUrl: null,
+            setPickerProducts(prods.map(p => ({
+              id: p.id,
+              title: p.title,
+              brand: p.attributes?.brand ?? null,
+              price: p.priceAmount,
+              currency: p.priceCurrency,
+              imageUrls: p.imageUrls,
+              availability: p.availability,
+              marketingBucket: p.marketingBucket,
+              size: p.attributes?.size ?? null,
+              category: p.attributes?.category ?? null,
+              publicUrl: p.attributes?.publicUrl ?? null,
             })));
             setStep('format');
           }}
@@ -1108,7 +1393,7 @@ export default function OperatorStudioPage() {
     );
   }
 
-  // ─── Format Picker Step ────────────────────────────────────────────────────
+  // ─── Format Picker Step ──────────────────────────────────────────────────────
 
   if (step === 'format') {
     return (
@@ -1126,26 +1411,31 @@ export default function OperatorStudioPage() {
           products={pickerProducts}
           onSelect={(f) => void setupStudio(f)}
           onWholeSet={() => void setupWholeSet()}
+          direction={creativeDirection}
+          onDirectionChange={setCreativeDirection}
         />
       </div>
     );
   }
 
-  // ─── Setup Step ────────────────────────────────────────────────────────────
+  // ─── Setup Step ──────────────────────────────────────────────────────────────
 
   if (step === 'setup') {
+    const setupLabel = format ? FORMAT_LABELS[format] : 'Whole set';
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-10">
         <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
         <p className="text-sm font-medium text-zinc-600">Creating your content…</p>
         <p className="text-xs text-zinc-400">
-          {format ? `${FORMAT_LABELS[format]} · ` : !format ? 'Whole set · ' : ''}AI is writing from your brand voice
+          {setupLabel}
+          {creativeDirection ? ` · ${DIRECTION_LABELS[creativeDirection]}` : ''}
+          {' · AI is writing from your brand voice'}
         </p>
       </div>
     );
   }
 
-  // ─── Whole Set Step ────────────────────────────────────────────────────────
+  // ─── Whole Set Step ──────────────────────────────────────────────────────────
 
   if (step === 'whole-set' && wholeSetResult) {
     return (
@@ -1157,7 +1447,7 @@ export default function OperatorStudioPage() {
     );
   }
 
-  // ─── Error Step ────────────────────────────────────────────────────────────
+  // ─── Error Step ──────────────────────────────────────────────────────────────
 
   if (step === 'error') {
     return (
@@ -1168,7 +1458,7 @@ export default function OperatorStudioPage() {
         <button
           onClick={() => {
             if (format) void setupStudio(format);
-            else setStep('format');
+            else void setupWholeSet();
           }}
           className="mt-2 flex items-center gap-1.5 rounded-lg border border-zinc-200 px-4 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
         >
@@ -1181,48 +1471,61 @@ export default function OperatorStudioPage() {
     );
   }
 
-  // ─── Studio Step ───────────────────────────────────────────────────────────
+  // ─── Studio Step ─────────────────────────────────────────────────────────────
 
   if (!session || !content) return null;
 
   const sessionProducts = session.products;
   const isCarousel = format === 'CAROUSEL';
+  const sessionDirection = session.creativeDirection;
+  const currentStatusCfg = STATUS_CONFIG[approved ? 'APPROVED' : (session.artifact.status ?? 'READY_FOR_REVIEW')];
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Top bar */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-zinc-100 bg-white px-4 py-2.5">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={handleBack}
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
-          <span className="hidden text-xs text-zinc-400 sm:inline">|</span>
+          <span className="hidden text-xs text-zinc-300 sm:inline">|</span>
           {wholeSetResult && (
             <span className="hidden text-xs text-zinc-400 sm:inline">Whole Set ·</span>
           )}
-          <span className="hidden truncate text-xs font-semibold text-zinc-950 sm:inline max-w-[200px]">
+          <span className="hidden truncate text-xs font-semibold text-zinc-950 sm:inline max-w-[160px]">
             {session.campaignName}
           </span>
-          <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">
+          <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 shrink-0">
             {format ? FORMAT_LABELS[format] : ''}
           </span>
+          {sessionDirection && (
+            <span className="hidden rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500 sm:inline shrink-0">
+              {DIRECTION_LABELS[sessionDirection]}
+            </span>
+          )}
           {!session.aiGenerated && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-              Template copy — AI unavailable
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 shrink-0">
+              Starter copy — edit to personalise
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-center gap-2">
           {saveState === 'saving' && (
             <span className="text-[10px] text-zinc-400">Saving…</span>
           )}
           {saveState === 'saved' && (
             <span className="flex items-center gap-1 text-[10px] text-emerald-600">
               <Check className="h-3 w-3" /> Saved
+            </span>
+          )}
+          {/* Status pill */}
+          {currentStatusCfg && (
+            <span className={`hidden rounded-full px-2 py-0.5 text-[10px] font-semibold sm:inline ${currentStatusCfg.className}`}>
+              {currentStatusCfg.label}
             </span>
           )}
 
@@ -1238,7 +1541,7 @@ export default function OperatorStudioPage() {
           ) : (
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                <Check className="h-3.5 w-3.5" /> Ready
+                <Check className="h-3.5 w-3.5" /> Approved
               </span>
               <button
                 onClick={() => setScheduleOpen(true)}
@@ -1256,7 +1559,7 @@ export default function OperatorStudioPage() {
         {sessionProducts.map((p, i) => (
           <button
             key={p.id}
-            onClick={() => isCarousel && setActiveSlide(i)}
+            onClick={() => { if (isCarousel) setActiveSlide(i); }}
             className={`group flex flex-shrink-0 items-center gap-2.5 rounded-xl border px-2.5 py-2 transition ${
               isCarousel && activeSlide === i
                 ? 'border-zinc-950 bg-white shadow-sm'
@@ -1272,19 +1575,13 @@ export default function OperatorStudioPage() {
                 </span>
               )}
               {p.marketingBucket === 'NEW' && (
-                <span className="absolute -right-1 -top-1 rounded-full bg-emerald-500 px-1 py-0.5 text-[8px] font-bold text-white">
-                  N
-                </span>
+                <span className="absolute -right-1 -top-1 rounded-full bg-emerald-500 px-1 py-0.5 text-[8px] font-bold text-white">N</span>
               )}
               {p.marketingBucket === 'SALE' && (
-                <span className="absolute -right-1 -top-1 rounded-full bg-amber-100 px-1 py-0.5 text-[8px] font-bold text-amber-800">
-                  S
-                </span>
+                <span className="absolute -right-1 -top-1 rounded-full bg-amber-100 px-1 py-0.5 text-[8px] font-bold text-amber-800">S</span>
               )}
               {p.availability !== 'AVAILABLE' && (
-                <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-[9px] font-bold text-red-600">
-                  SOLD
-                </span>
+                <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-[9px] font-bold text-red-600">SOLD</span>
               )}
             </div>
             <div className="hidden text-left sm:block">
@@ -1298,21 +1595,39 @@ export default function OperatorStudioPage() {
         ))}
       </div>
 
+      {/* Responsive tab switcher (visible below lg) */}
+      <div className="flex shrink-0 border-b border-zinc-100 bg-white lg:hidden">
+        <button
+          onClick={() => setStudioTab('edit')}
+          className={`flex-1 py-2 text-xs font-semibold transition ${studioTab === 'edit' ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-400 hover:text-zinc-700'}`}
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => setStudioTab('preview')}
+          className={`flex-1 py-2 text-xs font-semibold transition ${studioTab === 'preview' ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-400 hover:text-zinc-700'}`}
+        >
+          Preview
+        </button>
+      </div>
+
       {/* Two-panel workspace */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Left: controls */}
-        <div className="min-w-0 flex-1 overflow-y-auto border-r border-zinc-100 p-6">
+        {/* Left: editor */}
+        <div className={`min-w-0 flex-1 overflow-y-auto border-r border-zinc-100 p-5 ${studioTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
           <CopyEditor
             content={content}
             format={format!}
             session={session}
             onContentChange={handleContentChange}
             onRevising={setRevising}
+            activeSlide={activeSlide}
+            onSlideActivate={setActiveSlide}
           />
         </div>
 
-        {/* Right: preview */}
-        <div className="hidden w-80 flex-shrink-0 overflow-y-auto p-6 lg:block xl:w-96">
+        {/* Right: preview — always visible at lg+, tab-controlled below */}
+        <div className={`overflow-y-auto p-5 lg:block lg:w-72 xl:w-88 ${studioTab === 'preview' ? 'block w-full' : 'hidden'}`}>
           <LivePreview
             content={content}
             format={format!}
@@ -1323,24 +1638,20 @@ export default function OperatorStudioPage() {
       </div>
 
       {/* Schedule drawer */}
-      {scheduleOpen && session && format && (
+      {scheduleOpen && session && format && activeEntity && (
         <ScheduleItemDrawer
           mode="create"
           campaignId={session.campaignId}
-          workspaceId={activeEntity?.id ?? ''}
           campaignName={session.campaignName}
-          contentKey={session.artifact.contentKey}
-          channel={channelFor(format) as 'INSTAGRAM' | 'EMAIL'}
+          workspaceId={activeEntity.id}
+          contentKey={session.contentKey}
+          channel={session.artifact.channel as import('../../types').MarketingChannel}
           creativeArtifactId={session.artifact.id}
           creativeVersion={session.artifact.version}
           onClose={() => setScheduleOpen(false)}
           onSaved={() => {
             setScheduleOpen(false);
             setActiveCampaignId(session.campaignId);
-            setActiveTab('campaign-detail');
-          }}
-          onNavigateToCampaign={(id) => {
-            setActiveCampaignId(id);
             setActiveTab('campaign-detail');
           }}
         />

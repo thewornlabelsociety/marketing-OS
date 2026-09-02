@@ -824,6 +824,7 @@ export interface StudioLibraryItem {
   campaignStatus: string;
   content: unknown;
   products: StudioLibraryProduct[];
+  creativeDirection: 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL' | null;
   createdAt: string;
   updatedAt: string;
 }

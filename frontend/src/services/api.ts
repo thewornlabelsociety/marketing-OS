@@ -67,7 +67,7 @@ export const api = {
   getBusinessIntegrations: (workspaceId: string) => request<BusinessIntegration[]>(`/business-sources/integrations?workspaceId=${encodeURIComponent(workspaceId)}`),
   getSourceProducts: (workspaceId: string, filter = 'all') => request<SourceProduct[]>(`/business-sources/products?workspaceId=${encodeURIComponent(workspaceId)}&filter=${encodeURIComponent(filter)}`),
   getSourceProductUsage: (id: string, workspaceId: string) => request<Array<Record<string, unknown>>>(`/business-sources/products/${encodeURIComponent(id)}/usage?workspaceId=${encodeURIComponent(workspaceId)}`),
-  createStudioSession: (workspaceId: string, sourceProductIds: string[], format: string) =>
+  createStudioSession: (workspaceId: string, sourceProductIds: string[], format: string, creativeDirection?: string | null) =>
     request<{
       campaignId: string;
       campaignName: string;
@@ -77,9 +77,9 @@ export const api = {
       aiGenerated: boolean;
     }>('/business-sources/studio', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId, sourceProductIds, format }),
+      body: JSON.stringify({ workspaceId, sourceProductIds, format, creativeDirection }),
     }),
-  createWholeSet: (workspaceId: string, sourceProductIds: string[]) =>
+  createWholeSet: (workspaceId: string, sourceProductIds: string[], creativeDirection?: string | null) =>
     request<{
       campaignId: string;
       campaignName: string;
@@ -88,8 +88,13 @@ export const api = {
       aiGenerated: boolean;
     }>('/business-sources/studio', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId, sourceProductIds, format: 'WHOLE_SET' }),
+      body: JSON.stringify({ workspaceId, sourceProductIds, format: 'WHOLE_SET', creativeDirection }),
     }),
+  approveWholeSet: (workspaceId: string, campaignId: string, artifacts: Array<{ artifactId: string; contentKey: string }>) =>
+    request<{ results: Array<{ artifactId: string; contentKey: string; success: boolean; error?: string }> }>(
+      '/business-sources/studio/approve-all',
+      { method: 'POST', body: JSON.stringify({ workspaceId, campaignId, artifacts }) },
+    ),
   getStudioLibrary: (workspaceId: string) =>
     request<StudioLibraryItem[]>(`/business-sources/studio/library?workspaceId=${encodeURIComponent(workspaceId)}`),
   // Entities / Workspaces
