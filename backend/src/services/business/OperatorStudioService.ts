@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
 import { aiEnv } from '../../config/aiEnvironment';
-import { getAIProvider } from '../../integrations/adapters/AIProviderFactory';
+import { aiOrchestrator } from '../intelligence/AIOrchestrator';
 
 export type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL' | 'WHOLE_SET';
 export type CreativeDirection = 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL';
@@ -351,16 +351,19 @@ class OperatorStudioService {
 
     let content: unknown;
     let aiGenerated = false;
-    const ai = getAIProvider();
-    if (ai && aiEnv.isConfigured) {
+    if (aiOrchestrator.isAvailable()) {
       try {
-        const rawJson = await ai.generateStructured({
+        const result = await aiOrchestrator.generate({
+          workspaceId,
+          taskType: 'CREATIVE_COPY',
+          scope: 'SHOP',
+          knowledgeDomains: ['BRAND_CORE', 'VOICE'],
           systemPrompt: buildSystemPrompt(entity.name, market, creativeDirection),
           userPrompt: buildUserPrompt(products, format, brandBrain, entity.name, creativeDirection),
           model: aiEnv.revisionModel,
           maxTokens: 4096,
         });
-        content = JSON.parse(rawJson) as unknown;
+        content = JSON.parse(result.content) as unknown;
         aiGenerated = true;
       } catch {
         content = templateContent(products, format, creativeDirection);
@@ -412,13 +415,17 @@ class OperatorStudioService {
         INSERT INTO creative_artifacts
           (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
            content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-           title, content, quality, creative_direction, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           title, content, quality, creative_direction, ai_provider, ai_model, ai_generated, ai_task_type, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         artifactId, workspaceId, campaignId, contentPlanId,
         contentKey, deliverableId,
         meta.channel, meta.contentType, meta.format,
         meta.title, JSON.stringify(content), quality, creativeDirection ?? null,
+        aiGenerated ? (aiEnv.provider ?? null) : null,
+        aiGenerated ? (aiEnv.revisionModel ?? null) : null,
+        aiGenerated ? 1 : 0,
+        aiGenerated ? 'CREATIVE_COPY' : null,
         now, now,
       );
 
@@ -514,7 +521,6 @@ class OperatorStudioService {
     const conceptId = `con_${randomUUID()}`;
     const quality = JSON.stringify({ passed: true, checks: [], warnings: [] });
 
-    const ai = getAIProvider();
     let aiGenerated = false;
     const formatContents: Record<SingleFormat, unknown> = {
       POST: templateContent(products, 'POST', creativeDirection),
@@ -524,15 +530,19 @@ class OperatorStudioService {
     };
 
     for (const fmt of SINGLE_FORMATS) {
-      if (ai && aiEnv.isConfigured) {
+      if (aiOrchestrator.isAvailable()) {
         try {
-          const rawJson = await ai.generateStructured({
+          const result = await aiOrchestrator.generate({
+            workspaceId,
+            taskType: 'CREATIVE_WHOLE_SET',
+            scope: 'SHOP',
+            knowledgeDomains: ['BRAND_CORE', 'VOICE'],
             systemPrompt: buildSystemPrompt(entity.name, market, creativeDirection),
             userPrompt: buildUserPrompt(products, fmt, brandBrain, entity.name, creativeDirection),
             model: aiEnv.revisionModel,
             maxTokens: 4096,
           });
-          formatContents[fmt] = JSON.parse(rawJson) as unknown;
+          formatContents[fmt] = JSON.parse(result.content) as unknown;
           aiGenerated = true;
         } catch {
           // keep template
@@ -611,13 +621,17 @@ class OperatorStudioService {
           INSERT INTO creative_artifacts
             (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
              content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-             title, content, quality, creative_direction, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             title, content, quality, creative_direction, ai_provider, ai_model, ai_generated, ai_task_type, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           artifactId, workspaceId, campaignId, contentPlanId,
           meta.contentKey, deliverableId,
           meta.channel, meta.contentType, meta.format,
           meta.title, JSON.stringify(formatContents[fmt]), quality, creativeDirection ?? null,
+          aiGenerated ? (aiEnv.provider ?? null) : null,
+          aiGenerated ? (aiEnv.revisionModel ?? null) : null,
+          aiGenerated ? 1 : 0,
+          aiGenerated ? 'CREATIVE_WHOLE_SET' : null,
           now, now,
         );
 

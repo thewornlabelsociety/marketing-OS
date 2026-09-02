@@ -31,6 +31,7 @@ import { businessSourcesRouter } from './routes/businessSources';
 import { businessIntegrationService } from './services/business/BusinessIntegrationService';
 import { establishLocalOperatorSession } from './middleware/localOperatorSession';
 import { resolveWornLabelIntegrationEnvironment } from './config/businessIntegrationEnvironment';
+import { intelligenceRouter } from './routes/intelligence';
 
 const app = express();
 app.use(cors({ origin: /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/, credentials: true }));
@@ -66,6 +67,7 @@ app.use('/api/attention', attentionRouter);
 app.use('/api/media', mediaRouter);
 app.post('/api/local-operator-session', establishLocalOperatorSession);
 app.use('/api/business-sources', businessSourcesRouter);
+app.use('/api/intelligence', intelligenceRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'marketing-os-backend' });

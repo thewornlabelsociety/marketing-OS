@@ -1,10 +1,11 @@
 import axios from 'axios';
 import type { AIProvider, StructuredGenerationRequest } from '../contracts/AIProvider';
+import type { AIGenerationResult } from '../../types/marketing';
 
 export class AnthropicAdapter implements AIProvider {
   constructor(private readonly apiKey: string) {}
 
-  async generateStructured(req: StructuredGenerationRequest): Promise<string> {
+  async generateTracked(req: StructuredGenerationRequest): Promise<AIGenerationResult> {
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
@@ -23,13 +24,28 @@ export class AnthropicAdapter implements AIProvider {
       }
     );
 
-    const content = (response.data as { content: Array<{ type: string; text: string }> }).content;
-    const textBlock = content.find((b) => b.type === 'text');
+    const data = response.data as {
+      content: Array<{ type: string; text: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
+
+    const textBlock = data.content.find((b) => b.type === 'text');
     if (!textBlock) throw new Error('Anthropic returned no text content');
 
-    // Extract JSON from the response (model may wrap in markdown fences)
     const raw = textBlock.text.trim();
     const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/) ?? raw.match(/```\s*([\s\S]*?)```/);
-    return jsonMatch ? jsonMatch[1].trim() : raw;
+    const content = jsonMatch ? jsonMatch[1].trim() : raw;
+
+    const inputTokens = data.usage?.input_tokens ?? 0;
+    const outputTokens = data.usage?.output_tokens ?? 0;
+
+    return {
+      content,
+      usage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
+    };
+  }
+
+  async generateStructured(req: StructuredGenerationRequest): Promise<string> {
+    return (await this.generateTracked(req)).content;
   }
 }
