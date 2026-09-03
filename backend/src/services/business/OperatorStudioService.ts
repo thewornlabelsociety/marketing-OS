@@ -392,7 +392,12 @@ class OperatorStudioService {
         });
         content = JSON.parse(result.content) as unknown;
         aiGenerated = true;
-      } catch {
+      } catch (err) {
+        console.warn('[OperatorStudio] AI generation failed; deterministic fallback used', {
+          task: 'CREATIVE_COPY', workspace: workspaceId, provider: aiEnv.provider,
+          errorStatus: (err as { response?: { status?: number } })?.response?.status,
+          errorMessage: (err as Error).message?.slice(0, 120),
+        });
         content = templateContent(products, format, creativeDirection);
       }
     } else {
@@ -596,8 +601,12 @@ class OperatorStudioService {
           });
           formatContents[fmt] = JSON.parse(result.content) as unknown;
           aiGenerated = true;
-        } catch {
-          // keep template
+        } catch (err) {
+          console.warn('[OperatorStudio] AI generation failed; deterministic fallback used', {
+            task: 'CREATIVE_WHOLE_SET', format: fmt, workspace: workspaceId, provider: aiEnv.provider,
+            errorStatus: (err as { response?: { status?: number } })?.response?.status,
+            errorMessage: (err as Error).message?.slice(0, 120),
+          });
         }
       }
     }
@@ -803,7 +812,12 @@ Return JSON:
         } else {
           content = founderContent;
         }
-      } catch {
+      } catch (err) {
+        console.warn('[OperatorStudio] AI generation failed; deterministic fallback used', {
+          task: 'CREATIVE_COPY', scope: 'FOUNDER', workspace: workspaceId, provider: aiEnv.provider,
+          errorStatus: (err as { response?: { status?: number } })?.response?.status,
+          errorMessage: (err as Error).message?.slice(0, 120),
+        });
         content = founderContent;
       }
     } else {

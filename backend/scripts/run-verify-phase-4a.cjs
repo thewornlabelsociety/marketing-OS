@@ -109,8 +109,8 @@ check('Status endpoint returns no API keys', (() => {
   const statusHandler = routes.match(/intelligenceRouter\.get\('\/status'[\s\S]*?\}\)/)?.[0] ?? '';
   return statusHandler.includes('available') && !statusHandler.includes('apiKey') && !statusHandler.includes('ANTHROPIC') && !statusHandler.includes('OPENAI');
 })(), 'API key may leak through /status');
-check('Knowledge seed uses LOCAL_TENANT_ID', routes?.includes("marketingKnowledgeService.seedIfEmpty(LOCAL_TENANT_ID"), 'workspace ID not locked to local tenant');
-check('Feedback route uses LOCAL_TENANT_ID', routes?.includes("workspaceId: LOCAL_TENANT_ID"), 'workspace ID not locked to local tenant');
+check('Knowledge seed uses resolveWorkspaceId (workspace-aware after POST-4D corrections)', routes?.includes("marketingKnowledgeService.seedIfEmpty(resolveWorkspaceId(req)"), 'knowledge seed not workspace-aware');
+check('Feedback route uses resolveWorkspaceId (workspace-aware after POST-4D corrections)', routes?.includes("workspaceId: resolveWorkspaceId(req)"), 'feedback route not workspace-aware');
 
 // ─── [6/9] Knowledge Seed Safety ─────────────────────────────────────────────
 console.log('\n[6/9] Knowledge Seed Safety');

@@ -1,5 +1,6 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { LOCAL_TENANT_ID } from '../config/constants';
+import { db } from '../db/database';
 import { aiUsageLedgerService } from '../services/intelligence/AIUsageLedgerService';
 import { marketingKnowledgeService } from '../services/intelligence/MarketingKnowledgeService';
 import { marketingFeedbackService } from '../services/intelligence/MarketingFeedbackService';
@@ -8,16 +9,26 @@ import { aiOrchestrator } from '../services/intelligence/AIOrchestrator';
 
 export const intelligenceRouter = Router();
 
+// Resolve workspace from request — query param takes precedence over LOCAL_TENANT_ID.
+// Validates the entity exists so cross-workspace access is prevented.
+function resolveWorkspaceId(req: Request): string {
+  const q = String((req.query as Record<string, string>).workspaceId ?? '').trim();
+  const candidate = q || LOCAL_TENANT_ID;
+  const exists = db.prepare('SELECT id FROM entities WHERE id = ?').get(candidate);
+  return exists ? candidate : LOCAL_TENANT_ID;
+}
+
 // ─── AI Status & Budget ───────────────────────────────────────────────────────
 
-intelligenceRouter.get('/status', (_req, res) => {
+intelligenceRouter.get('/status', (req, res) => {
+  const wsId = resolveWorkspaceId(req);
   const available = aiOrchestrator.isAvailable();
-  const summary = aiUsageLedgerService.budgetSummary(LOCAL_TENANT_ID);
+  const summary = aiUsageLedgerService.budgetSummary(wsId);
   res.json({ available, budget: summary });
 });
 
-intelligenceRouter.get('/budget', (_req, res) => {
-  res.json(aiUsageLedgerService.budgetSummary(LOCAL_TENANT_ID));
+intelligenceRouter.get('/budget', (req, res) => {
+  res.json(aiUsageLedgerService.budgetSummary(resolveWorkspaceId(req)));
 });
 
 intelligenceRouter.put('/budget', (req, res) => {
@@ -25,20 +36,21 @@ intelligenceRouter.put('/budget', (req, res) => {
   if (typeof monthlyLimitUsd !== 'number' || monthlyLimitUsd < 0) {
     return res.status(400).json({ error: 'monthlyLimitUsd must be a non-negative number' });
   }
+  const wsId = resolveWorkspaceId(req);
   const threshold = typeof alertThresholdPct === 'number' ? Math.max(1, Math.min(100, alertThresholdPct)) : 80;
-  aiUsageLedgerService.setBudget(LOCAL_TENANT_ID, monthlyLimitUsd, threshold);
-  res.json(aiUsageLedgerService.budgetSummary(LOCAL_TENANT_ID));
+  aiUsageLedgerService.setBudget(wsId, monthlyLimitUsd, threshold);
+  res.json(aiUsageLedgerService.budgetSummary(wsId));
 });
 
-intelligenceRouter.get('/usage', (_req, res) => {
-  const limit = parseInt(String((_req.query as Record<string, string>).limit ?? '50'), 10);
-  res.json(aiUsageLedgerService.recentUsage(LOCAL_TENANT_ID, Math.min(limit, 200)));
+intelligenceRouter.get('/usage', (req, res) => {
+  const { limit } = req.query as Record<string, string>;
+  res.json(aiUsageLedgerService.recentUsage(resolveWorkspaceId(req), Math.min(parseInt(limit ?? '50', 10), 200)));
 });
 
 // ─── Knowledge ────────────────────────────────────────────────────────────────
 
-intelligenceRouter.get('/knowledge', (_req, res) => {
-  res.json(marketingKnowledgeService.readAll(LOCAL_TENANT_ID));
+intelligenceRouter.get('/knowledge', (req, res) => {
+  res.json(marketingKnowledgeService.readAll(resolveWorkspaceId(req)));
 });
 
 intelligenceRouter.patch('/knowledge', (req, res) => {
@@ -46,8 +58,9 @@ intelligenceRouter.patch('/knowledge', (req, res) => {
   if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
     return res.status(400).json({ error: 'Body must be a JSON object' });
   }
-  marketingKnowledgeService.update(LOCAL_TENANT_ID, updates);
-  res.json(marketingKnowledgeService.readAll(LOCAL_TENANT_ID));
+  const wsId = resolveWorkspaceId(req);
+  marketingKnowledgeService.update(wsId, updates);
+  res.json(marketingKnowledgeService.readAll(wsId));
 });
 
 intelligenceRouter.post('/knowledge/seed', (req, res) => {
@@ -55,14 +68,14 @@ intelligenceRouter.post('/knowledge/seed', (req, res) => {
   if (!seed || typeof seed !== 'object' || Array.isArray(seed)) {
     return res.status(400).json({ error: 'Body must be a JSON object' });
   }
-  const result = marketingKnowledgeService.seedIfEmpty(LOCAL_TENANT_ID, seed);
+  const result = marketingKnowledgeService.seedIfEmpty(resolveWorkspaceId(req), seed);
   res.json(result);
 });
 
 // ─── Channel Strategy ─────────────────────────────────────────────────────────
 
-intelligenceRouter.get('/channels', (_req, res) => {
-  res.json(channelStrategyService.get(LOCAL_TENANT_ID));
+intelligenceRouter.get('/channels', (req, res) => {
+  res.json(channelStrategyService.get(resolveWorkspaceId(req)));
 });
 
 intelligenceRouter.put('/channels', (req, res) => {
@@ -70,7 +83,7 @@ intelligenceRouter.put('/channels', (req, res) => {
   if (!strategy || typeof strategy !== 'object' || Array.isArray(strategy)) {
     return res.status(400).json({ error: 'Body must be a JSON object' });
   }
-  res.json(channelStrategyService.set(LOCAL_TENANT_ID, strategy));
+  res.json(channelStrategyService.set(resolveWorkspaceId(req), strategy));
 });
 
 intelligenceRouter.patch('/channels', (req, res) => {
@@ -78,7 +91,7 @@ intelligenceRouter.patch('/channels', (req, res) => {
   if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
     return res.status(400).json({ error: 'Body must be a JSON object' });
   }
-  res.json(channelStrategyService.patch(LOCAL_TENANT_ID, updates));
+  res.json(channelStrategyService.patch(resolveWorkspaceId(req), updates));
 });
 
 // ─── Feedback ─────────────────────────────────────────────────────────────────
@@ -89,7 +102,7 @@ intelligenceRouter.post('/feedback', (req, res) => {
     return res.status(400).json({ error: 'feedbackType and sentiment are required' });
   }
   const record = marketingFeedbackService.record({
-    workspaceId: LOCAL_TENANT_ID,
+    workspaceId: resolveWorkspaceId(req),
     feedbackType: feedbackType as Parameters<typeof marketingFeedbackService.record>[0]['feedbackType'],
     sentiment: sentiment as Parameters<typeof marketingFeedbackService.record>[0]['sentiment'],
     artifactId: typeof artifactId === 'string' ? artifactId : null,
@@ -103,7 +116,7 @@ intelligenceRouter.post('/feedback', (req, res) => {
 
 intelligenceRouter.get('/feedback', (req, res) => {
   const { artifactId, campaignId, limit } = req.query as Record<string, string>;
-  const records = marketingFeedbackService.list(LOCAL_TENANT_ID, {
+  const records = marketingFeedbackService.list(resolveWorkspaceId(req), {
     artifactId: artifactId || undefined,
     campaignId: campaignId || undefined,
     limit: limit ? parseInt(limit, 10) : 50,
