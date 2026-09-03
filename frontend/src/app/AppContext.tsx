@@ -11,6 +11,18 @@ import { api } from '../services/api';
 import { useDeepLink } from '../hooks/useDeepLink';
 import type { AppTab, DropDraft, Entity, StudioLibraryItem } from '../types';
 
+export interface RecommendationSeed {
+  recommendationId: string;
+  recommendationType: string;
+  sourceProductIds: string[];
+  contentType: string | null;
+  title: string;
+  hook: string | null;
+  angle: string | null;
+  cta: string | null;
+  talkingPoints: string[] | null;
+}
+
 interface AppContextValue {
   entities: Entity[];
   activeEntity: Entity | null;
@@ -32,6 +44,9 @@ interface AppContextValue {
   setStudioReturnTarget: (target: StudioLibraryItem | null) => void;
   studioKey: number;
   newStudioSession: () => void;
+  recommendationSeed: RecommendationSeed | null;
+  setRecommendationSeed: (seed: RecommendationSeed | null) => void;
+  launchFromRecommendation: (seed: RecommendationSeed) => void;
 }
 
 const defaultDraft: DropDraft = {
@@ -58,9 +73,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedSourceProductIds, setSelectedSourceProductIds] = useState<string[]>([]);
   const [studioReturnTarget, setStudioReturnTarget] = useState<StudioLibraryItem | null>(null);
   const [studioKey, setStudioKey] = useState(0);
+  const [recommendationSeed, setRecommendationSeed] = useState<RecommendationSeed | null>(null);
 
   const newStudioSession = useCallback(() => {
     setSelectedSourceProductIds([]);
+    setStudioReturnTarget(null);
+    setRecommendationSeed(null);
+    setStudioKey((k) => k + 1);
+    setActiveTab('operator-studio');
+  }, []);
+
+  const launchFromRecommendation = useCallback((seed: RecommendationSeed) => {
+    setSelectedSourceProductIds(seed.sourceProductIds);
+    setRecommendationSeed(seed);
     setStudioReturnTarget(null);
     setStudioKey((k) => k + 1);
     setActiveTab('operator-studio');
@@ -169,6 +194,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStudioReturnTarget,
     studioKey,
     newStudioSession,
+    recommendationSeed,
+    setRecommendationSeed,
+    launchFromRecommendation,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

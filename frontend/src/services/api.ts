@@ -67,7 +67,7 @@ export const api = {
   getBusinessIntegrations: (workspaceId: string) => request<BusinessIntegration[]>(`/business-sources/integrations?workspaceId=${encodeURIComponent(workspaceId)}`),
   getSourceProducts: (workspaceId: string, filter = 'all') => request<SourceProduct[]>(`/business-sources/products?workspaceId=${encodeURIComponent(workspaceId)}&filter=${encodeURIComponent(filter)}`),
   getSourceProductUsage: (id: string, workspaceId: string) => request<Array<Record<string, unknown>>>(`/business-sources/products/${encodeURIComponent(id)}/usage?workspaceId=${encodeURIComponent(workspaceId)}`),
-  createStudioSession: (workspaceId: string, sourceProductIds: string[], format: string, creativeDirection?: string | null) =>
+  createStudioSession: (workspaceId: string, sourceProductIds: string[], format: string, creativeDirection?: string | null, recommendationId?: string | null) =>
     request<{
       campaignId: string;
       campaignName: string;
@@ -77,9 +77,9 @@ export const api = {
       aiGenerated: boolean;
     }>('/business-sources/studio', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId, sourceProductIds, format, creativeDirection }),
+      body: JSON.stringify({ workspaceId, sourceProductIds, format, creativeDirection, recommendationId }),
     }),
-  createWholeSet: (workspaceId: string, sourceProductIds: string[], creativeDirection?: string | null) =>
+  createWholeSet: (workspaceId: string, sourceProductIds: string[], creativeDirection?: string | null, recommendationId?: string | null) =>
     request<{
       campaignId: string;
       campaignName: string;
@@ -88,8 +88,35 @@ export const api = {
       aiGenerated: boolean;
     }>('/business-sources/studio', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId, sourceProductIds, format: 'WHOLE_SET', creativeDirection }),
+      body: JSON.stringify({ workspaceId, sourceProductIds, format: 'WHOLE_SET', creativeDirection, recommendationId }),
     }),
+  createFounderContent: (workspaceId: string, recommendationId: string) =>
+    request<{
+      campaignId: string;
+      campaignName: string;
+      contentKey: string;
+      artifact: Record<string, unknown>;
+      products: Array<Record<string, unknown>>;
+      aiGenerated: boolean;
+    }>('/business-sources/studio/founder', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, recommendationId }),
+    }),
+  // Recommendations
+  getRecommendations: () =>
+    request<{ recommendations: Array<Record<string, unknown>> }>('/recommendations'),
+  generateRecommendations: () =>
+    request<{
+      recommendations: Array<Record<string, unknown>>;
+      generationSource: string;
+      createdCount: number;
+      reusedCount: number;
+      expiredCount: number;
+      cached: boolean;
+      nextAllowedAt?: string;
+    }>('/recommendations/generate', { method: 'POST' }),
+  dismissRecommendation: (id: string) =>
+    request<{ success: boolean; id: string }>(`/recommendations/${encodeURIComponent(id)}/dismiss`, { method: 'POST' }),
   approveWholeSet: (workspaceId: string, campaignId: string, artifacts: Array<{ artifactId: string; contentKey: string }>) =>
     request<{ results: Array<{ artifactId: string; contentKey: string; success: boolean; error?: string }> }>(
       '/business-sources/studio/approve-all',

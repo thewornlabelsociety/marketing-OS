@@ -109,23 +109,40 @@ businessSourcesRouter.get('/studio/library', (req, res) => {
   res.json(enriched);
 });
 
+businessSourcesRouter.post('/studio/founder', async (req, res) => {
+  const { workspaceId, recommendationId } = req.body as {
+    workspaceId?: string;
+    recommendationId?: string;
+  };
+  if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required', code: 'BAD_REQUEST' });
+  if (!recommendationId) return res.status(400).json({ error: 'recommendationId is required', code: 'BAD_REQUEST' });
+  const result = await operatorStudioService.setupFounderContent({ workspaceId, recommendationId });
+  if ('error' in result) {
+    const status = result.code === 'NOT_FOUND' ? 404 : result.code === 'CONFLICT' ? 409 : 400;
+    return res.status(status).json(result);
+  }
+  res.json(result);
+});
+
 businessSourcesRouter.post('/studio', async (req, res) => {
-  const { workspaceId, sourceProductIds, format, creativeDirection } = req.body as {
+  const { workspaceId, sourceProductIds, format, creativeDirection, recommendationId } = req.body as {
     workspaceId?: string;
     sourceProductIds?: string[];
     format?: string;
     creativeDirection?: 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL' | null;
+    recommendationId?: string | null;
   };
   if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required', code: 'BAD_REQUEST' });
   if (!sourceProductIds?.length) return res.status(400).json({ error: 'At least one product must be selected', code: 'BAD_REQUEST' });
   if (!format) return res.status(400).json({ error: 'format is required', code: 'BAD_REQUEST' });
 
   const direction = creativeDirection ?? null;
+  const recId = recommendationId ?? null;
 
   if (format === 'WHOLE_SET') {
-    const result = await operatorStudioService.setupWholeSet({ workspaceId, sourceProductIds, creativeDirection: direction });
+    const result = await operatorStudioService.setupWholeSet({ workspaceId, sourceProductIds, creativeDirection: direction, recommendationId: recId });
     if ('error' in result) {
-      const status = result.code === 'NOT_FOUND' ? 404 : 400;
+      const status = result.code === 'NOT_FOUND' ? 404 : result.code === 'CONFLICT' ? 409 : 400;
       return res.status(status).json(result);
     }
     return res.json(result);
@@ -136,9 +153,10 @@ businessSourcesRouter.post('/studio', async (req, res) => {
     sourceProductIds,
     format: format as 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL',
     creativeDirection: direction,
+    recommendationId: recId,
   });
   if ('error' in result) {
-    const status = result.code === 'NOT_FOUND' ? 404 : 400;
+    const status = result.code === 'NOT_FOUND' ? 404 : result.code === 'CONFLICT' ? 409 : 400;
     return res.status(status).json(result);
   }
   res.json(result);

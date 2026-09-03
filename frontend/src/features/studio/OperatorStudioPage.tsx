@@ -68,7 +68,15 @@ interface EmailContent {
   body: string;
   cta: { label: string; destinationDescription: string };
 }
-type ArtifactContent = CarouselContent | PostContent | StoryContent | EmailContent;
+interface TalkingPointsContent {
+  kind: 'TALKING_POINTS';
+  hook: string;
+  talkingPoints: string[];
+  angle: string | null;
+  cta: string | null;
+  suggestedDurationSeconds: number | null;
+}
+type ArtifactContent = CarouselContent | PostContent | StoryContent | EmailContent | TalkingPointsContent;
 
 interface Artifact {
   id: string;
@@ -855,6 +863,7 @@ function CopyEditor({
   const isPost = format === 'POST' && content.kind === 'STATIC_POST';
   const isEmail = format === 'EMAIL' && content.kind === 'EMAIL';
   const isStory = format === 'STORY' && content.kind === 'STORY';
+  const isTalkingPoints = content.kind === 'TALKING_POINTS';
 
   return (
     <div className="space-y-5">
@@ -1068,6 +1077,46 @@ function CopyEditor({
           </Field>
         </div>
       )}
+
+      {isTalkingPoints && (
+        <div className="space-y-3">
+          <Field label="Hook (opening line)">
+            <input
+              type="text"
+              value={(content as TalkingPointsContent).hook}
+              onChange={(e) => onContentChange({ ...(content as TalkingPointsContent), hook: e.target.value })}
+              className="mos-field w-full"
+            />
+          </Field>
+          <Field label="Talking points">
+            {((content as TalkingPointsContent).talkingPoints ?? []).map((pt, i) => (
+              <div key={i} className="mb-2 flex items-start gap-2">
+                <span className="mt-2 text-xs text-zinc-400">{i + 1}.</span>
+                <textarea
+                  rows={2}
+                  value={pt}
+                  onChange={(e) => {
+                    const pts = [...(content as TalkingPointsContent).talkingPoints];
+                    pts[i] = e.target.value;
+                    onContentChange({ ...(content as TalkingPointsContent), talkingPoints: pts });
+                  }}
+                  className="mos-field w-full resize-none"
+                />
+              </div>
+            ))}
+          </Field>
+          {(content as TalkingPointsContent).cta && (
+            <Field label="Call to action">
+              <input
+                type="text"
+                value={(content as TalkingPointsContent).cta ?? ''}
+                onChange={(e) => onContentChange({ ...(content as TalkingPointsContent), cta: e.target.value })}
+                className="mos-field w-full"
+              />
+            </Field>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1128,6 +1177,8 @@ export default function OperatorStudioPage() {
     setActiveCampaignId,
     studioReturnTarget,
     setStudioReturnTarget,
+    recommendationSeed,
+    setRecommendationSeed,
   } = useApp();
 
   const hasProducts = selectedSourceProductIds.length > 0;
@@ -1218,7 +1269,9 @@ export default function OperatorStudioPage() {
           selectedSourceProductIds,
           selectedFormat,
           creativeDirection,
+          recommendationSeed?.recommendationId ?? null,
         );
+        setRecommendationSeed(null);
         const s: Session = {
           campaignId: result.campaignId,
           campaignName: result.campaignName,
@@ -1247,7 +1300,8 @@ export default function OperatorStudioPage() {
     setSetupError(null);
     try {
       await api.establishLocalOperatorSession();
-      const result = await api.createWholeSet(activeEntity.id, selectedSourceProductIds, creativeDirection);
+      const result = await api.createWholeSet(activeEntity.id, selectedSourceProductIds, creativeDirection, recommendationSeed?.recommendationId ?? null);
+      setRecommendationSeed(null);
       const ws: WholeSetResult = {
         campaignId: result.campaignId,
         campaignName: result.campaignName,

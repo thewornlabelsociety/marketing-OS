@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
 import { aiEnv } from '../../config/aiEnvironment';
 import { aiOrchestrator } from '../intelligence/AIOrchestrator';
+import type { MarketingRecommendationRow } from '../../types/marketingRecommendations';
 
 export type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL' | 'WHOLE_SET';
 export type CreativeDirection = 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL';
@@ -264,8 +265,9 @@ class OperatorStudioService {
     sourceProductIds: string[];
     format: SingleFormat;
     creativeDirection?: CreativeDirection | null;
+    recommendationId?: string | null;
   }): Promise<StudioSetupResult | ServiceError> {
-    const { workspaceId, sourceProductIds, format, creativeDirection = null } = params;
+    const { workspaceId, sourceProductIds, format, creativeDirection = null, recommendationId = null } = params;
 
     if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
     if (!sourceProductIds?.length) return { error: 'At least one product must be selected', code: 'BAD_REQUEST' };
@@ -280,9 +282,27 @@ class OperatorStudioService {
     const brandBrain = brandKit.brandBrain ?? {};
     const market = (brandBrain as { identity?: { market?: string } }).identity?.market ?? null;
 
-    const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as
-      | { id: string } | undefined;
-    if (!objective) return { error: 'System sales objective not found. Database may need seeding.', code: 'NOT_FOUND' };
+    // Resolve objective: from recommendation lineage if provided, else system default
+    let objectiveId: string;
+    let recRow: MarketingRecommendationRow | null = null;
+    if (recommendationId) {
+      recRow = db.prepare('SELECT * FROM marketing_recommendations WHERE id = ? AND workspace_id = ?').get(recommendationId, workspaceId) as MarketingRecommendationRow | null;
+      if (!recRow) return { error: 'Recommendation not found', code: 'NOT_FOUND' };
+      if (recRow.status !== 'NEW') return { error: 'Recommendation is no longer available', code: 'CONFLICT' };
+      if (recRow.objective_id) {
+        const validObjective = db.prepare(`SELECT id FROM objectives WHERE id = ? AND is_active = 1 AND (workspace_id = ? OR workspace_id IS NULL)`).get(recRow.objective_id, workspaceId) as { id: string } | undefined;
+        if (!validObjective) return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+        objectiveId = recRow.objective_id;
+      } else {
+        const sysObj = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+        if (!sysObj) return { error: 'System sales objective not found', code: 'NOT_FOUND' };
+        objectiveId = sysObj.id;
+      }
+    } else {
+      const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+      if (!objective) return { error: 'System sales objective not found. Database may need seeding.', code: 'NOT_FOUND' };
+      objectiveId = objective.id;
+    }
 
     const sourceRows = sourceProductIds.map(id =>
       db.prepare('SELECT * FROM source_records WHERE id = ? AND workspace_id = ?').get(id, workspaceId) as
@@ -376,9 +396,9 @@ class OperatorStudioService {
 
     db.transaction(() => {
       db.prepare(`
-        INSERT INTO campaigns (id, workspace_id, objective_id, name, status, source_type, source_title, channels, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
-      `).run(campaignId, workspaceId, objective.id, campaignName, campaignName, JSON.stringify([meta.channel]), now, now);
+        INSERT INTO campaigns (id, workspace_id, objective_id, recommendation_id, name, status, source_type, source_title, channels, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
+      `).run(campaignId, workspaceId, objectiveId, recommendationId ?? null, campaignName, campaignName, JSON.stringify([meta.channel]), now, now);
 
       db.prepare(`
         INSERT INTO campaign_plans
@@ -433,6 +453,12 @@ class OperatorStudioService {
         db.prepare(`INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at) VALUES (?, ?, ?, ?)`)
           .run(artifactId, row.id, position, now);
       });
+
+      // Atomically accept recommendation
+      if (recommendationId) {
+        db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
+          .run(campaignId, artifactId, now, now, recommendationId, workspaceId);
+      }
     })();
 
     const artifactRow = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
@@ -463,8 +489,9 @@ class OperatorStudioService {
     workspaceId: string;
     sourceProductIds: string[];
     creativeDirection?: CreativeDirection | null;
+    recommendationId?: string | null;
   }): Promise<WholeSetSetupResult | ServiceError> {
-    const { workspaceId, sourceProductIds, creativeDirection = null } = params;
+    const { workspaceId, sourceProductIds, creativeDirection = null, recommendationId = null } = params;
 
     if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
     if (!sourceProductIds?.length) return { error: 'At least one product must be selected', code: 'BAD_REQUEST' };
@@ -478,9 +505,27 @@ class OperatorStudioService {
     const brandBrain = brandKit.brandBrain ?? {};
     const market = (brandBrain as { identity?: { market?: string } }).identity?.market ?? null;
 
-    const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as
-      | { id: string } | undefined;
-    if (!objective) return { error: 'System sales objective not found.', code: 'NOT_FOUND' };
+    // Resolve objective: from recommendation lineage if provided, else system default
+    let objectiveIdWS: string;
+    let recRowWS: MarketingRecommendationRow | null = null;
+    if (recommendationId) {
+      recRowWS = db.prepare('SELECT * FROM marketing_recommendations WHERE id = ? AND workspace_id = ?').get(recommendationId, workspaceId) as MarketingRecommendationRow | null;
+      if (!recRowWS) return { error: 'Recommendation not found', code: 'NOT_FOUND' };
+      if (recRowWS.status !== 'NEW') return { error: 'Recommendation is no longer available', code: 'CONFLICT' };
+      if (recRowWS.objective_id) {
+        const validObj = db.prepare(`SELECT id FROM objectives WHERE id = ? AND is_active = 1 AND (workspace_id = ? OR workspace_id IS NULL)`).get(recRowWS.objective_id, workspaceId) as { id: string } | undefined;
+        if (!validObj) return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+        objectiveIdWS = recRowWS.objective_id;
+      } else {
+        const sysObj = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+        if (!sysObj) return { error: 'System sales objective not found', code: 'NOT_FOUND' };
+        objectiveIdWS = sysObj.id;
+      }
+    } else {
+      const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+      if (!objective) return { error: 'System sales objective not found.', code: 'NOT_FOUND' };
+      objectiveIdWS = objective.id;
+    }
 
     const sourceRows = sourceProductIds.map(id =>
       db.prepare('SELECT * FROM source_records WHERE id = ? AND workspace_id = ?').get(id, workspaceId) as
@@ -580,9 +625,9 @@ class OperatorStudioService {
 
     db.transaction(() => {
       db.prepare(`
-        INSERT INTO campaigns (id, workspace_id, objective_id, name, status, source_type, source_title, channels, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
-      `).run(campaignId, workspaceId, objective.id, campaignName, campaignName, JSON.stringify(['INSTAGRAM', 'EMAIL']), now, now);
+        INSERT INTO campaigns (id, workspace_id, objective_id, recommendation_id, name, status, source_type, source_title, channels, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
+      `).run(campaignId, workspaceId, objectiveIdWS, recommendationId ?? null, campaignName, campaignName, JSON.stringify(['INSTAGRAM', 'EMAIL']), now, now);
 
       db.prepare(`
         INSERT INTO campaign_plans
@@ -640,6 +685,13 @@ class OperatorStudioService {
             .run(artifactId, row.id, position, now);
         });
       }
+
+      // Atomically accept recommendation (use first artifact as the accepted artifact)
+      if (recommendationId) {
+        const firstArtifactId = formatIds[0]?.artifactId ?? null;
+        db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
+          .run(campaignId, firstArtifactId, now, now, recommendationId, workspaceId);
+      }
     })();
 
     const formats: WholeSetFormatResult[] = formatIds.map(({ fmt, artifactId }) => {
@@ -665,6 +717,204 @@ class OperatorStudioService {
     });
 
     return { campaignId, campaignName, formats, products, aiGenerated, creativeDirection };
+  }
+
+  async setupFounderContent(params: {
+    workspaceId: string;
+    recommendationId: string;
+  }): Promise<StudioSetupResult | ServiceError> {
+    const { workspaceId, recommendationId } = params;
+    if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
+    if (!recommendationId) return { error: 'recommendationId is required for founder content', code: 'BAD_REQUEST' };
+
+    const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
+      | { id: string; name: string; brand_kit: string } | undefined;
+    if (!entity) return { error: 'Workspace not found', code: 'NOT_FOUND' };
+
+    const recRow = db.prepare('SELECT * FROM marketing_recommendations WHERE id = ? AND workspace_id = ?').get(recommendationId, workspaceId) as MarketingRecommendationRow | null;
+    if (!recRow) return { error: 'Recommendation not found', code: 'NOT_FOUND' };
+    if (recRow.status !== 'NEW') return { error: 'Recommendation is no longer available', code: 'CONFLICT' };
+
+    // Resolve objective from recommendation lineage
+    let objectiveId: string;
+    if (recRow.objective_id) {
+      const validObj = db.prepare(`SELECT id FROM objectives WHERE id = ? AND is_active = 1 AND (workspace_id = ? OR workspace_id IS NULL)`).get(recRow.objective_id, workspaceId) as { id: string } | undefined;
+      if (!validObj) return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+      objectiveId = recRow.objective_id;
+    } else {
+      const sysObj = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+      if (!sysObj) return { error: 'System sales objective not found', code: 'NOT_FOUND' };
+      objectiveId = sysObj.id;
+    }
+
+    const talkingPoints = recRow.talking_points_json ? JSON.parse(recRow.talking_points_json) as string[] : [];
+    const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown> };
+    const brandBrain = brandKit.brandBrain ?? {};
+
+    // Try to expand talking points via AI into a richer founder script
+    let content: unknown;
+    let aiGenerated = false;
+    const founderContent = {
+      kind: 'TALKING_POINTS',
+      hook: recRow.hook ?? 'Start with something honest and personal',
+      talkingPoints,
+      angle: recRow.angle ?? null,
+      cta: recRow.cta ?? null,
+      suggestedDurationSeconds: recRow.suggested_duration_seconds ?? 45,
+    };
+
+    if (aiOrchestrator.isAvailable() && talkingPoints.length > 0) {
+      try {
+        const bb = brandBrain as { personality?: { traits?: string[] }; language?: { preferredWords?: string[]; bannedWords?: string[]; exampleCopy?: string }; audience?: { primaryAudience?: string } };
+        const systemPrompt = `You are a brand voice coach for ${entity.name}. Expand founder talking points into a warm, authentic video script structure. Return ONLY valid JSON.`;
+        const userPrompt = `Expand these talking points into a founder video script:
+Hook: ${recRow.hook ?? 'Be authentic and personal'}
+Angle: ${recRow.angle ?? 'Share a personal perspective on the shop'}
+Talking points: ${talkingPoints.join('\n- ')}
+Duration: ~${recRow.suggested_duration_seconds ?? 45} seconds
+Brand traits: ${bb.personality?.traits?.join(', ') || 'authentic, warm, considered'}
+Audience: ${bb.audience?.primaryAudience || 'fashion-conscious shoppers'}
+${bb.language?.bannedWords?.length ? `Never use: ${bb.language.bannedWords.join(', ')}` : ''}
+
+Return JSON:
+{ "kind": "TALKING_POINTS", "hook": "string", "talkingPoints": ["string", ...], "angle": "string|null", "cta": "string|null", "suggestedDurationSeconds": number }`;
+
+        const result = await aiOrchestrator.generate({
+          workspaceId,
+          taskType: 'CREATIVE_COPY',
+          scope: 'FOUNDER',
+          knowledgeDomains: ['BRAND_CORE', 'VOICE', 'CONTENT_PILLARS'],
+          systemPrompt,
+          userPrompt,
+          model: aiEnv.revisionModel,
+          maxTokens: 1000,
+        });
+        const parsed = JSON.parse(result.content) as Record<string, unknown>;
+        if (parsed.kind === 'TALKING_POINTS' && Array.isArray(parsed.talkingPoints)) {
+          content = parsed;
+          aiGenerated = true;
+        } else {
+          content = founderContent;
+        }
+      } catch {
+        content = founderContent;
+      }
+    } else {
+      content = founderContent;
+    }
+
+    const now = new Date().toISOString();
+    const campaignId = `campaign_${randomUUID()}`;
+    const planId = `plan_${randomUUID()}`;
+    const planApprovalId = `plnapp_${randomUUID()}`;
+    const contentPlanId = `cp_${randomUUID()}`;
+    const contentPlanApprovalId = `cpapp_${randomUUID()}`;
+    const deliverableId = `del_${randomUUID()}`;
+    const conceptId = `con_${randomUUID()}`;
+    const artifactId = `cart_${randomUUID()}`;
+    const contentKey = 'founder-talking-points';
+    const campaignName = recRow.title;
+    const quality = JSON.stringify({ passed: true, checks: [], warnings: [] });
+
+    const contentPlanBody = JSON.stringify({
+      summary: {
+        campaignNarrative: campaignName,
+        contentStrategy: 'Founder-voice talking points for video/story content',
+      },
+      concepts: [{ id: conceptId, contentKey, name: 'Founder Content', strategicPurpose: 'Build connection through founder voice', coreMessage: recRow.hook ?? 'A personal note', proofPoints: [] }],
+      deliverables: [{
+        id: deliverableId, contentKey, title: campaignName, purpose: 'Build audience connection',
+        campaignRole: 'Brand voice', channel: 'INSTAGRAM', contentType: 'TALKING_POINTS', format: 'VERTICAL_9_16',
+        objectiveRole: 'Build brand trust', primaryMessage: recRow.summary,
+        supportingMessages: talkingPoints, proofPoints: [],
+        creativeDirection: null,
+        assetRequirements: [],
+        sourceConceptId: conceptId,
+      }],
+      cadence: { phases: [] },
+    });
+
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO campaigns (id, workspace_id, objective_id, recommendation_id, name, status, source_type, source_title, channels, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'DRAFTING', 'FOUNDER_CONTENT', ?, ?, ?, ?)
+      `).run(campaignId, workspaceId, objectiveId, recommendationId, campaignName, campaignName, JSON.stringify(['INSTAGRAM']), now, now);
+
+      db.prepare(`
+        INSERT INTO campaign_plans
+          (id, campaign_id, workspace_id, version, status, is_current,
+           strategy_campaign_angle, strategy_core_message, strategy_proposition, strategy_audience_focus,
+           hooks, proof_points, cta_primary, cta_alternatives,
+           channels, content_mix, cadence_summary, cadence_duration,
+           creative_visual_direction, creative_copy_direction,
+           measurement_objective, measurement_primary_kpi, measurement_supporting_kpis,
+           rationale_summary, created_at, updated_at)
+        VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
+      `).run(
+        planId, campaignId, workspaceId,
+        'Founder content', recRow.hook ?? 'Personal connection',
+        'Founder brand voice', 'Existing and potential customers',
+        JSON.stringify({ primary: recRow.cta ?? 'Engage', supporting: [] }),
+        recRow.cta ?? 'Engage', 'Short-form video or story',
+        null, 'Authentic founder voice', 'Engagement', 'reach',
+        recRow.rationale,
+        now, now,
+      );
+
+      db.prepare(`INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+        .run(planApprovalId, campaignId, workspaceId, planId, now, now);
+
+      db.prepare(`INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)`)
+        .run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
+
+      db.prepare(`INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+        .run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
+
+      db.prepare(`
+        INSERT INTO creative_artifacts
+          (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
+           content_key, deliverable_id, version, status, is_current, channel, content_type, format,
+           title, content, quality, marketing_scope, creative_direction, ai_provider, ai_model, ai_generated, ai_task_type, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, 'INSTAGRAM', 'TALKING_POINTS', 'VERTICAL_9_16', ?, ?, ?, 'FOUNDER', ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        artifactId, workspaceId, campaignId, contentPlanId,
+        contentKey, deliverableId,
+        campaignName, JSON.stringify(content), quality,
+        null,
+        aiGenerated ? (aiEnv.provider ?? null) : null,
+        aiGenerated ? (aiEnv.revisionModel ?? null) : null,
+        aiGenerated ? 1 : 0,
+        aiGenerated ? 'CREATIVE_COPY' : null,
+        now, now,
+      );
+
+      // Atomically accept the recommendation
+      db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
+        .run(campaignId, artifactId, now, now, recommendationId, workspaceId);
+    })();
+
+    const artifactRow = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
+      id: string; workspace_id: string; campaign_id: string; source_content_plan_id: string;
+      source_content_plan_version: number; content_key: string; deliverable_id: string; version: number;
+      status: string; is_current: number; channel: string; content_type: string; format: string;
+      title: string | null; content: string; quality: string; created_at: string; updated_at: string;
+    };
+
+    return {
+      campaignId, campaignName, contentKey,
+      artifact: {
+        id: artifactRow.id, workspaceId: artifactRow.workspace_id, campaignId: artifactRow.campaign_id,
+        sourceContentPlanId: artifactRow.source_content_plan_id, sourceContentPlanVersion: artifactRow.source_content_plan_version,
+        contentKey: artifactRow.content_key, deliverableId: artifactRow.deliverable_id, version: artifactRow.version,
+        channel: artifactRow.channel, contentType: artifactRow.content_type, format: artifactRow.format,
+        title: artifactRow.title, content: JSON.parse(artifactRow.content) as unknown, quality: JSON.parse(artifactRow.quality) as unknown,
+        status: artifactRow.status, isCurrent: artifactRow.is_current === 1,
+        createdAt: artifactRow.created_at, updatedAt: artifactRow.updated_at,
+      },
+      products: [],
+      aiGenerated,
+      creativeDirection: null,
+    };
   }
 }
 

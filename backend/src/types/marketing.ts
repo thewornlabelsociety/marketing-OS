@@ -66,7 +66,8 @@ export type AITaskType =
   | 'CREATIVE_REVISION'
   | 'CREATIVE_WHOLE_SET'
   | 'PERFORMANCE_ANALYSIS'
-  | 'BRIEF_GENERATION';
+  | 'BRIEF_GENERATION'
+  | 'MARKETING_RECOMMENDATION';
 
 // ─── AI Brief Contract ────────────────────────────────────────────────────────
 
