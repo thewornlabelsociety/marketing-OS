@@ -476,7 +476,7 @@ function WholeSetOverview({
   const FORMAT_VISUAL: Record<StudioFormat, { aspect: string; badge: string; bgHint: string }> = {
     POST:     { aspect: 'aspect-[4/5]',  badge: '4:5',  bgHint: '' },
     CAROUSEL: { aspect: 'aspect-[4/5]',  badge: '4:5',  bgHint: '' },
-    STORY:    { aspect: 'aspect-[4/5]',  badge: '9:16', bgHint: '' },
+    STORY:    { aspect: 'aspect-[9/16]', badge: '9:16', bgHint: '' },
     EMAIL:    { aspect: 'aspect-[4/5]',  badge: 'Email', bgHint: 'bg-white' },
   };
 

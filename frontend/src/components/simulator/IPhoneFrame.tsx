@@ -4,12 +4,12 @@ export function IPhoneFrame({
   title,
   children,
 }: {
-  title: string;
+  title?: string;
   children: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center">
-      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[#71717A]">{title}</p>
+      {title && <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[#71717A]">{title}</p>}
       <div className="relative w-[260px] rounded-[2rem] border-[6px] border-[#09090B] bg-[#09090B] p-2 shadow-xl">
         <div className="absolute left-1/2 top-2 z-10 h-5 w-24 -translate-x-1/2 rounded-full bg-[#09090B]" />
         <div className="overflow-hidden rounded-[1.5rem] bg-white">

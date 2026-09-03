@@ -1,5 +1,5 @@
 import { Monitor, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChannelPreview } from '../../features/studio/ChannelPreview';
 import { api } from '../../services/api';
 import type {
@@ -46,6 +46,7 @@ export function CreativePreviewDrawer({
   const [artifact, setArtifact] = useState<CreativeArtifact | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
 
   const row = deliverables.find((d) => d.contentKey === contentKey) ?? deliverables[0];
   const capability = capabilities.find((c) => c.channel === row?.channel);
@@ -65,11 +66,29 @@ export function CreativePreviewDrawer({
     if (!contentKey) return;
     setLoading(true);
     setError('');
+    setImageUrl(undefined);
     api.getCreative(campaignId, contentKey, workspaceId)
       .then(setArtifact)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, [campaignId, contentKey, workspaceId]);
+
+  const resolveImageUrl = useCallback(async (assetId: string) => {
+    try {
+      const { url } = await api.getMediaPreviewUrl(assetId, workspaceId);
+      setImageUrl(url);
+    } catch {
+      setImageUrl(undefined);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (artifact?.mediaAssetId) {
+      void resolveImageUrl(artifact.mediaAssetId);
+    } else {
+      setImageUrl(undefined);
+    }
+  }, [artifact?.mediaAssetId, resolveImageUrl]);
 
   if (!row) return null;
 
@@ -123,7 +142,7 @@ export function CreativePreviewDrawer({
 
         <div className="flex-1 overflow-y-auto p-6">
           {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-          <ChannelPreview descriptor={descriptor} creative={artifact?.content} loading={loading} />
+          <ChannelPreview descriptor={descriptor} creative={artifact?.content} imageUrl={imageUrl} loading={loading} />
         </div>
       </aside>
     </>

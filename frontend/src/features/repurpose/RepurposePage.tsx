@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { PlatformPreview } from '../../components/preview/PlatformPreview';
 import {
-  ArrowLeft, Check, CheckCircle2, Copy, Loader2, AlertCircle, Mail, Share2,
+  ArrowLeft, Check, CheckCircle2, Copy, Loader2, AlertCircle, Mail, Share2, X,
 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
+import type { CreativeContent } from '../../types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +46,381 @@ type DestResult =
   | { destination: string; status: 'VALIDATION_FAILED';  error: string }
   | { destination: string; status: 'PERSISTENCE_FAILED'; error: string };
 
+type SuccessResult = Extract<DestResult, { status: 'SUCCEEDED' | 'ALREADY_COMPLETED' }>;
+
 type PagePhase = 'loading' | 'pick' | 'generating' | 'results' | 'error';
+
+// ─── Shared field wrapper ─────────────────────────────────────────────────────
+
+function DrawerField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+const TA = 'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none';
+const INP = 'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400';
+
+// ─── Content fields (editable per kind) ──────────────────────────────────────
+
+function ContentFields({
+  content,
+  onChange,
+}: {
+  content: CreativeContent;
+  onChange: (c: CreativeContent) => void;
+}) {
+  if (content.kind === 'STATIC_POST') {
+    return (
+      <div className="space-y-4">
+        {content.hook !== undefined && (
+          <DrawerField label="Hook">
+            <textarea rows={2} className={TA} value={content.hook ?? ''} onChange={e => onChange({ ...content, hook: e.target.value })} />
+          </DrawerField>
+        )}
+        <DrawerField label="Caption">
+          <textarea rows={6} className={TA} value={content.caption} onChange={e => onChange({ ...content, caption: e.target.value })} />
+        </DrawerField>
+        {content.cta !== undefined && (
+          <DrawerField label="CTA">
+            <input className={INP} value={content.cta ?? ''} onChange={e => onChange({ ...content, cta: e.target.value })} />
+          </DrawerField>
+        )}
+        {content.hashtags && content.hashtags.length > 0 && (
+          <DrawerField label="Hashtags">
+            <textarea rows={2} className={TA} value={content.hashtags.join(' ')} onChange={e => onChange({ ...content, hashtags: e.target.value.split(/\s+/).filter(Boolean) })} />
+          </DrawerField>
+        )}
+      </div>
+    );
+  }
+
+  if (content.kind === 'CAROUSEL') {
+    return (
+      <div className="space-y-4">
+        <DrawerField label="Opening caption">
+          <textarea rows={4} className={TA} value={content.caption} onChange={e => onChange({ ...content, caption: e.target.value })} />
+        </DrawerField>
+        {content.slides.map((slide, i) => (
+          <div key={i} className="space-y-3 rounded-xl border border-zinc-200 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Slide {slide.slideNumber}</p>
+            {slide.headline !== undefined && (
+              <DrawerField label="Headline">
+                <input className={INP} value={slide.headline ?? ''} onChange={e => {
+                  const slides = content.slides.map((s, si) => si === i ? { ...s, headline: e.target.value } : s);
+                  onChange({ ...content, slides });
+                }} />
+              </DrawerField>
+            )}
+            {slide.body !== undefined && (
+              <DrawerField label="Body">
+                <textarea rows={3} className={TA} value={slide.body ?? ''} onChange={e => {
+                  const slides = content.slides.map((s, si) => si === i ? { ...s, body: e.target.value } : s);
+                  onChange({ ...content, slides });
+                }} />
+              </DrawerField>
+            )}
+          </div>
+        ))}
+        {content.cta !== undefined && (
+          <DrawerField label="CTA">
+            <input className={INP} value={content.cta ?? ''} onChange={e => onChange({ ...content, cta: e.target.value })} />
+          </DrawerField>
+        )}
+      </div>
+    );
+  }
+
+  if (content.kind === 'STORY') {
+    return (
+      <div className="space-y-4">
+        {content.frames.map((frame, i) => (
+          <div key={i} className="space-y-3 rounded-xl border border-zinc-200 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Frame {frame.frameNumber}</p>
+            {frame.headline !== undefined && (
+              <DrawerField label="Headline">
+                <input className={INP} value={frame.headline ?? ''} onChange={e => {
+                  const frames = content.frames.map((f, fi) => fi === i ? { ...f, headline: e.target.value } : f);
+                  onChange({ ...content, frames });
+                }} />
+              </DrawerField>
+            )}
+            {frame.body !== undefined && (
+              <DrawerField label="Body">
+                <textarea rows={2} className={TA} value={frame.body ?? ''} onChange={e => {
+                  const frames = content.frames.map((f, fi) => fi === i ? { ...f, body: e.target.value } : f);
+                  onChange({ ...content, frames });
+                }} />
+              </DrawerField>
+            )}
+            {frame.cta !== undefined && (
+              <DrawerField label="CTA">
+                <input className={INP} value={frame.cta ?? ''} onChange={e => {
+                  const frames = content.frames.map((f, fi) => fi === i ? { ...f, cta: e.target.value } : f);
+                  onChange({ ...content, frames });
+                }} />
+              </DrawerField>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (content.kind === 'EMAIL') {
+    const bodyIsString = typeof content.body === 'string';
+    const bodySections = bodyIsString ? null : (content.body as { sections: { heading?: string; body: string }[] }).sections;
+    return (
+      <div className="space-y-4">
+        <DrawerField label="Subject">
+          <input className={INP} value={content.subject} onChange={e => onChange({ ...content, subject: e.target.value })} />
+        </DrawerField>
+        {content.preheader !== undefined && (
+          <DrawerField label="Preheader">
+            <input className={INP} value={content.preheader ?? ''} onChange={e => onChange({ ...content, preheader: e.target.value })} />
+          </DrawerField>
+        )}
+        {content.headline !== undefined && (
+          <DrawerField label="Headline">
+            <input className={INP} value={content.headline ?? ''} onChange={e => onChange({ ...content, headline: e.target.value })} />
+          </DrawerField>
+        )}
+        <DrawerField label="Body">
+          {bodyIsString ? (
+            <textarea rows={8} className={TA} value={content.body as string} onChange={e => onChange({ ...content, body: e.target.value })} />
+          ) : (
+            <div className="space-y-3">
+              {bodySections!.map((section, i) => (
+                <div key={i} className="space-y-1">
+                  {section.heading && <p className="text-xs font-semibold text-zinc-600">{section.heading}</p>}
+                  <textarea rows={4} className={TA} value={section.body} onChange={e => {
+                    const sections = bodySections!.map((s, si) => si === i ? { ...s, body: e.target.value } : s);
+                    onChange({ ...content, body: { sections } });
+                  }} />
+                </div>
+              ))}
+            </div>
+          )}
+        </DrawerField>
+        {content.cta?.label !== undefined && (
+          <DrawerField label="CTA label">
+            <input className={INP} value={content.cta.label} onChange={e => onChange({ ...content, cta: { ...content.cta!, label: e.target.value } })} />
+          </DrawerField>
+        )}
+      </div>
+    );
+  }
+
+  if (content.kind === 'TALKING_POINTS') {
+    // Runtime field name may be `points` (canonical) or `talkingPoints` (legacy)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pts: string[] = (content as any).points ?? (content as any).talkingPoints ?? [];
+    const setPoints = (next: string[]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const hasLegacyField = 'talkingPoints' in (content as any);
+      onChange(hasLegacyField
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ? { ...content, talkingPoints: next } as any
+        : { ...content, points: next } as CreativeContent
+      );
+    };
+    return (
+      <div className="space-y-4">
+        <DrawerField label="Hook">
+          <textarea rows={2} className={TA} value={content.hook} onChange={e => onChange({ ...content, hook: e.target.value })} />
+        </DrawerField>
+        <DrawerField label="Talking points">
+          <div className="space-y-2">
+            {pts.map((pt, i) => (
+              <div key={i} className="flex gap-2">
+                <span className="mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] font-semibold text-zinc-500">{i + 1}</span>
+                <textarea rows={2} className={`${TA} flex-1`} value={pt} onChange={e => setPoints(pts.map((p, pi) => pi === i ? e.target.value : p))} />
+              </div>
+            ))}
+          </div>
+        </DrawerField>
+        {content.closingCta !== undefined && (
+          <DrawerField label="Closing CTA">
+            <input className={INP} value={content.closingCta ?? ''} onChange={e => onChange({ ...content, closingCta: e.target.value })} />
+          </DrawerField>
+        )}
+      </div>
+    );
+  }
+
+  return <p className="text-xs text-zinc-400">Preview not available for this content type.</p>;
+}
+
+// ─── Preview helpers ──────────────────────────────────────────────────────────
+
+function repurposeContentTypeToFormat(ct: string): string {
+  switch (ct.toUpperCase()) {
+    case 'CAROUSEL': return 'carousel';
+    case 'STORY': return 'story';
+    case 'SHORT_VIDEO': return 'short-video';
+    case 'EMAIL': case 'NEWSLETTER': return 'newsletter';
+    default: return 'feed';
+  }
+}
+
+// ─── Version review drawer ────────────────────────────────────────────────────
+
+function VersionReviewDrawer({
+  result,
+  source,
+  workspaceId,
+  onClose,
+  onApproved,
+}: {
+  result: SuccessResult;
+  source: SourceSummary;
+  workspaceId: string;
+  onClose: () => void;
+  onApproved: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [content, setContent] = useState<CreativeContent | null>(null);
+  const [artifactId, setArtifactId] = useState('');
+  const [approved, setApproved] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+  const [previewChannel, setPreviewChannel] = useState('instagram');
+  const [previewFormat, setPreviewFormat] = useState('feed');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentRef = useRef<CreativeContent | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.getCreative(source.campaignId, result.contentKey, workspaceId)
+      .then(async a => {
+        if (cancelled) return;
+        const c = a.content as unknown as CreativeContent;
+        setContent(c);
+        contentRef.current = c;
+        setArtifactId(a.id);
+        setApproved(a.status === 'APPROVED');
+        setPreviewChannel(String(a.channel).toLowerCase());
+        setPreviewFormat(repurposeContentTypeToFormat(String(a.contentType)));
+        if (a.mediaAssetId) {
+          try {
+            const { url } = await api.getMediaPreviewUrl(a.mediaAssetId, workspaceId);
+            if (!cancelled) setImageUrl(url);
+          } catch { /* no image */ }
+        }
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [source.campaignId, result.contentKey, workspaceId]);
+
+  const persistContent = useCallback((c: CreativeContent) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await api.patchCreative(source.campaignId, result.contentKey, workspaceId, c);
+      } catch { /* silent */ }
+    }, 800);
+  }, [source.campaignId, result.contentKey, workspaceId]);
+
+  const handleContentChange = useCallback((c: CreativeContent) => {
+    setContent(c);
+    contentRef.current = c;
+    persistContent(c);
+  }, [persistContent]);
+
+  const handleApprove = async () => {
+    if (approving || approved || !artifactId) return;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      if (contentRef.current) {
+        try { await api.patchCreative(source.campaignId, result.contentKey, workspaceId, contentRef.current); } catch { /* silent */ }
+      }
+    }
+    setApproving(true);
+    try {
+      await api.approveCreative(source.campaignId, result.contentKey, workspaceId, artifactId);
+      setApproved(true);
+      onApproved();
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[520px] flex-col bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <p className="text-sm font-semibold text-zinc-950">{result.destination}</p>
+            {approved
+              ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Approved</span>
+              : <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">Ready for review</span>
+            }
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading && (
+            <div className="flex h-48 items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+            </div>
+          )}
+          {!loading && (
+            <>
+              <div className="border-b border-zinc-100 bg-zinc-50 px-5 py-5">
+                <PlatformPreview
+                  channel={previewChannel}
+                  format={previewFormat}
+                  creative={content}
+                  imageUrl={imageUrl}
+                />
+              </div>
+              {content && (
+                <div className="px-5 py-5">
+                  <ContentFields content={content} onChange={handleContentChange} />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="shrink-0 border-t border-zinc-100 bg-white px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" onClick={onClose} className="text-xs text-zinc-400 hover:text-zinc-700">Close</button>
+            {approved ? (
+              <span className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Approved
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleApprove()}
+                disabled={approving || loading}
+                className="flex items-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50"
+              >
+                {approving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                Approve
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
 // ─── Channel icon helper ──────────────────────────────────────────────────────
 
@@ -108,36 +484,48 @@ function DestinationCard({
 
 function ResultCard({
   result,
+  isApproved,
+  onOpen,
   onApprove,
 }: {
   result: DestResult;
+  isApproved: boolean;
+  onOpen: () => void;
   onApprove: (artifactId: string, contentKey: string) => Promise<void>;
 }) {
   const [approving, setApproving] = useState(false);
-  const [approved, setApproved] = useState(false);
 
   const ok = result.status === 'SUCCEEDED' || result.status === 'ALREADY_COMPLETED';
 
-  const handleApprove = async () => {
-    if (!ok || approved || approving) return;
-    const r = result as { destination: string; status: string; artifactId: string; contentKey: string };
+  const handleApproveClick = async () => {
+    if (!ok || isApproved || approving) return;
+    const r = result as SuccessResult;
     setApproving(true);
     try {
       await onApprove(r.artifactId, r.contentKey);
-      setApproved(true);
     } finally {
       setApproving(false);
     }
   };
 
   return (
-    <div className={`rounded-xl border p-4 ${ok ? 'border-zinc-200 bg-white' : 'border-red-100 bg-red-50'}`}>
-      <div className="flex items-start justify-between gap-2">
+    <div
+      role={ok ? 'button' : undefined}
+      tabIndex={ok ? 0 : undefined}
+      onClick={ok ? onOpen : undefined}
+      onKeyDown={ok ? (e) => { if (e.key === 'Enter' || e.key === ' ') onOpen(); } : undefined}
+      className={`rounded-xl border ${
+        ok
+          ? 'cursor-pointer border-zinc-200 bg-white transition hover:border-zinc-400 hover:shadow-sm'
+          : 'border-red-100 bg-red-50'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2 p-4">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-zinc-800">{result.destination}</p>
           {ok ? (
             <p className="mt-0.5 text-[10px] text-zinc-400">
-              Ready for review{result.status === 'ALREADY_COMPLETED' ? ' (existing)' : ''}
+              {isApproved ? 'Approved' : `Ready for review${result.status === 'ALREADY_COMPLETED' ? ' (existing)' : ''}`}
             </p>
           ) : (
             <p className="mt-0.5 text-[10px] text-red-600">
@@ -145,10 +533,10 @@ function ResultCard({
             </p>
           )}
         </div>
-        {ok && !approved && (
+        {ok && !isApproved && (
           <button
             type="button"
-            onClick={() => void handleApprove()}
+            onClick={e => { e.stopPropagation(); void handleApproveClick(); }}
             disabled={approving}
             className="flex shrink-0 items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-[10px] font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
           >
@@ -156,14 +544,12 @@ function ResultCard({
             Approve
           </button>
         )}
-        {ok && approved && (
+        {ok && isApproved && (
           <span className="flex shrink-0 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] font-semibold text-emerald-700">
             <CheckCircle2 className="h-3 w-3" /> Approved
           </span>
         )}
-        {!ok && (
-          <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-        )}
+        {!ok && <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />}
       </div>
     </div>
   );
@@ -182,10 +568,11 @@ export default function RepurposePage() {
   const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState<DestResult[]>([]);
   const [overallStatus, setOverallStatus] = useState<'COMPLETED' | 'PARTIAL' | 'FAILED' | null>(null);
+  const [approvedSet, setApprovedSet] = useState<Set<string>>(new Set());
+  const [drawerResult, setDrawerResult] = useState<SuccessResult | null>(null);
 
   const workspaceId = activeEntity?.id ?? '';
 
-  // Load destinations + source on mount
   useEffect(() => {
     if (!workspaceId || !repurposeSourceArtifactId) {
       setErrorMsg('No source artifact selected. Return to the studio and choose a format to repurpose.');
@@ -201,11 +588,9 @@ export default function RepurposePage() {
           api.getRepurposeSource(workspaceId, repurposeSourceArtifactId),
         ]);
         if (cancelled) return;
-        // Exclude the source's own channel/contentType to avoid self-repurpose
         const filtered = dests.filter(d => !(d.channel === src.channel && d.contentType === src.contentType));
         setDestinations(filtered);
         setSource(src);
-        // Pre-select only destinations whose channel is enabled in the workspace channel strategy
         const preSelected = new Set(filtered.filter(d => d.channelEnabled !== false).map(d => d.label));
         setSelected(preSelected);
         setPhase('pick');
@@ -255,10 +640,11 @@ export default function RepurposePage() {
     }
   };
 
-  const handleApprove = async (artifactId: string, contentKey: string) => {
+  const handleApprove = useCallback(async (artifactId: string, contentKey: string, destination: string) => {
     if (!source) return;
     await api.approveCreative(source.campaignId, contentKey, workspaceId, artifactId);
-  };
+    setApprovedSet(prev => { const s = new Set(prev); s.add(destination); return s; });
+  }, [source, workspaceId]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -302,7 +688,6 @@ export default function RepurposePage() {
 
     return (
       <div className="flex h-full flex-col overflow-hidden">
-        {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 bg-white px-4 py-3">
           <div className="flex items-center gap-3">
             <button
@@ -335,7 +720,13 @@ export default function RepurposePage() {
               <ResultCard
                 key={r.destination}
                 result={r}
-                onApprove={handleApprove}
+                isApproved={approvedSet.has(r.destination)}
+                onOpen={() => {
+                  if (r.status === 'SUCCEEDED' || r.status === 'ALREADY_COMPLETED') {
+                    setDrawerResult(r as SuccessResult);
+                  }
+                }}
+                onApprove={(artifactId, contentKey) => handleApprove(artifactId, contentKey, r.destination)}
               />
             ))}
           </div>
@@ -346,6 +737,19 @@ export default function RepurposePage() {
             </p>
           )}
         </div>
+
+        {drawerResult && source && (
+          <VersionReviewDrawer
+            result={drawerResult}
+            source={source}
+            workspaceId={workspaceId}
+            onClose={() => setDrawerResult(null)}
+            onApproved={() => {
+              setApprovedSet(prev => { const s = new Set(prev); s.add(drawerResult.destination); return s; });
+              setDrawerResult(null);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -353,7 +757,6 @@ export default function RepurposePage() {
   // phase === 'pick'
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
       <div className="flex shrink-0 items-center gap-3 border-b border-zinc-100 bg-white px-4 py-3">
         <button
           onClick={handleBack}
@@ -368,7 +771,6 @@ export default function RepurposePage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-8">
-        {/* Source summary */}
         {source && (
           <div className="mb-8 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
             <p className="mos-eyebrow mb-1">Source</p>
@@ -383,7 +785,6 @@ export default function RepurposePage() {
           </div>
         )}
 
-        {/* Destination picker */}
         <p className="mos-eyebrow mb-3">Choose channels to generate</p>
         <div className="grid gap-2 sm:grid-cols-2">
           {destinations.map(d => (
@@ -398,7 +799,6 @@ export default function RepurposePage() {
         </div>
       </div>
 
-      {/* Footer action */}
       <div className="shrink-0 border-t border-zinc-100 bg-white px-6 py-4">
         <div className="flex items-center justify-between">
           <p className="text-xs text-zinc-400">
