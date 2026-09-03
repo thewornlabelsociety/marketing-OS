@@ -3,6 +3,7 @@ import { db } from '../../db/database';
 import { aiEnv } from '../../config/aiEnvironment';
 import { aiOrchestrator } from '../intelligence/AIOrchestrator';
 import type { MarketingRecommendationRow } from '../../types/marketingRecommendations';
+import { findDestination } from '../../types/studioDestinations';
 
 export type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL' | 'WHOLE_SET';
 export type CreativeDirection = 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL';
@@ -70,11 +71,17 @@ type ServiceError = { error: string; code: string };
 type SingleFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL';
 const SINGLE_FORMATS: SingleFormat[] = ['POST', 'CAROUSEL', 'STORY', 'EMAIL'];
 
+function destMeta(channel: string, contentType: string): { channel: string; contentType: string; format: string } {
+  const d = findDestination(channel, contentType);
+  if (!d) throw new Error(`No CREATIVE_DESTINATIONS entry for ${channel}/${contentType}`);
+  return { channel: d.channel, contentType: d.contentType, format: d.format };
+}
+
 const FORMAT_META: Record<SingleFormat, { channel: string; contentType: string; format: string; contentKey: string; title: string }> = {
-  POST:     { channel: 'INSTAGRAM', contentType: 'STATIC_POST',  format: 'PORTRAIT_4_5',  contentKey: 'new-arrivals-ig-post',     title: 'New Arrivals — Instagram Post' },
-  CAROUSEL: { channel: 'INSTAGRAM', contentType: 'CAROUSEL',     format: 'PORTRAIT_4_5',  contentKey: 'new-arrivals-ig-carousel',  title: 'New Arrivals — Instagram Carousel' },
-  STORY:    { channel: 'INSTAGRAM', contentType: 'STORY',         format: 'VERTICAL_9_16', contentKey: 'new-arrivals-ig-story',    title: 'New Arrivals — Instagram Story' },
-  EMAIL:    { channel: 'EMAIL',     contentType: 'EMAIL',         format: 'NEWSLETTER',    contentKey: 'new-arrivals-email',       title: 'New Arrivals — Email' },
+  POST:     { ...destMeta('INSTAGRAM', 'STATIC_POST'), contentKey: 'new-arrivals-ig-post',     title: 'New Arrivals — Instagram Post' },
+  CAROUSEL: { ...destMeta('INSTAGRAM', 'CAROUSEL'),    contentKey: 'new-arrivals-ig-carousel',  title: 'New Arrivals — Instagram Carousel' },
+  STORY:    { ...destMeta('INSTAGRAM', 'STORY'),        contentKey: 'new-arrivals-ig-story',    title: 'New Arrivals — Instagram Story' },
+  EMAIL:    { ...destMeta('EMAIL',     'EMAIL'),         contentKey: 'new-arrivals-email',       title: 'New Arrivals — Email' },
 };
 
 function directionSystemNote(direction: CreativeDirection | null): string {

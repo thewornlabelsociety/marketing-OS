@@ -316,6 +316,7 @@ export type PlannedContentType =
   | 'ARTICLE'
   | 'LANDING_PAGE'
   | 'DOCUMENT'
+  | 'TALKING_POINTS'
   | 'OTHER';
 
 export type ContentFormat =
@@ -468,7 +469,8 @@ export type CreativeContent =
   | { kind: 'NEWSLETTER'; subject: string; preheader?: string; sections: { heading?: string; body: string }[]; cta?: { label: string; destinationDescription?: string }; footerNotes?: string }
   | { kind: 'TEXT_POST'; hook?: string; body: string; cta?: string }
   | { kind: 'ARTICLE'; title: string; excerpt?: string; sections: { heading?: string; body: string }[]; cta?: string }
-  | { kind: 'LANDING_PAGE'; hero: { eyebrow?: string; headline: string; supportingText?: string; cta?: string }; sections: { heading?: string; body: string }[]; closingCta?: string };
+  | { kind: 'LANDING_PAGE'; hero: { eyebrow?: string; headline: string; supportingText?: string; cta?: string }; sections: { heading?: string; body: string }[]; closingCta?: string }
+  | { kind: 'TALKING_POINTS'; hook: string; points: string[]; closingCta?: string; visualNotes?: string };
 
 export interface CreativeArtifact {
   id: string;
@@ -800,6 +802,7 @@ export type AppTab =
   | 'operator-studio'
   | 'creative-studio'
   | 'planner'
+  | 'repurpose'
   | 'learn';
 
 export interface StudioLibraryProduct {

@@ -35,7 +35,7 @@ const CAPABILITIES: Record<MarketingChannel, ChannelCapability> = {
   },
   TIKTOK: {
     channel: 'TIKTOK',
-    supportedContentTypes: ['SHORT_VIDEO'],
+    supportedContentTypes: ['SHORT_VIDEO', 'TALKING_POINTS'],
     supportedFormats: ['VERTICAL_9_16'],
     supportedDevices: ['mobile'],
     preferredAspectRatios: ['9:16'],

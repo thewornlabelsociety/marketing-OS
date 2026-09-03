@@ -65,6 +65,7 @@ export type AITaskType =
   | 'CREATIVE_COPY'
   | 'CREATIVE_REVISION'
   | 'CREATIVE_WHOLE_SET'
+  | 'CONTENT_REPURPOSE'
   | 'PERFORMANCE_ANALYSIS'
   | 'BRIEF_GENERATION'
   | 'MARKETING_RECOMMENDATION';
@@ -79,7 +80,10 @@ export type AITaskType =
 export interface MarketingAIBrief {
   workspaceId: string;
   taskType: AITaskType;
-  scope: MarketingScope;
+  /** Single scope — for tasks that operate in one scope. Made optional for cross-channel repurpose tasks. */
+  scope?: MarketingScope;
+  /** Multi-scope — for repurpose tasks that inherit scope from the source artifact's recommendation lineage. */
+  marketingScopes?: MarketingScope[];
   knowledgeDomains: KnowledgeDomain[];
   systemPrompt: string;
   userPrompt: string;

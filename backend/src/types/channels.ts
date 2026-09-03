@@ -17,6 +17,7 @@ export type PlannedContentType =
   | 'ARTICLE'
   | 'LANDING_PAGE'
   | 'DOCUMENT'
+  | 'TALKING_POINTS'
   | 'OTHER';
 
 export type ContentFormat =

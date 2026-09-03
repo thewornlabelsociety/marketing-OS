@@ -4,6 +4,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  Copy,
   GripVertical,
   ImageOff,
   Loader2,
@@ -424,8 +425,10 @@ function WholeSetOverview({
   onOpenFormat: (fmt: StudioFormat) => void;
   onBack: () => void;
 }) {
-  const { activeEntity } = useApp();
+  const { activeEntity, setRepurposeSourceArtifactId, setActiveTab } = useApp();
   const [approveState, setApproveState] = useState<ApproveAllState>('idle');
+  const [versionsMenuOpen, setVersionsMenuOpen] = useState(false);
+  const versionsMenuRef = useRef<HTMLDivElement>(null);
   const [localStatuses, setLocalStatuses] = useState<Record<string, string>>(() =>
     Object.fromEntries(result.formats.map(f => [f.format, f.artifact.status]))
   );
@@ -497,25 +500,60 @@ function WholeSetOverview({
             </span>
           )}
         </div>
-        {/* Approve all */}
-        {!allApproved && approveState !== 'done' ? (
-          <button
-            onClick={() => void handleApproveAll()}
-            disabled={approveState === 'approving'}
-            className="flex items-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50"
-          >
-            {approveState === 'approving' ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-3.5 w-3.5" />
+        {/* Right-side actions */}
+        <div className="flex items-center gap-2">
+          {/* Create versions dropdown */}
+          <div className="relative" ref={versionsMenuRef}>
+            <button
+              type="button"
+              onClick={() => setVersionsMenuOpen(v => !v)}
+              className="flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Create versions
+              <ChevronDown className="h-3 w-3 text-zinc-400" />
+            </button>
+            {versionsMenuOpen && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl border border-zinc-200 bg-white py-1 shadow-lg">
+                {result.formats.map(({ format: fmt, artifact: a }) => (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => {
+                      setVersionsMenuOpen(false);
+                      setRepurposeSourceArtifactId(a.id);
+                      setActiveTab('repurpose');
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <Copy className="h-3 w-3 text-zinc-400" />
+                    {FORMAT_LABELS[fmt]}
+                  </button>
+                ))}
+              </div>
             )}
-            Looks good to all
-          </button>
-        ) : (
-          <div className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-            <CheckCircle2 className="h-3.5 w-3.5" /> All approved
           </div>
-        )}
+
+          {/* Approve all */}
+          {!allApproved && approveState !== 'done' ? (
+            <button
+              onClick={() => void handleApproveAll()}
+              disabled={approveState === 'approving'}
+              className="flex items-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {approveState === 'approving' ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              Looks good to all
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+              <CheckCircle2 className="h-3.5 w-3.5" /> All approved
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-8">
@@ -1179,16 +1217,22 @@ export default function OperatorStudioPage() {
     setStudioReturnTarget,
     recommendationSeed,
     setRecommendationSeed,
+    studioWholeSetResult,
+    setStudioWholeSetResult,
   } = useApp();
 
   const hasProducts = selectedSourceProductIds.length > 0;
-  const initialStep: PageStep = studioReturnTarget ? 'studio' : hasProducts ? 'format' : 'source-select';
+  const initialStep: PageStep = studioReturnTarget ? 'studio'
+    : studioWholeSetResult ? 'whole-set'
+    : hasProducts ? 'format' : 'source-select';
 
   const [step, setStep] = useState<PageStep>(initialStep);
   const [format, setFormat] = useState<StudioFormat | null>(null);
   const [creativeDirection, setCreativeDirection] = useState<CreativeDirection | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [wholeSetResult, setWholeSetResult] = useState<WholeSetResult | null>(null);
+  const [wholeSetResult, setWholeSetResult] = useState<WholeSetResult | null>(
+    studioWholeSetResult as WholeSetResult | null
+  );
   const [setupError, setSetupError] = useState<string | null>(null);
 
   // Studio editing state
@@ -1315,12 +1359,13 @@ export default function OperatorStudioPage() {
         creativeDirection,
       };
       setWholeSetResult(ws);
+      setStudioWholeSetResult(ws);
       setStep('whole-set');
     } catch (err) {
       setSetupError((err as Error).message);
       setStep('error');
     }
-  }, [activeEntity, selectedSourceProductIds, creativeDirection]);
+  }, [activeEntity, selectedSourceProductIds, creativeDirection, setStudioWholeSetResult]);
 
   const persistEdit = useCallback(
     async (newContent: ArtifactContent) => {

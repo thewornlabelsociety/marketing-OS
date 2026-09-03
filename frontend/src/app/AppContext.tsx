@@ -47,6 +47,10 @@ interface AppContextValue {
   recommendationSeed: RecommendationSeed | null;
   setRecommendationSeed: (seed: RecommendationSeed | null) => void;
   launchFromRecommendation: (seed: RecommendationSeed) => void;
+  repurposeSourceArtifactId: string | null;
+  setRepurposeSourceArtifactId: (id: string | null) => void;
+  studioWholeSetResult: unknown | null;
+  setStudioWholeSetResult: (r: unknown | null) => void;
 }
 
 const defaultDraft: DropDraft = {
@@ -74,11 +78,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [studioReturnTarget, setStudioReturnTarget] = useState<StudioLibraryItem | null>(null);
   const [studioKey, setStudioKey] = useState(0);
   const [recommendationSeed, setRecommendationSeed] = useState<RecommendationSeed | null>(null);
+  const [repurposeSourceArtifactId, setRepurposeSourceArtifactId] = useState<string | null>(null);
+  const [studioWholeSetResult, setStudioWholeSetResult] = useState<unknown | null>(null);
 
   const newStudioSession = useCallback(() => {
     setSelectedSourceProductIds([]);
     setStudioReturnTarget(null);
     setRecommendationSeed(null);
+    setStudioWholeSetResult(null);
     setStudioKey((k) => k + 1);
     setActiveTab('operator-studio');
   }, []);
@@ -197,6 +204,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     recommendationSeed,
     setRecommendationSeed,
     launchFromRecommendation,
+    repurposeSourceArtifactId,
+    setRepurposeSourceArtifactId,
+    studioWholeSetResult,
+    setStudioWholeSetResult,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

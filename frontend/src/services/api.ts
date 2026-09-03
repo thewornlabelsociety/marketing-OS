@@ -602,4 +602,45 @@ export const api = {
     request<{ campaignId: string; usageId: string }>(`/blueprints/${blueprintId}/use`, { method: 'POST', body: JSON.stringify({ workspaceId, ...payload }) }),
   suggestBlueprints: (workspaceId: string, opts?: { objectiveType?: string; channels?: string }) =>
     request<CampaignBlueprint[]>(`/blueprints/suggest?workspaceId=${encodeURIComponent(workspaceId)}${opts?.objectiveType ? `&objectiveType=${opts.objectiveType}` : ''}`),
+
+  // Repurpose
+  getRepurposeDestinations: (workspaceId: string) =>
+    request<Array<{ channel: string; contentType: string; format: string; label: string; supportsCreative: boolean; supportsScheduling: boolean; supportsPublishing: boolean; channelEnabled: boolean }>>(`/repurpose/destinations?workspaceId=${encodeURIComponent(workspaceId)}`),
+
+  getRepurposeSource: (workspaceId: string, artifactId: string) =>
+    request<{
+      id: string;
+      campaignId: string;
+      channel: string;
+      contentType: string;
+      format: string;
+      title: string | null;
+      status: string;
+      summary: {
+        sourceLabel: string;
+        campaignName: string;
+        hook: string | null;
+        caption: string | null;
+        headline: string | null;
+        contentElements: string[];
+        cta: string | null;
+      };
+    }>(`/repurpose/source/${encodeURIComponent(artifactId)}?workspaceId=${encodeURIComponent(workspaceId)}`),
+
+  repurposeArtifact: (params: { workspaceId: string; sourceArtifactId: string; destinations: string[]; idempotencyKey: string }) =>
+    request<{
+      requestId: string;
+      sourceArtifactId: string;
+      status: 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'IN_PROGRESS';
+      results: Array<
+        | { destination: string; status: 'SUCCEEDED';         artifactId: string; contentKey: string }
+        | { destination: string; status: 'ALREADY_COMPLETED'; artifactId: string; contentKey: string }
+        | { destination: string; status: 'AI_FAILED';          error: string }
+        | { destination: string; status: 'VALIDATION_FAILED';  error: string }
+        | { destination: string; status: 'PERSISTENCE_FAILED'; error: string }
+      >;
+    }>('/repurpose', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
 };

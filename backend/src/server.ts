@@ -34,6 +34,7 @@ import { resolveWornLabelIntegrationEnvironment } from './config/businessIntegra
 import { intelligenceRouter } from './routes/intelligence';
 import { recommendationsRouter } from './routes/recommendations';
 import { plannerRouter } from './routes/planner';
+import { repurposeRouter } from './routes/repurpose';
 
 const app = express();
 app.use(cors({ origin: /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/, credentials: true }));
@@ -72,6 +73,7 @@ app.use('/api/business-sources', businessSourcesRouter);
 app.use('/api/intelligence', intelligenceRouter);
 app.use('/api/recommendations', recommendationsRouter);
 app.use('/api/planner', plannerRouter);
+app.use('/api/repurpose', repurposeRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'marketing-os-backend' });
