@@ -1,6 +1,7 @@
 // Marketing Recommendations — Phase 4B types
 
 import type { MarketingScope, ChannelKey } from './marketing';
+import type { OrganicIntelligenceSummary } from '../services/intelligence/OrganicPlannerService';
 
 export type RecommendationStatus =
   | 'NEW'
@@ -118,7 +119,11 @@ export interface RecommendationContext {
   recentUnderperformingCampaign: boolean;
   recentDismissals: { type: string; count: number }[];
   contextSignature: string;
+  plannerIntelligence?: OrganicIntelligenceSummary;
 }
+
+// Re-export for consumers that import from this module
+export type { OrganicIntelligenceSummary };
 
 // ─── Generation result ────────────────────────────────────────────────────────
 

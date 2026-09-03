@@ -1,6 +1,7 @@
 import {
   BarChart3,
   CalendarDays,
+  LayoutGrid,
   Layers,
   LayoutDashboard,
   Rocket,
@@ -19,6 +20,7 @@ const PRIMARY_NAV: NavItem[] = [
   { id: 'creative-studio', label: 'Creative Studio', icon: Layers },
   { id: 'campaigns', label: 'Campaigns', icon: Rocket },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+  { id: 'planner', label: 'Planner', icon: LayoutGrid },
   { id: 'learn', label: 'Learn', icon: BarChart3 },
 ];
 

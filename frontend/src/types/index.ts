@@ -799,6 +799,7 @@ export type AppTab =
   | 'studio'
   | 'operator-studio'
   | 'creative-studio'
+  | 'planner'
   | 'learn';
 
 export interface StudioLibraryProduct {

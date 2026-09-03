@@ -33,6 +33,7 @@ import { establishLocalOperatorSession } from './middleware/localOperatorSession
 import { resolveWornLabelIntegrationEnvironment } from './config/businessIntegrationEnvironment';
 import { intelligenceRouter } from './routes/intelligence';
 import { recommendationsRouter } from './routes/recommendations';
+import { plannerRouter } from './routes/planner';
 
 const app = express();
 app.use(cors({ origin: /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/, credentials: true }));
@@ -70,6 +71,7 @@ app.post('/api/local-operator-session', establishLocalOperatorSession);
 app.use('/api/business-sources', businessSourcesRouter);
 app.use('/api/intelligence', intelligenceRouter);
 app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/planner', plannerRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'marketing-os-backend' });

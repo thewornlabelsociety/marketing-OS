@@ -3,6 +3,7 @@ import { db } from '../../db/database';
 import { marketingKnowledgeService } from './MarketingKnowledgeService';
 import { channelStrategyService } from './ChannelStrategyService';
 import { campaignPerformanceService } from '../performance/CampaignPerformanceService';
+import { organicPlannerService } from './OrganicPlannerService';
 import type {
   RecommendationContext,
   RecommendationInventoryItem,
@@ -318,6 +319,10 @@ class RecommendationContextAssembler {
       recentUnderperformingCampaign,
       recentDismissals: recentDismissals.map(r => ({ type: r.recommendation_type, count: r.dismissal_count })),
       contextSignature,
+      plannerIntelligence: (() => {
+        try { return organicPlannerService.getIntelligenceSummary(workspaceId); }
+        catch { return undefined; }
+      })(),
     };
   }
 }

@@ -554,6 +554,19 @@ export const api = {
       body: JSON.stringify({ workspaceId, measurementWindow }),
     }),
 
+  // Organic Planner
+  getOrganicPlan: (workspaceId: string, channel = 'instagram', days = 30) =>
+    request<{
+      channel: string;
+      channelStrategy: { enabled: boolean; priority: string | null };
+      currentFeed: Array<Record<string, unknown>>;
+      plannedFeed: Array<Record<string, unknown>>;
+      readyToPlace: Array<Record<string, unknown>>;
+      proposedNext: Array<Record<string, unknown>>;
+      signals: Array<{ type: string; severity: string; message: string; gapDays?: number }>;
+      summary: { publishedCount: number; scheduledCount: number; preparedCount: number; proposedCount: number; largestGapDays: number | null; hasUpcomingContent: boolean };
+    }>(`/planner?workspaceId=${encodeURIComponent(workspaceId)}&channel=${encodeURIComponent(channel)}&days=${days}`),
+
   getDashboard: (workspaceId: string) =>
     request<import('../types/dashboard').DashboardSnapshot>(`/dashboard?workspaceId=${encodeURIComponent(workspaceId)}`),
   getAttentionSignals: (workspaceId: string, status: 'OPEN' | 'ALL' = 'OPEN') =>

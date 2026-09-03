@@ -217,13 +217,37 @@ ${dismissalLines || 'No recent dismissals.'}
 
 Generate recommendations now. Return ONLY the JSON array.`;
 
+  let plannerSection = '';
+  if (ctx.plannerIntelligence) {
+    const pi = ctx.plannerIntelligence;
+    const primaryCh = pi.channels.find(c => c.channel === pi.primaryChannel) ?? pi.channels[0];
+    if (primaryCh) {
+      const countOf = (arr: string[], cls: string) => arr.filter(c => c === cls).length;
+      const recent = primaryCh.recentClassifications;
+      const upcoming = primaryCh.upcomingClassifications;
+      const prepared = primaryCh.preparedClassifications;
+      const tally = (arr: string[]) =>
+        ['PRODUCT','FOUNDER','EDITORIAL','MARKETPLACE','SHOP','BRAND','OTHER']
+          .filter(c => countOf(arr, c) > 0)
+          .map(c => `${c.charAt(0) + c.slice(1).toLowerCase()} ×${countOf(arr, c)}`)
+          .join(', ') || 'none';
+      plannerSection = `\n=== ORGANIC PLANNER INTELLIGENCE (${primaryCh.channel}, last 14 days) ===
+Recent mix: ${tally(recent)}
+Upcoming: ${tally(upcoming)}
+Ready to place: ${tally(prepared)}
+Scheduled density (next 7 days): ${primaryCh.scheduledDensity} posts
+Active signals: ${primaryCh.activeSignalTypes.join(', ') || 'none'}
+Largest posting gap: ${primaryCh.largestGapDays != null ? `${primaryCh.largestGapDays} days` : 'none detected'}`;
+    }
+  }
+
   return {
     workspaceId,
     taskType: 'MARKETING_RECOMMENDATION',
     scope: 'SHOP',
     knowledgeDomains: ['BRAND_CORE', 'AUDIENCE', 'VOICE', 'CONTENT_PILLARS', 'CHANNEL_STRATEGY'],
     systemPrompt,
-    userPrompt,
+    userPrompt: userPrompt + plannerSection,
     model: aiEnv.campaignModel,
     maxTokens: 3000,
   };

@@ -20,6 +20,7 @@ import CreatePage from './features/create/CreatePage';
 import LearnPage from './features/learn/LearnPage';
 import OperatorStudioPage from './features/studio/OperatorStudioPage';
 import CreativeStudioPage from './features/studio/CreativeStudioPage';
+import InstagramGridPlannerPage from './features/planner/InstagramGridPlannerPage';
 
 function AppShell() {
   const { activeTab, activeCampaignId, entities, loading, error, studioKey } = useApp();
@@ -72,6 +73,7 @@ function AppShell() {
               {activeTab === 'studio' && <StudioTab />}
               {activeTab === 'operator-studio' && <OperatorStudioPage key={studioKey} />}
               {activeTab === 'creative-studio' && <CreativeStudioPage />}
+              {activeTab === 'planner' && <InstagramGridPlannerPage />}
               {activeTab === 'learn' && <LearnPage />}
             </>
           )}
