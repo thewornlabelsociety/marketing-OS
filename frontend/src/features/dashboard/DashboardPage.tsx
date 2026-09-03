@@ -1,7 +1,7 @@
 ﻿import { AlertCircle, ArrowRight, CalendarDays, CheckCircle2, Lightbulb, Plus, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useApp, type RecommendationSeed } from '../../app/AppContext';
-import { Button, EmptyState, PageHeader, StatusPill } from '../../components/ui/ProductUI';
+import { Button, EmptyState, PageHeader } from '../../components/ui/ProductUI';
 import { api } from '../../services/api';
 import type { DashboardSnapshot, AttentionSignal } from '../../types/dashboard';
 import { NewArrivalsSource } from '../sources/NewArrivalsSource';
@@ -53,7 +53,20 @@ export default function DashboardPage() {
         : <div className="flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 px-6 py-5"><div><p className="text-sm font-semibold text-zinc-700">What should we market today?</p><p className="mt-1 text-xs text-zinc-500">Analyse your inventory, calendar and recent content to suggest what to create next.</p></div><Button variant="secondary" onClick={()=>void generateRecs()} disabled={recsLoading}>{recsLoading ? 'Thinking...' : 'Recommend what to create'}</Button></div>
       }
     </section>
-    <div className="grid gap-10 lg:grid-cols-[1.3fr_.7fr]"><section><div className="mb-3 flex items-end justify-between"><div><p className="mos-eyebrow">Today's work</p><h2 className="mt-1 text-xl font-semibold tracking-tight">What needs you</h2></div><StatusPill tone={dashboard.counts.needsAttention ? 'warning' : 'success'}>{dashboard.counts.needsAttention + dashboard.counts.readyForReview} items</StatusPill></div><div className="divide-y divide-zinc-200 border-y border-zinc-200">{[...dashboard.needsAttention.slice(1),...dashboard.readyForYou].slice(0,5).map(s=><Signal key={s.id} signal={s} onAction={navigate} onDismiss={dismiss}/>)}{dashboard.needsAttention.slice(1).length + dashboard.readyForYou.length === 0 && <p className="py-7 text-sm text-zinc-500">No other decisions are waiting.</p>}</div></section>
+    <div className="grid gap-10 lg:grid-cols-[1.3fr_.7fr]"><section>
+      <div className="mb-3"><p className="mos-eyebrow">Today's work</p><h2 className="mt-1 text-xl font-semibold tracking-tight">What needs you</h2></div>
+      <div className="divide-y divide-zinc-200 border-y border-zinc-200">
+        {dashboard.needsAttention.slice(1,5).map(s=><Signal key={s.id} signal={s} onAction={navigate} onDismiss={dismiss}/>)}
+        {dashboard.needsAttention.slice(1).length === 0 && <p className="py-7 text-sm text-zinc-500">Nothing needs immediate attention.</p>}
+      </div>
+      {dashboard.readyForYou.length > 0 && <>
+        <p className="mos-eyebrow mt-6 mb-2">Worth doing next</p>
+        <div className="divide-y divide-zinc-200 border-y border-zinc-200">
+          {dashboard.readyForYou.slice(0,3).map(s=><Signal key={s.id} signal={s} onAction={navigate} onDismiss={dismiss}/>)}
+        </div>
+      </>}
+      {(dashboard.counts.needsAttention + dashboard.counts.readyForReview) > 0 && <button onClick={()=>setActiveTab('campaigns')} className="mt-3 text-xs text-zinc-400 hover:text-zinc-700">View all work ({dashboard.counts.needsAttention + dashboard.counts.readyForReview})</button>}
+    </section>
       <section><p className="mos-eyebrow">Coming next</p><h2 className="mt-1 text-xl font-semibold tracking-tight">On the calendar</h2><div className="mt-3 space-y-1">{dashboard.upcoming.slice(0,4).map(u=><button key={u.scheduleId} onClick={()=>setActiveTab('calendar')} className="flex w-full gap-3 rounded-xl px-2 py-3 text-left hover:bg-zinc-50"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400"/><span><span className="block text-sm font-medium">{friendlyName(u.campaignName,u.contentKey)}</span><span className="mt-1 block text-xs text-zinc-500">{u.localDayLabel} · {u.localTimeLabel} · {titleCase(u.channel)}</span></span></button>)}{dashboard.upcoming.length===0&&<p className="mt-3 rounded-xl bg-zinc-50 p-4 text-sm text-zinc-500">Nothing scheduled yet. Create or approve content to begin planning the week.</p>}</div></section></div>
     {sectionHasContent(insight) && <section className="grid gap-5 border-t border-zinc-200 pt-7 md:grid-cols-[auto_1fr_auto]"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><Lightbulb className="h-5 w-5"/></span><div><p className="mos-eyebrow">Useful learning</p><p className="mt-1 text-base font-semibold">{insight.campaignName}</p><p className="mt-1 text-sm leading-6 text-zinc-500">{insight.reasons?.[0] ?? `${insight.primaryKpi} is the clearest signal so far.`}</p></div><Button variant="quiet" onClick={()=>setActiveTab('learn')}>See what worked <ArrowRight className="h-4 w-4"/></Button></section>}
     {activeEntity?.name.trim().toLowerCase()==='worn label'&&<NewArrivalsSource/>}

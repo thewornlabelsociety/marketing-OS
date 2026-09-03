@@ -1,5 +1,5 @@
-import { Filter, ImageOff, Layers, Loader2, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Filter, ImageOff, Layers, Loader2, MoreHorizontal, Plus } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../app/AppContext';
 import { api } from '../../services/api';
 import type { StudioLibraryItem } from '../../types';
@@ -37,19 +37,30 @@ function matches(item: StudioLibraryItem, filter: StatusFilter): boolean {
   return true;
 }
 
-function LibraryCard({ item, onOpen }: { item: StudioLibraryItem; onOpen: () => void }) {
+function LibraryCard({ item, onOpen, onCreateVersions }: { item: StudioLibraryItem; onOpen: () => void; onCreateVersions: () => void }) {
   const hero = item.products[0];
   const heroImage = hero?.imageUrls[0] ?? null;
   const statusCfg = STATUS_CONFIG[item.status] ?? { label: item.status, className: 'bg-zinc-100 text-zinc-600' };
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition hover:border-zinc-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-zinc-950"
-    >
-      {/* Image area */}
-      <div className="relative aspect-[4/5] w-full overflow-hidden bg-zinc-100">
+    <div className="group relative flex flex-col rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:border-zinc-400 hover:shadow-md">
+      {/* Image area — clickable */}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="relative aspect-[4/5] w-full overflow-hidden rounded-t-2xl bg-zinc-100 focus-visible:outline-2 focus-visible:outline-zinc-950 text-left"
+      >
         {heroImage ? (
           <img
             src={heroImage}
@@ -83,7 +94,7 @@ function LibraryCard({ item, onOpen }: { item: StudioLibraryItem; onOpen: () => 
             ))}
           </div>
         )}
-      </div>
+      </button>
 
       {/* Card footer */}
       <div className="flex flex-col gap-1 p-3">
@@ -99,17 +110,38 @@ function LibraryCard({ item, onOpen }: { item: StudioLibraryItem; onOpen: () => 
               </span>
             )}
           </div>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusCfg.className}`}>
-            {statusCfg.label}
-          </span>
+          <div className="relative flex items-center gap-1" ref={menuRef}>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusCfg.className}`}>
+              {statusCfg.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(v => !v)}
+              className="rounded p-0.5 text-zinc-300 hover:text-zinc-600 focus-visible:outline-none"
+              aria-label="More options"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+            {menuOpen && (
+              <div className="absolute bottom-full right-0 mb-1 z-20 min-w-[130px] rounded-xl border border-zinc-200 bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); onCreateVersions(); }}
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                >
+                  Create versions
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
 export default function CreativeStudioPage() {
-  const { activeEntity, setActiveTab, setStudioReturnTarget, setSelectedSourceProductIds, newStudioSession } = useApp();
+  const { activeEntity, setActiveTab, setStudioReturnTarget, setSelectedSourceProductIds, newStudioSession, setRepurposeSourceArtifactId } = useApp();
   const [items, setItems] = useState<StudioLibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -229,6 +261,10 @@ export default function CreativeStudioPage() {
                 key={item.artifactId}
                 item={item}
                 onOpen={() => openItem(item)}
+                onCreateVersions={() => {
+                  setRepurposeSourceArtifactId(item.artifactId);
+                  setActiveTab('repurpose');
+                }}
               />
             ))}
           </div>

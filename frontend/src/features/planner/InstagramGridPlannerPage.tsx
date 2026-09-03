@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp, type RecommendationSeed } from '../../app/AppContext';
 import { PageHeader } from '../../components/ui/ProductUI';
 import { api } from '../../services/api';
+import { contentTypeLabel } from '../../utils/displayLabels';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -217,7 +218,7 @@ function PreparedCard({
         <p className="truncate text-sm font-semibold">{item.title ?? item.contentType ?? 'Creative'}</p>
         <div className="mt-0.5 flex flex-wrap gap-1">
           <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${CLASS_COLORS[item.classification]}`}>{classLabel(item.classification)}</span>
-          {item.contentType && <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">{item.contentType}</span>}
+          {item.contentType && <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">{contentTypeLabel(item.contentType)}</span>}
         </div>
       </div>
       <button

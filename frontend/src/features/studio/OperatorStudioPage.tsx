@@ -1219,6 +1219,7 @@ export default function OperatorStudioPage() {
     setRecommendationSeed,
     studioWholeSetResult,
     setStudioWholeSetResult,
+    setRepurposeSourceArtifactId,
   } = useApp();
 
   const hasProducts = selectedSourceProductIds.length > 0;
@@ -1247,6 +1248,8 @@ export default function OperatorStudioPage() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [pickerProducts, setPickerProducts] = useState<StudioProduct[]>([]);
+  const [entrySource] = useState<'fresh' | 'library'>(() => studioReturnTarget ? 'library' : 'fresh');
+  const [setupMsgIdx, setSetupMsgIdx] = useState(0);
 
   // Populate picker products from return target or IDs
   useEffect(() => {
@@ -1299,6 +1302,12 @@ export default function OperatorStudioPage() {
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (step !== 'setup' || format) return;
+    const id = setInterval(() => setSetupMsgIdx(i => (i + 1) % 4), 1400);
+    return () => clearInterval(id);
+  }, [step, format]);
 
   const setupStudio = useCallback(
     async (selectedFormat: StudioFormat) => {
@@ -1448,6 +1457,14 @@ export default function OperatorStudioPage() {
     } else if (step === 'source-select') {
       setSelectedSourceProductIds([]);
       setActiveTab('creative-studio');
+    } else if (step === 'studio') {
+      if (entrySource === 'library') {
+        setSelectedSourceProductIds([]);
+        setWholeSetResult(null);
+        setActiveTab('creative-studio');
+      } else {
+        setStep('format');
+      }
     } else {
       setSelectedSourceProductIds([]);
       setWholeSetResult(null);
@@ -1520,16 +1537,16 @@ export default function OperatorStudioPage() {
   // ─── Setup Step ──────────────────────────────────────────────────────────────
 
   if (step === 'setup') {
-    const setupLabel = format ? FORMAT_LABELS[format] : 'Whole set';
+    const wholeSetMsgs = ['Preparing Post…', 'Preparing Carousel…', 'Preparing Story…', 'Preparing Email…'];
+    const singleMsgs = ['Writing in your brand voice', 'Adapting your selected products'];
+    const subMsg = format
+      ? `${FORMAT_LABELS[format]}${creativeDirection ? ` · ${DIRECTION_LABELS[creativeDirection]}` : ''} · ${singleMsgs[setupMsgIdx % singleMsgs.length]}`
+      : wholeSetMsgs[setupMsgIdx];
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-10">
         <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
         <p className="text-sm font-medium text-zinc-600">Creating your content…</p>
-        <p className="text-xs text-zinc-400">
-          {setupLabel}
-          {creativeDirection ? ` · ${DIRECTION_LABELS[creativeDirection]}` : ''}
-          {' · AI is writing from your brand voice'}
-        </p>
+        <p className="text-xs text-zinc-400">{subMsg}</p>
       </div>
     );
   }
@@ -1642,6 +1659,17 @@ export default function OperatorStudioPage() {
               <span className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
                 <Check className="h-3.5 w-3.5" /> Approved
               </span>
+              {session?.artifact.id && (
+                <button
+                  onClick={() => {
+                    setRepurposeSourceArtifactId(session.artifact.id);
+                    setActiveTab('repurpose');
+                  }}
+                  className="rounded-xl border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                >
+                  Create versions
+                </button>
+              )}
               <button
                 onClick={() => setScheduleOpen(true)}
                 className="rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800"
