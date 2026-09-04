@@ -1,0 +1,388 @@
+# WLS Production Remediation — Phase 2B: Payout Integrity Hardening
+
+Phase 2 produced commit:
+
+`3553bc782e07f9b55670daa14ff3bfe7d03dff8c`
+`fix(payouts): scope payment confirmation to payout runs`
+
+DO NOT PUSH IT YET.
+
+The main Phase 2 direction is correct, but three payout-integrity concerns remain.
+
+Do ONLY this hardening pass.
+
+Do not begin Phase 3.
+
+Do not modify checkout, Stripe, publishing, scheduler, intake, general store-credit architecture, or unrelated UX.
+
+---
+
+# Concern 1 — Store-credit email still performs a financial mutation
+
+The Phase 2 report states:
+
+`POST …/store-credit-email`
+
+still sends email AND marks sales/items as `STORE_CREDIT`.
+
+This violates the payout invariant established in Phase 2:
+
+**Communication must not itself be the authoritative financial event.**
+
+Audit this route completely.
+
+Determine:
+
+* exactly what financial rows it changes
+* whether it credits `consignors.store_credit`
+* whether it changes `sales.payout_status`
+* whether it changes item status
+* whether it writes to `store_credit_usage` or another ledger
+* which admin UI calls it
+
+Then separate the behaviours with the smallest safe change.
+
+Required final behaviour:
+
+### Store-credit communication
+
+Email/notification only.
+
+Must not:
+
+* mark sales STORE_CREDIT
+* credit a balance
+* mark items Paid
+* change payout financial state
+
+### Explicit store-credit confirmation
+
+Financial action only.
+
+Must:
+
+* operate on an exact payout run / exact payout-run items
+* be transactional
+* be idempotent
+* update the correct store-credit financial fields exactly once
+
+If the existing run-scoped:
+
+`markRunConsignorStoreCredit`
+
+already provides the correct financial action, use it rather than inventing a second implementation.
+
+Add regression coverage proving email alone is non-financial.
+
+---
+
+# Concern 2 — Confirm Paid must NOT assemble a payout at confirmation time
+
+The Phase 2 report says:
+
+`confirmConsignorPayoutPaid` ensures eligible sales are inserted into `payout_run_items` before calling the transactional confirmation path.
+
+Audit this carefully.
+
+We do NOT want:
+
+`Confirm Paid`
+→ discover all currently eligible pending sales
+→ construct payout contents
+→ mark them paid
+
+That makes confirmation itself determine the financial scope.
+
+Required invariant:
+
+**The exact payout contents must be fixed BEFORE payment confirmation.**
+
+Preferred flow:
+
+PENDING sales
+→ Prepare payout
+→ payout run + exact `payout_run_items` created
+→ staff reviews exact payout
+→ payment performed
+→ Confirm Paid using existing run ID
+→ only those fixed run items transition
+
+Therefore:
+
+* `confirm-payout-paid` must require an existing payout run ID, directly or through an already-established exact run relationship.
+* It must NOT add newly eligible pending sales to the run while confirming.
+* It must NOT automatically create a broad payout run during confirmation.
+* It must NOT infer payout scope from all current PENDING sales.
+
+If the current admin UI does not prepare a run before calling Confirm Paid, report that workflow and make the minimum safe adjustment required to use the existing payout-run preparation path.
+
+Do not redesign the screen.
+
+---
+
+# Concern 3 — Invalid run contents must fail atomically, not be skipped
+
+The report states:
+
+"Invalid/missing/wrong-consignor sales are skipped or flagged."
+
+That is not sufficient for a financial confirmation.
+
+For confirmation of a payout run:
+
+If any payout-run item expected to be confirmed is inconsistent, including:
+
+* missing sale
+* sale belongs to another consignor
+* item mismatch
+* unexpected payout status
+* amount/snapshot integrity problem where applicable
+
+the operation must:
+
+1. fail
+2. roll back the transaction
+3. mark none of the payout-run items newly paid
+
+Do NOT silently skip invalid rows and continue paying the rest.
+
+Idempotency is different:
+
+A run already fully confirmed may safely return an already-processed/no-op result.
+
+But a partially inconsistent unprocessed run must fail.
+
+Add a behavioural test demonstrating full rollback.
+
+---
+
+# STEP 1 — Reconfirm Git state
+
+Before edits:
+
+* HEAD must be Phase 2 commit `3553bc7`
+* Phase 2 must still be unpushed
+* origin/main should remain at the Phase 1 production commit unless it legitimately advanced
+* tracked working tree clean
+* tmp files excluded
+* recovery branches untouched
+
+If origin has advanced, inspect and report but do not discard Phase 2 work.
+
+---
+
+# STEP 2 — Add/strengthen tests first
+
+Minimum required new/updated tests:
+
+## Test I — store-credit email is non-financial
+
+Send/mock store-credit email.
+
+Assert no changes to:
+
+* sales payout status
+* items paid status
+* consignor store-credit balance
+* payout-run state other than communication metadata if applicable
+
+## Test J — explicit store-credit confirmation is run-scoped
+
+Run X contains Sale 1 only.
+
+Sale 2 for same consignor remains outside X.
+
+Confirm store credit for X.
+
+Assert:
+
+* Sale 1 receives correct store-credit outcome
+* Sale 2 remains untouched
+* credit added exactly once
+
+## Test K — cash confirmation cannot create/expand payout scope
+
+Prepare Run X with Sale 1.
+
+Create another eligible PENDING Sale 2 after preparation.
+
+Confirm Run X.
+
+Assert:
+
+* Sale 1 paid
+* Sale 2 remains PENDING
+* Sale 2 is NOT inserted into payout_run_items during confirmation
+
+## Test L — store-credit confirmation cannot create/expand payout scope
+
+Same principle for store credit.
+
+## Test M — inconsistent run rolls back completely
+
+Run X has:
+
+* one valid pending sale
+* one invalid/missing/wrong-consignor run item
+
+Attempt confirmation.
+
+Assert:
+
+* operation fails
+* valid sale remains PENDING
+* item remains unchanged
+* no credit/cash totals changed
+* run not marked processed
+
+## Test N — already completed run remains idempotent
+
+Second confirmation of a genuinely completed run is safe/no-op.
+
+---
+
+# STEP 3 — Implementation constraints
+
+Prefer modifying the Phase 2 implementation rather than adding parallel pathways.
+
+Final architecture should use payout runs as immutable confirmation scope.
+
+During confirmation:
+
+NO:
+
+* new payout run creation
+* insertion of newly eligible sales
+* consignor-wide PENDING queries used to define payment scope
+
+YES:
+
+* load existing payout run
+* load exact existing payout_run_items
+* validate all rows
+* transactional state transition
+
+---
+
+# STEP 4 — UI check
+
+Trace:
+
+* Payouts page
+* OpsHub
+* any calendar/payout quick action
+* store-credit payout action
+
+Make sure buttons now represent distinct actions:
+
+Prepare payout
+→ Confirm cash/bank paid OR Confirm store credit
+→ Send notification
+
+An email-labelled action must never carry financial side effects.
+
+Do not redesign the UI beyond what is necessary to enforce this distinction.
+
+---
+
+# STEP 5 — Full verification
+
+Run:
+
+* payout-integrity tests
+* W2 full suite
+* W1
+* W3A
+* W3B
+* relevant typechecks
+
+No previously passing tests may regress.
+
+Known baseline W1/typecheck failures may remain if genuinely unrelated.
+
+---
+
+# STEP 6 — Review all payout communication routes again
+
+Search the entire repository for:
+
+* `sendEmail`
+* payout email template names
+* `payout_status`
+* `STORE_CREDIT`
+* `Paid`
+
+within payout-related routes/services.
+
+Explicitly confirm there is no remaining route where sending a payout-related email directly performs a payout financial mutation.
+
+If another one exists, report and include it in this same Phase 2 hardening only if it is clearly part of payout communication.
+
+---
+
+# STEP 7 — Update the existing Phase 2 commit
+
+Keep this as one logical Phase 2 change.
+
+You may amend the existing unpushed commit rather than creating another commit.
+
+Preferred final commit message remains:
+
+`fix(payouts): scope payment confirmation to payout runs`
+
+Do NOT push.
+
+---
+
+# REQUIRED REPORT
+
+## Remaining Issues Found
+
+Explain each of the three concerns and what code actually did.
+
+## Store Credit Separation
+
+Show final store-credit flow:
+
+prepare
+→ explicit store-credit confirmation
+→ balance/state updated
+→ notification
+
+## Payout Scope Immutability
+
+Prove confirmation cannot add sales or create/expand the payout scope.
+
+## Invalid-Run Behaviour
+
+Explain transaction rollback for inconsistent run contents.
+
+## Regression Tests
+
+Report tests I–N and results.
+
+## Communication Route Audit
+
+List every payout-related email route and confirm whether it is financially read-only.
+
+## UI Behaviour
+
+Explain each operator action and endpoint.
+
+## Full Test Results
+
+Pass/fail/skip.
+
+## Diff Review
+
+Confirm no unrelated scope.
+
+## Final Commit
+
+SHA + message.
+
+## Push Status
+
+NOT PUSHED
+
+Stop after this report.
