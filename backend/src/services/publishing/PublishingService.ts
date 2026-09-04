@@ -98,11 +98,31 @@ export class PublishingService {
     return Boolean(row);
   }
 
+  // A PENDING attempt that is older than STALE_PENDING_THRESHOLD_MS was left behind by a
+  // crashed process. We cannot know whether the publish reached the provider, so we promote
+  // it to UNKNOWN — the same state as an acknowledged ambiguous outcome — and require operator
+  // reconciliation before retrying. Reuses the existing UNKNOWN / Resolve-as-Published flow.
+  private static readonly STALE_PENDING_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+  private promoteStalePendingToUnknown(scheduleId: string): void {
+    const cutoff = new Date(Date.now() - PublishingService.STALE_PENDING_THRESHOLD_MS).toISOString();
+    db.prepare(`
+      UPDATE publish_attempts
+      SET status = 'UNKNOWN',
+          error_code = 'STALE_PENDING',
+          error_message = 'Attempt status unknown — process may have crashed during publish',
+          error_category = 'UNKNOWN_RESULT',
+          completed_at = COALESCE(completed_at, ?)
+      WHERE schedule_id = ? AND status = 'PENDING' AND started_at < ?
+    `).run(new Date().toISOString(), scheduleId, cutoff);
+  }
+
   async publishSchedule(
     scheduleId: string,
     campaignId: string,
     options?: { manualPublish?: boolean },
   ): Promise<{ item: ScheduledContentItem; attempt?: PublishAttempt } | PublishingServiceError> {
+    this.promoteStalePendingToUnknown(scheduleId);
     if (this.hasUnknownAttempt(scheduleId)) {
       return { error: 'Previous publish outcome is unknown. Reconcile before retrying.', code: 'RECONCILIATION_REQUIRED' };
     }
@@ -265,6 +285,7 @@ export class PublishingService {
   }
 
   async retry(scheduleId: string, campaignId: string) {
+    this.promoteStalePendingToUnknown(scheduleId);
     if (this.hasUnknownAttempt(scheduleId)) {
       return { error: 'Previous publish outcome is unknown. Reconcile before retrying.', code: 'RECONCILIATION_REQUIRED' };
     }

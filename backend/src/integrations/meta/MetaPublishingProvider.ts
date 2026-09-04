@@ -5,6 +5,7 @@ import type { PublishingProvider } from '../contracts/PublishingProvider';
 import { mediaDeliveryService } from '../../services/media/MediaDeliveryService';
 import { mediaValidationService } from '../../services/media/MediaValidationService';
 import { metaGraphClient, isMetaMockMode } from './MetaGraphClient';
+import { credentialVault } from '../../services/credentials/CredentialVault';
 
 interface DestinationRow {
   id: string;
@@ -151,6 +152,32 @@ export class MetaPublishingProvider implements PublishingProvider {
       return { success: false, providerKey: this.providerKey, errorCode: 'AUTH_EXPIRED', errorMessage: 'Meta token expired', errorCategory: 'AUTH_EXPIRED' };
     }
 
+    // Credential resolution — skipped only in mock mode where no real token exists.
+    // In production, the token MUST be resolved from the encrypted vault; there is no env-var fallback.
+    let accessToken = '';
+    if (!isMetaMockMode()) {
+      if (!connection.access_credential_ref) {
+        return {
+          success: false,
+          providerKey: this.providerKey,
+          errorCode: 'CREDENTIAL_UNAVAILABLE',
+          errorMessage: 'No credential stored for this Meta connection',
+          errorCategory: 'DESTINATION_UNAVAILABLE',
+        };
+      }
+      const resolved = credentialVault.read(connection.access_credential_ref, request.workspaceId);
+      if (!resolved) {
+        return {
+          success: false,
+          providerKey: this.providerKey,
+          errorCode: 'CREDENTIAL_UNAVAILABLE',
+          errorMessage: 'Credential could not be resolved for this workspace',
+          errorCategory: 'DESTINATION_UNAVAILABLE',
+        };
+      }
+      accessToken = resolved;
+    }
+
     const imageAsset = request.mediaAssets.find(isImageAsset)!;
     const imageUrl = mediaDeliveryService.resolvePublicUrl(imageAsset, request.workspaceId)!;
 
@@ -161,6 +188,7 @@ export class MetaPublishingProvider implements PublishingProvider {
         caption: extractCaption(request.content),
         imageUrl,
         idempotencyKey: request.idempotencyKey,
+        accessToken,
       });
       return {
         success: true,

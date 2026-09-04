@@ -490,6 +490,7 @@ export interface CreativeArtifact {
   status: CreativeArtifactStatus;
   isCurrent: boolean;
   mediaAssetId?: string;
+  carouselSlideImages?: string[];
   createdAt: string;
   updatedAt: string;
 }

@@ -937,6 +937,221 @@ Return JSON:
       creativeDirection: null,
     };
   }
+  async setupFromMedia(params: {
+    workspaceId: string;
+    mediaAssetId: string;
+    brief: string;
+    format?: SingleFormat;
+    creativeDirection?: CreativeDirection | null;
+  }): Promise<StudioSetupResult | ServiceError> {
+    const { workspaceId, mediaAssetId, brief, format = 'POST', creativeDirection = null } = params;
+
+    if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
+    if (!mediaAssetId) return { error: 'mediaAssetId is required', code: 'BAD_REQUEST' };
+    if (!brief?.trim()) return { error: 'brief is required', code: 'BAD_REQUEST' };
+    if (!FORMAT_META[format]) return { error: `Invalid format. Use: ${SINGLE_FORMATS.join(', ')}`, code: 'BAD_REQUEST' };
+
+    const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
+      | { id: string; name: string; brand_kit: string } | undefined;
+    if (!entity) return { error: 'Workspace not found', code: 'NOT_FOUND' };
+
+    const asset = db.prepare("SELECT id FROM media_assets WHERE id = ? AND workspace_id = ? AND status = 'ACTIVE'").get(mediaAssetId, workspaceId) as
+      | { id: string } | undefined;
+    if (!asset) return { error: 'Media asset not found or inactive', code: 'NOT_FOUND' };
+
+    const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+    if (!objective) return { error: 'System sales objective not found. Database may need seeding.', code: 'NOT_FOUND' };
+
+    const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown> };
+    const brandBrain = brandKit.brandBrain ?? {};
+    const market = (brandBrain as { identity?: { market?: string } }).identity?.market ?? null;
+    const bb = brandBrain as { personality?: { traits?: string[]; archetype?: string }; language?: { preferredWords?: string[]; bannedWords?: string[]; ctaStyle?: string; exampleCopy?: string }; audience?: { primaryAudience?: string } };
+
+    const brandLines = [
+      bb.personality?.archetype ? `Brand archetype: ${bb.personality.archetype}` : null,
+      bb.personality?.traits?.length ? `Brand traits: ${bb.personality.traits.join(', ')}` : null,
+      bb.audience?.primaryAudience ? `Primary audience: ${bb.audience.primaryAudience}` : null,
+      bb.language?.preferredWords?.length ? `Preferred language: ${bb.language.preferredWords.join(', ')}` : null,
+      bb.language?.bannedWords?.length ? `NEVER USE: ${bb.language.bannedWords.join(', ')}` : null,
+      bb.language?.ctaStyle ? `CTA style: ${bb.language.ctaStyle}` : null,
+      bb.language?.exampleCopy ? `Example copy: ${bb.language.exampleCopy}` : null,
+    ].filter(Boolean).join('\n');
+
+    const meta = FORMAT_META[format];
+    const campaignName = brief.length > 60 ? brief.slice(0, 57) + '…' : brief;
+
+    const now = new Date().toISOString();
+    const campaignId = `campaign_${randomUUID()}`;
+    const planId = `plan_${randomUUID()}`;
+    const planApprovalId = `plnapp_${randomUUID()}`;
+    const contentPlanId = `cp_${randomUUID()}`;
+    const contentPlanApprovalId = `cpapp_${randomUUID()}`;
+    const deliverableId = `del_${randomUUID()}`;
+    const conceptId = `con_${randomUUID()}`;
+    const artifactId = `cart_${randomUUID()}`;
+    const contentKey = `media-${format.toLowerCase()}-${randomUUID().slice(0, 8)}`;
+
+    const schemas: Record<SingleFormat, string> = {
+      POST: `{ "kind": "STATIC_POST", "caption": "string (2-4 sentences with hashtags)", "hook": "string (scroll-stopping first line)", "cta": "string" }`,
+      CAROUSEL: `{ "kind": "CAROUSEL", "caption": "string (opening caption with hashtags)", "slides": [{ "slideNumber": 1, "headline": "string (max 6 words)", "body": "string (1-2 sentences)" }], "cta": "string" }`,
+      STORY: `{ "kind": "STORY", "frames": [{ "frameNumber": 1, "headline": "string (max 5 words)", "body": "string (1 sentence, optional)", "cta": "string (optional)" }] }`,
+      EMAIL: `{ "kind": "EMAIL", "subject": "string", "preheader": "string (40-60 chars)", "headline": "string", "body": "string (2-3 paragraphs)", "cta": { "label": "string", "destinationDescription": "string" } }`,
+    };
+
+    const systemPrompt = `You are a marketing copywriter for ${entity.name}${market ? `, ${market}` : ''}.
+
+ROLE: Write authentic, on-brand copy for content the operator has described. The image has already been chosen — focus entirely on the copy.
+
+CRITICAL RULES:
+1. Write copy based ONLY on the brief provided — never invent facts not stated.
+2. Match the brand voice from the Brand Brain.
+3. Copy must feel human and native — not like a generic advertisement.
+4. Never use banned words/phrases if provided.
+5. Return VALID JSON ONLY matching the required schema exactly.${directionSystemNote(creativeDirection)}`;
+
+    const userPrompt = [
+      '=== CONTENT BRIEF ===',
+      brief.trim(),
+      '',
+      `=== ${entity.name.toUpperCase()} BRAND BRAIN ===`,
+      brandLines || 'Match the existing brand personality and voice.',
+      '',
+      `=== FORMAT: ${meta.contentType} (${meta.channel}) ===`,
+      '',
+      '=== REQUIRED JSON SCHEMA ===',
+      schemas[format],
+      '',
+      directionUserNote(creativeDirection),
+    ].join('\n');
+
+    let content: unknown;
+    let aiGenerated = false;
+
+    const briefWords = brief.trim().split(/\s+/).slice(0, 6).join(' ');
+    const fallback: Record<SingleFormat, unknown> = {
+      POST: { kind: 'STATIC_POST', caption: brief.trim(), hook: briefWords, cta: 'See more via link in bio' },
+      CAROUSEL: { kind: 'CAROUSEL', caption: brief.trim(), slides: [{ slideNumber: 1, headline: briefWords, body: brief.trim() }], cta: 'See more via link in bio' },
+      STORY: { kind: 'STORY', frames: [{ frameNumber: 1, headline: briefWords, body: brief.trim() }] },
+      EMAIL: { kind: 'EMAIL', subject: briefWords, preheader: brief.trim().slice(0, 60), headline: briefWords, body: brief.trim(), cta: { label: 'See more', destinationDescription: 'Website' } },
+    };
+
+    if (aiOrchestrator.isAvailable()) {
+      try {
+        const result = await aiOrchestrator.generate({
+          workspaceId,
+          taskType: 'CREATIVE_COPY',
+          scope: 'SHOP',
+          knowledgeDomains: ['BRAND_CORE', 'VOICE'],
+          systemPrompt,
+          userPrompt,
+          model: aiEnv.revisionModel,
+          maxTokens: 2048,
+        });
+        content = JSON.parse(result.content) as unknown;
+        aiGenerated = true;
+      } catch {
+        content = fallback[format];
+      }
+    } else {
+      content = fallback[format];
+    }
+
+    const quality = JSON.stringify({ passed: true, checks: [], warnings: [] });
+
+    const contentPlanBody = JSON.stringify({
+      summary: { campaignNarrative: campaignName, contentStrategy: `Media-first ${meta.channel} content` },
+      concepts: [{ id: conceptId, contentKey, name: 'Media post', strategicPurpose: 'Publish operator-selected image with on-brand copy', coreMessage: briefWords, proofPoints: [] }],
+      deliverables: [{
+        id: deliverableId, contentKey, title: campaignName, purpose: 'Publish media with on-brand copy',
+        campaignRole: 'Primary post', channel: meta.channel, contentType: meta.contentType, format: meta.format,
+        objectiveRole: 'Drive engagement', primaryMessage: brief.trim(),
+        supportingMessages: [], proofPoints: [],
+        creativeDirection: creativeDirection ?? 'Brand-authentic',
+        assetRequirements: [{ id: 'req-1', type: 'IMAGE', description: 'Operator-selected image', required: true }],
+        sourceConceptId: conceptId,
+      }],
+      cadence: { phases: [] },
+    });
+
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO campaigns (id, workspace_id, objective_id, name, status, source_type, source_title, channels, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'DRAFTING', 'MEDIA_UPLOAD', ?, ?, ?, ?)
+      `).run(campaignId, workspaceId, objective.id, campaignName, campaignName, JSON.stringify([meta.channel]), now, now);
+
+      db.prepare(`
+        INSERT INTO campaign_plans
+          (id, campaign_id, workspace_id, version, status, is_current,
+           strategy_campaign_angle, strategy_core_message, strategy_proposition, strategy_audience_focus,
+           hooks, proof_points, cta_primary, cta_alternatives, channels, content_mix, cadence_summary, cadence_duration,
+           creative_visual_direction, creative_copy_direction,
+           measurement_objective, measurement_primary_kpi, measurement_supporting_kpis,
+           rationale_summary, created_at, updated_at)
+        VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
+      `).run(
+        planId, campaignId, workspaceId,
+        'Media-first content', brief.trim(),
+        'Brand-authentic content', 'Existing audience',
+        JSON.stringify({ primary: 'See more via link in bio', supporting: [] }),
+        'Immediate publishing',
+        creativeDirection ? `${creativeDirection} direction` : 'Brand-authentic visual',
+        'Brand voice, human copy', 'Engagement', 'engagement',
+        'Operator-selected image with AI copy',
+        now, now,
+      );
+
+      db.prepare(`INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+        .run(planApprovalId, campaignId, workspaceId, planId, now, now);
+
+      db.prepare(`INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)`)
+        .run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
+
+      db.prepare(`INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+        .run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
+
+      db.prepare(`
+        INSERT INTO creative_artifacts
+          (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
+           content_key, deliverable_id, version, status, is_current, channel, content_type, format,
+           title, content, quality, media_asset_id, creative_direction, ai_provider, ai_model, ai_generated, ai_task_type, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        artifactId, workspaceId, campaignId, contentPlanId,
+        contentKey, deliverableId,
+        meta.channel, meta.contentType, meta.format,
+        campaignName, JSON.stringify(content), quality,
+        mediaAssetId, creativeDirection ?? null,
+        aiGenerated ? (aiEnv.provider ?? null) : null,
+        aiGenerated ? (aiEnv.revisionModel ?? null) : null,
+        aiGenerated ? 1 : 0,
+        aiGenerated ? 'CREATIVE_COPY' : null,
+        now, now,
+      );
+    })();
+
+    const artifactRow = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
+      id: string; workspace_id: string; campaign_id: string; source_content_plan_id: string;
+      source_content_plan_version: number; content_key: string; deliverable_id: string; version: number;
+      status: string; is_current: number; channel: string; content_type: string; format: string;
+      title: string | null; content: string; quality: string; created_at: string; updated_at: string;
+    };
+
+    return {
+      campaignId, campaignName, contentKey,
+      artifact: {
+        id: artifactRow.id, workspaceId: artifactRow.workspace_id, campaignId: artifactRow.campaign_id,
+        sourceContentPlanId: artifactRow.source_content_plan_id, sourceContentPlanVersion: artifactRow.source_content_plan_version,
+        contentKey: artifactRow.content_key, deliverableId: artifactRow.deliverable_id, version: artifactRow.version,
+        channel: artifactRow.channel, contentType: artifactRow.content_type, format: artifactRow.format,
+        title: artifactRow.title, content: JSON.parse(artifactRow.content) as unknown, quality: JSON.parse(artifactRow.quality) as unknown,
+        status: artifactRow.status, isCurrent: artifactRow.is_current === 1,
+        createdAt: artifactRow.created_at, updatedAt: artifactRow.updated_at,
+      },
+      products: [],
+      aiGenerated,
+      creativeDirection,
+    };
+  }
 }
 
 export const operatorStudioService = new OperatorStudioService();

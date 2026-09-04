@@ -90,7 +90,28 @@ campaignCreativeRouter.get('/:contentKey', (req: CreativeReq, res: Response) => 
     res.status(404).json({ error: 'No creative exists for this deliverable' });
     return;
   }
-  res.json(artifact);
+
+  // For carousel artifacts, return ordered per-slide images from source record associations.
+  // This covers both original carousels and repurposed derivatives (source links are copied).
+  let carouselSlideImages: string[] | undefined;
+  if (artifact.content && (artifact.content as { kind?: string }).kind === 'CAROUSEL') {
+    const links = db.prepare(`
+      SELECT COALESCE(ma.storage_key, NULL) AS asset_key, sr.image_urls
+      FROM creative_source_links csl
+      LEFT JOIN source_records sr ON sr.id = csl.source_record_id
+      LEFT JOIN media_assets ma ON ma.id = csl.media_asset_id AND ma.status = 'ACTIVE'
+      WHERE csl.creative_artifact_id = ?
+      ORDER BY csl.position
+    `).all(artifact.id) as Array<{ asset_key: string | null; image_urls: string | null }>;
+
+    carouselSlideImages = links.map(l => {
+      if (l.asset_key) return `__asset__${l.asset_key}`;
+      const urls = JSON.parse(l.image_urls || '[]') as string[];
+      return urls[0] ?? '';
+    }).filter(Boolean);
+  }
+
+  res.json({ ...artifact, ...(carouselSlideImages?.length ? { carouselSlideImages } : {}) });
 });
 
 campaignCreativeRouter.get('/:contentKey/versions', (req: CreativeReq, res: Response) => {

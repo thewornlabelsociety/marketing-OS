@@ -32,6 +32,7 @@ interface Props {
   creative?: CreativeContent | null;
   planned?: PlatformPreviewPlanned;
   imageUrl?: string;
+  mediaItems?: string[];
   loading?: boolean;
 }
 
@@ -120,18 +121,19 @@ function InstagramFeedContent({ creative, imageUrl }: { creative?: CreativeConte
 
 // ─── Instagram Carousel (4:5 per slide) ──────────────────────────────────────
 
-function InstagramCarouselContent({ creative, imageUrl }: { creative?: CreativeContent | null; imageUrl?: string }) {
+function InstagramCarouselContent({ creative, imageUrl, mediaItems }: { creative?: CreativeContent | null; imageUrl?: string; mediaItems?: string[] }) {
   const slides = creative?.kind === 'CAROUSEL' ? creative.slides : [];
   const caption = creative?.kind === 'CAROUSEL' ? creative.caption : '';
   const count = Math.max(slides.length, 1);
   const [idx, setIdx] = useState(0);
   const slide = slides[idx];
+  const slideImage = mediaItems?.length ? (mediaItems[idx] ?? mediaItems[0]) : imageUrl;
 
   return (
     <div className="flex flex-col bg-white">
       <IGHeader />
       <div className="relative">
-        <ImageSlot imageUrl={imageUrl} className="aspect-[4/5]" />
+        <ImageSlot imageUrl={slideImage} className="aspect-[4/5]" />
         {slide && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-10">
             {slide.headline && <p className="text-[10px] font-bold leading-tight text-white">{slide.headline}</p>}
@@ -305,6 +307,88 @@ function FacebookPostContent({ creative, imageUrl }: { creative?: CreativeConten
   );
 }
 
+// ─── Facebook Carousel ────────────────────────────────────────────────────────
+
+function FacebookCarouselContent({ creative, imageUrl, mediaItems }: { creative?: CreativeContent | null; imageUrl?: string; mediaItems?: string[] }) {
+  const slides = creative?.kind === 'CAROUSEL' ? creative.slides : [];
+  const caption = creative?.kind === 'CAROUSEL' ? creative.caption : '';
+  const count = Math.max(slides.length, 1);
+  const [idx, setIdx] = useState(0);
+  const slide = slides[idx];
+  const slideImage = mediaItems?.length ? (mediaItems[idx] ?? mediaItems[0]) : imageUrl;
+
+  return (
+    <div className="flex flex-col bg-white">
+      {/* Facebook page header */}
+      <div className="flex items-start gap-2 px-2.5 pt-2.5 pb-1">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600">
+          <span className="text-[9px] font-bold text-white">W</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] font-semibold leading-tight text-zinc-900">Workspace</p>
+          <p className="text-[8px] text-zinc-400">Sponsored ·</p>
+        </div>
+        <MoreHorizontal className="h-3.5 w-3.5 text-zinc-400" />
+      </div>
+
+      {caption && (
+        <p className="px-2.5 pb-1 text-[9px] leading-snug text-zinc-800 line-clamp-2">{caption}</p>
+      )}
+
+      {/* Carousel image area */}
+      <div className="relative">
+        <ImageSlot imageUrl={slideImage} className="aspect-square" />
+
+        {/* Per-slide overlay */}
+        {slide && (slide.headline || slide.body) && (
+          <div className="absolute inset-x-0 bottom-0 border-t border-zinc-200 bg-white/95 px-2.5 py-1.5">
+            {slide.headline && <p className="text-[9px] font-semibold text-zinc-900 line-clamp-1">{slide.headline}</p>}
+            {slide.body && <p className="text-[8px] leading-tight text-zinc-500 line-clamp-1">{slide.body}</p>}
+          </div>
+        )}
+
+        {count > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setIdx(i => Math.max(0, i - 1))}
+              disabled={idx === 0}
+              className="absolute left-1.5 top-1/2 -translate-y-1/2 rounded-full bg-white/95 p-1 shadow text-zinc-700 disabled:opacity-30"
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIdx(i => Math.min(count - 1, i + 1))}
+              disabled={idx >= count - 1}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full bg-white/95 p-1 shadow text-zinc-700 disabled:opacity-30"
+            >
+              <ChevronRight className="h-3 w-3" />
+            </button>
+            <div className="absolute right-2 top-2 rounded-full bg-black/50 px-1.5 py-0.5">
+              <span className="text-[8px] font-medium text-white">{idx + 1} / {count}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Facebook action bar */}
+      <div className="flex items-center justify-around border-t border-zinc-100 py-1.5">
+        {([
+          { label: 'Like',    node: <ThumbsUp className="h-3 w-3 text-zinc-500" /> },
+          { label: 'Comment', node: <MessageCircle className="h-3 w-3 text-zinc-500" /> },
+          { label: 'Share',   node: <Send className="h-3 w-3 text-zinc-500" /> },
+        ] as const).map(({ label, node }) => (
+          <div key={label} className="flex items-center gap-1">
+            {node}
+            <span className="text-[8px] text-zinc-500">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Email preview (full-width, no device frame) ──────────────────────────────
 
 function EmailContent({ creative, imageUrl }: { creative?: CreativeContent | null; imageUrl?: string }) {
@@ -383,7 +467,7 @@ function PlannedBadge({ planned }: { planned: PlatformPreviewPlanned }) {
 
 // ─── Main dispatcher ──────────────────────────────────────────────────────────
 
-export function PlatformPreview({ channel, format, device: _device, creative, planned, imageUrl, loading }: Props) {
+export function PlatformPreview({ channel, format, device: _device, creative, planned, imageUrl, mediaItems, loading }: Props) {
   if (loading) {
     return (
       <div className="flex flex-col items-center">
@@ -419,8 +503,10 @@ export function PlatformPreview({ channel, format, device: _device, creative, pl
       <IPhoneFrame>
         {isStory ? (
           <InstagramStoryContent creative={creative} imageUrl={imageUrl} />
+        ) : isFacebook && isCarousel ? (
+          <FacebookCarouselContent creative={creative} imageUrl={imageUrl} mediaItems={mediaItems} />
         ) : isCarousel ? (
-          <InstagramCarouselContent creative={creative} imageUrl={imageUrl} />
+          <InstagramCarouselContent creative={creative} imageUrl={imageUrl} mediaItems={mediaItems} />
         ) : isReel ? (
           <ReelContent creative={creative} imageUrl={imageUrl} />
         ) : isFacebook ? (

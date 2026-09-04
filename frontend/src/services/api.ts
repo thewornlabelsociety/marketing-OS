@@ -335,6 +335,13 @@ export const api = {
     }),
   listCreativeMedia: (workspaceId: string, creativeArtifactId: string) =>
     request<{ assets: MediaAsset[] }>(`/media/assets?workspaceId=${encodeURIComponent(workspaceId)}&creativeArtifactId=${encodeURIComponent(creativeArtifactId)}`),
+  listWorkspaceMedia: (workspaceId: string) =>
+    request<{ assets: MediaAsset[] }>(`/media/assets?workspaceId=${encodeURIComponent(workspaceId)}`),
+  createFromMedia: (workspaceId: string, mediaAssetId: string, brief: string, format?: string, creativeDirection?: string | null) =>
+    request<{ campaignId: string; campaignName: string; contentKey: string; artifact: Record<string, unknown>; products: unknown[]; aiGenerated: boolean; creativeDirection: string | null }>('/business-sources/studio/from-media', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, mediaAssetId, brief, format: format ?? 'POST', creativeDirection: creativeDirection ?? null }),
+    }),
   getMediaPreviewUrl: (assetId: string, workspaceId: string) =>
     request<{ url: string }>(`/media/preview-url?assetId=${encodeURIComponent(assetId)}&workspaceId=${encodeURIComponent(workspaceId)}`),
   selectCreativeMedia: (campaignId: string, contentKey: string, workspaceId: string, mediaAssetId: string) =>

@@ -75,6 +75,7 @@ function contentKeyAbbrev(channel: string, contentType: string): string {
     'INSTAGRAM/CAROUSEL':       'ig-car',
     'INSTAGRAM/STORY':          'ig-str',
     'FACEBOOK/STATIC_POST':     'fb-post',
+    'FACEBOOK/CAROUSEL':        'fb-car',
     'EMAIL/EMAIL':              'em-email',
     'TIKTOK/TALKING_POINTS':    'tk-reel',
   };

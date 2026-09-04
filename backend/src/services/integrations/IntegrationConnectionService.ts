@@ -107,7 +107,10 @@ export class IntegrationConnectionService {
     if (!consumed) return { error: 'Invalid or expired OAuth state', code: 'INVALID_STATE' };
 
     const redirectUri = process.env.META_REDIRECT_URI ?? `http://localhost:${process.env.PORT ?? 4100}/api/integrations/meta/callback`;
-    const token = await metaGraphClient.exchangeCodeForToken(code, redirectUri);
+    const shortLived = await metaGraphClient.exchangeCodeForToken(code, redirectUri);
+    // Exchange immediately for a long-lived token (~60 days) before storing.
+    // Short-lived tokens (~2h) are not suitable for production publishing or performance reads.
+    const token = await metaGraphClient.exchangeForLongLivedToken(shortLived.accessToken);
     const destinations = await metaGraphClient.discoverDestinations(token.accessToken);
 
     const existing = db.prepare(`

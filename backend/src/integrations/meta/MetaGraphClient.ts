@@ -16,6 +16,8 @@ export interface MetaPublishInput {
   caption: string;
   imageUrl: string;
   idempotencyKey: string;
+  /** Workspace-resolved page access token from CredentialVault. Required in production; ignored in mock mode. */
+  accessToken: string;
 }
 
 export interface MetaPublishOutput {
@@ -28,6 +30,8 @@ export interface MetaPerformanceInput {
   externalPublishId: string;
   channel: 'INSTAGRAM' | 'FACEBOOK';
   measurementWindow: string;
+  /** Workspace-resolved page access token from CredentialVault. Ignored in mock mode. Performance callers will add credential resolution in a follow-up. */
+  accessToken?: string;
 }
 
 export interface MetaPerformanceOutput {
@@ -87,6 +91,34 @@ export class MetaGraphClient {
         client_secret: appSecret,
         redirect_uri: redirectUri,
         code,
+      },
+    });
+    return {
+      accessToken: res.data.access_token as string,
+      expiresIn: res.data.expires_in as number | undefined,
+    };
+  }
+
+  /**
+   * Exchanges a short-lived user access token (~2h) for a long-lived one (~60 days).
+   * Must be called immediately after exchangeCodeForToken before storing anything.
+   * Long-lived tokens are required for reliable production publishing and performance reads.
+   */
+  async exchangeForLongLivedToken(shortLivedToken: string): Promise<MetaTokenResponse> {
+    if (isMetaMockMode()) {
+      return {
+        accessToken: `mock_long_lived_${shortLivedToken.slice(-12)}`,
+        expiresIn: 60 * 24 * 60 * 60, // 60 days
+      };
+    }
+    const appId = process.env.META_APP_ID!;
+    const appSecret = process.env.META_APP_SECRET!;
+    const res = await axios.get(`${this.graphBase}/oauth/access_token`, {
+      params: {
+        grant_type: 'fb_exchange_token',
+        client_id: appId,
+        client_secret: appSecret,
+        fb_exchange_token: shortLivedToken,
       },
     });
     return {
@@ -175,11 +207,13 @@ export class MetaGraphClient {
     }
 
     if (input.channel === 'INSTAGRAM') {
+      // Phase A: create container and poll until FINISHED.
+      // Any failure here is safe to treat as FAILED — media_publish has not been sent.
       const containerRes = await axios.post(`${this.graphBase}/${input.destinationExternalId}/media`, null, {
         params: {
           image_url: input.imageUrl,
           caption: input.caption,
-          access_token: process.env.META_PAGE_ACCESS_TOKEN,
+          access_token: input.accessToken,
         },
       });
       const creationId = containerRes.data.id as string;
@@ -187,18 +221,38 @@ export class MetaGraphClient {
       for (let i = 0; i < 10 && status !== 'FINISHED'; i += 1) {
         await new Promise((r) => setTimeout(r, 1000));
         const statusRes = await axios.get(`${this.graphBase}/${creationId}`, {
-          params: { fields: 'status_code', access_token: process.env.META_PAGE_ACCESS_TOKEN },
+          params: { fields: 'status_code', access_token: input.accessToken },
         });
         status = statusRes.data.status_code as string;
         if (status === 'ERROR') throw new Error('Instagram media container failed');
       }
-      const publishRes = await axios.post(`${this.graphBase}/${input.destinationExternalId}/media_publish`, null, {
-        params: {
-          creation_id: creationId,
-          access_token: process.env.META_PAGE_ACCESS_TOKEN,
-        },
-      });
-      const externalPublishId = publishRes.data.id as string;
+
+      // Phase B: send media_publish.
+      // Once this request is dispatched, any transport failure is ambiguous —
+      // Instagram may have accepted and published the post before the connection dropped.
+      // A 4xx response is a definitive rejection (post was not created); everything
+      // else must become UNKNOWN_RESULT to prevent blind retries that duplicate posts.
+      let publishRes: { data: { id: string } };
+      try {
+        publishRes = await axios.post(`${this.graphBase}/${input.destinationExternalId}/media_publish`, null, {
+          params: {
+            creation_id: creationId,
+            access_token: input.accessToken,
+          },
+        }) as { data: { id: string } };
+      } catch (err) {
+        const httpStatus = (err as { response?: { status?: number } }).response?.status;
+        if (httpStatus && httpStatus >= 400 && httpStatus < 500) {
+          // Meta explicitly rejected the publish request — post was not created.
+          throw err;
+        }
+        // Transport error, timeout, or 5xx: outcome is unknown.
+        throw Object.assign(
+          new Error('Unknown outcome after media_publish — post may exist on Instagram'),
+          { code: 'UNKNOWN_RESULT', cause: err },
+        );
+      }
+      const externalPublishId = publishRes.data.id;
       return {
         externalPublishId,
         externalUrl: `https://www.instagram.com/p/${externalPublishId}`,
@@ -206,14 +260,27 @@ export class MetaGraphClient {
       };
     }
 
-    const fbRes = await axios.post(`${this.graphBase}/${input.destinationExternalId}/photos`, null, {
-      params: {
-        url: input.imageUrl,
-        caption: input.caption,
-        access_token: process.env.META_PAGE_ACCESS_TOKEN,
-      },
-    });
-    const externalPublishId = fbRes.data.id as string;
+    // Facebook: single-call publish. Same ambiguity boundary applies.
+    let fbRes: { data: { id: string } };
+    try {
+      fbRes = await axios.post(`${this.graphBase}/${input.destinationExternalId}/photos`, null, {
+        params: {
+          url: input.imageUrl,
+          caption: input.caption,
+          access_token: input.accessToken,
+        },
+      }) as { data: { id: string } };
+    } catch (err) {
+      const httpStatus = (err as { response?: { status?: number } }).response?.status;
+      if (httpStatus && httpStatus >= 400 && httpStatus < 500) {
+        throw err;
+      }
+      throw Object.assign(
+        new Error('Unknown outcome after Facebook photos publish — post may exist'),
+        { code: 'UNKNOWN_RESULT', cause: err },
+      );
+    }
+    const externalPublishId = fbRes.data.id;
     return {
       externalPublishId,
       externalUrl: `https://www.facebook.com/${input.destinationExternalId}/posts/${externalPublishId}`,
@@ -241,7 +308,7 @@ export class MetaGraphClient {
     const res = await axios.get(`${this.graphBase}/${input.externalPublishId}/insights`, {
       params: {
         metric: fields,
-        access_token: process.env.META_PAGE_ACCESS_TOKEN,
+        access_token: input.accessToken ?? '',
       },
     });
     const data = (res.data.data ?? []) as Array<{ name: string; values: Array<{ value: number }> }>;

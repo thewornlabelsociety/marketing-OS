@@ -33,6 +33,34 @@ function previewFormat(contentType: string): string {
   }
 }
 
+function MetaRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-[10px] font-medium uppercase tracking-wide text-[#A1A1AA]">{label}</p>
+      <p className="mt-0.5 text-xs leading-relaxed text-[#3F3F46]">{value}</p>
+    </div>
+  );
+}
+
+const CHANNEL_LABELS: Record<string, string> = {
+  INSTAGRAM: 'Instagram',
+  FACEBOOK: 'Facebook',
+  TIKTOK: 'TikTok',
+  LINKEDIN: 'LinkedIn',
+  EMAIL: 'Email',
+  WEBSITE: 'Website',
+};
+
+const CONTENT_TYPE_LABELS: Record<string, string> = {
+  STATIC_POST: 'Post',
+  CAROUSEL: 'Carousel',
+  STORY: 'Story',
+  SHORT_VIDEO: 'Reel',
+  NEWSLETTER: 'Newsletter',
+  EMAIL: 'Email',
+};
+
 export function CreativePreviewDrawer({
   campaignId,
   workspaceId,
@@ -47,6 +75,7 @@ export function CreativePreviewDrawer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+  const [mediaItems, setMediaItems] = useState<string[]>([]);
 
   const row = deliverables.find((d) => d.contentKey === contentKey) ?? deliverables[0];
   const capability = capabilities.find((c) => c.channel === row?.channel);
@@ -83,12 +112,17 @@ export function CreativePreviewDrawer({
   }, [workspaceId]);
 
   useEffect(() => {
-    if (artifact?.mediaAssetId) {
+    if (artifact?.carouselSlideImages?.length) {
+      setMediaItems(artifact.carouselSlideImages.filter(Boolean));
+      setImageUrl(undefined);
+    } else if (artifact?.mediaAssetId) {
+      setMediaItems([]);
       void resolveImageUrl(artifact.mediaAssetId);
     } else {
+      setMediaItems([]);
       setImageUrl(undefined);
     }
-  }, [artifact?.mediaAssetId, resolveImageUrl]);
+  }, [artifact?.mediaAssetId, artifact?.carouselSlideImages, resolveImageUrl]);
 
   if (!row) return null;
 
@@ -98,39 +132,36 @@ export function CreativePreviewDrawer({
     device: activeDevice,
   };
 
+  const channelLabel = CHANNEL_LABELS[row.channel] ?? row.channel;
+  const typeLabel = CONTENT_TYPE_LABELS[row.contentType] ?? row.contentType.replaceAll('_', ' ');
+
   return (
     <>
       <button type="button" aria-label="Close preview" className="fixed inset-0 z-40 bg-black/10" onClick={onClose} />
       <aside className="fixed right-0 top-0 z-50 flex h-full w-[640px] flex-col border-l border-[#E4E4E7] bg-[#FAFAFA] shadow-xl">
-        <header className="flex shrink-0 items-center justify-between border-b border-[#E4E4E7] bg-white px-5 py-4">
-          <p className="text-sm font-semibold text-[#09090B]">Creative Preview</p>
-          <button type="button" aria-label="Close" onClick={onClose} className="rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]">
-            <X className="h-4 w-4" />
-          </button>
-        </header>
 
-        <div className="space-y-3 border-b border-[#E4E4E7] bg-white px-5 py-4">
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-[#A1A1AA]">
-            Content
-            <select
-              value={row.contentKey}
-              onChange={(e) => setContentKey(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm text-[#09090B]"
-            >
-              {deliverables.map((d) => (
-                <option key={d.contentKey} value={d.contentKey}>{d.title}</option>
-              ))}
-            </select>
-          </label>
-
+        {/* Compact single-row header */}
+        <header className="flex shrink-0 items-center gap-2.5 border-b border-[#E4E4E7] bg-white px-4 py-2.5">
+          <p className="shrink-0 text-sm font-semibold text-[#09090B]">Creative Preview</p>
+          <select
+            value={row.contentKey}
+            onChange={(e) => setContentKey(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-[#E4E4E7] bg-white px-2.5 py-1.5 text-xs text-[#09090B]"
+          >
+            {deliverables.map((d) => (
+              <option key={d.contentKey} value={d.contentKey}>{d.title}</option>
+            ))}
+          </select>
           {validDevices.length > 1 && (
-            <div className="flex gap-2">
+            <div className="flex shrink-0 gap-1">
               {validDevices.map((d) => (
                 <button
                   key={d}
                   type="button"
                   onClick={() => setDevice(d)}
-                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs ${activeDevice === d ? 'bg-[#09090B] text-white' : 'border border-[#E4E4E7] text-[#71717A]'}`}
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs capitalize ${
+                    activeDevice === d ? 'bg-[#09090B] text-white' : 'border border-[#E4E4E7] text-[#71717A]'
+                  }`}
                 >
                   {d === 'desktop' && <Monitor className="h-3 w-3" />}
                   {d}
@@ -138,11 +169,37 @@ export function CreativePreviewDrawer({
               ))}
             </div>
           )}
-        </div>
+          <button type="button" aria-label="Close" onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
 
-        <div className="flex-1 overflow-y-auto p-6">
-          {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-          <ChannelPreview descriptor={descriptor} creative={artifact?.content} imageUrl={imageUrl} loading={loading} />
+        {/* Two-column body */}
+        <div className="flex flex-1 overflow-hidden">
+
+          {/* Left: creative metadata */}
+          <div className="w-[210px] shrink-0 space-y-4 overflow-y-auto border-r border-[#E4E4E7] bg-white p-4">
+            <MetaRow label="Channel" value={channelLabel} />
+            <MetaRow label="Format" value={typeLabel} />
+            <MetaRow label="Device" value={activeDevice} />
+            {error && (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-red-400">Error</p>
+                <p className="mt-0.5 text-xs text-red-600">{error}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right: platform preview */}
+          <div className="flex-1 overflow-y-auto bg-zinc-50 p-5">
+            <ChannelPreview
+              descriptor={descriptor}
+              creative={artifact?.content}
+              imageUrl={imageUrl}
+              mediaItems={mediaItems}
+              loading={loading}
+            />
+          </div>
         </div>
       </aside>
     </>

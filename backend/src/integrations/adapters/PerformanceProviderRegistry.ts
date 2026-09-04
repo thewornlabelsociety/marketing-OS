@@ -1,6 +1,7 @@
 import type { MarketingChannel } from '../../types/channels';
 import type { PerformanceProvider } from '../../integrations/contracts/PerformanceProvider';
 import { mockPerformanceProvider } from './MockPerformanceProvider';
+import { metaPerformanceProvider } from '../meta/MetaPerformanceProvider';
 
 export class PerformanceProviderRegistry {
   private static providers = new Map<string, PerformanceProvider>();
@@ -35,3 +36,4 @@ export class PerformanceProviderRegistry {
 }
 
 PerformanceProviderRegistry.register(mockPerformanceProvider);
+PerformanceProviderRegistry.register(metaPerformanceProvider);

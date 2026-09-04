@@ -5,17 +5,22 @@ import {
   CheckCircle2,
   ChevronDown,
   Copy,
+  ExternalLink,
   GripVertical,
+  Image,
   ImageOff,
   Loader2,
   RefreshCw,
   Sparkles,
+  Upload,
+  Video,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../../app/AppContext';
 import { ScheduleItemDrawer } from '../../components/drawers/ScheduleItemDrawer';
+import { PlatformPreview } from '../../components/preview/PlatformPreview';
 import { api } from '../../services/api';
-import type { SourceProduct } from '../../types';
+import type { CreativeContent, MediaAsset, PublicationMode, PublishingDestination, SourceProduct } from '../../types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -313,15 +318,32 @@ function FormatPicker({
 
 // ─── Source Product Picker ────────────────────────────────────────────────────
 
+type PickerTab = 'products' | 'media';
+
 function SourceProductPicker({
+  workspaceId,
   onContinue,
+  onContinueWithMedia,
 }: {
+  workspaceId: string;
   onContinue: (ids: string[], products: SourceProduct[]) => void;
+  onContinueWithMedia: (assetId: string, brief: string) => void;
 }) {
   const { activeEntity } = useApp();
+  const [pickerTab, setPickerTab] = useState<PickerTab>('products');
+
+  // Products tab state
   const [products, setProducts] = useState<SourceProduct[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
+  // Media tab state
+  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [loadingMedia, setLoadingMedia] = useState(false);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [brief, setBrief] = useState('');
+  const [mediaLoaded, setMediaLoaded] = useState(false);
 
   useEffect(() => {
     if (!activeEntity) return;
@@ -329,8 +351,30 @@ function SourceProductPicker({
       .then(() => api.getSourceProducts(activeEntity.id, 'new'))
       .then(setProducts)
       .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
+      .finally(() => setLoadingProducts(false));
   }, [activeEntity]);
+
+  useEffect(() => {
+    if (pickerTab !== 'media' || mediaLoaded) return;
+    setLoadingMedia(true);
+    setMediaLoaded(true);
+    api.listWorkspaceMedia(workspaceId)
+      .then(async ({ assets }) => {
+        setMediaAssets(assets);
+        const urls: Record<string, string> = {};
+        await Promise.allSettled(
+          assets.slice(0, 20).map(async a => {
+            try {
+              const { url } = await api.getMediaPreviewUrl(a.id, workspaceId);
+              urls[a.id] = url;
+            } catch { /* no preview */ }
+          })
+        );
+        setPreviewUrls(urls);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMedia(false));
+  }, [pickerTab, workspaceId, mediaLoaded]);
 
   const toggle = (id: string) => {
     setSelected(prev =>
@@ -338,76 +382,188 @@ function SourceProductPicker({
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center gap-3 text-sm text-zinc-400">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading products…
-      </div>
-    );
-  }
+  const tabs = [
+    { id: 'products' as PickerTab, label: 'Products' },
+    { id: 'media' as PickerTab, label: 'My Media' },
+  ];
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <p className="mos-eyebrow mb-1">Studio</p>
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">Select products</h1>
-      <p className="mt-1 text-sm text-zinc-500">Choose up to 6 products to create content for.</p>
-
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {products.map(p => {
-          const isSelected = selected.includes(p.id);
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => toggle(p.id)}
-              className={`group relative overflow-hidden rounded-2xl border text-left transition ${
-                isSelected ? 'border-zinc-950 shadow-md' : 'border-zinc-200 hover:border-zinc-400'
-              }`}
-            >
-              <div className="aspect-[4/5] w-full bg-zinc-100">
-                {p.imageUrls[0] ? (
-                  <img src={p.imageUrls[0]} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <ImageOff className="h-6 w-6 text-zinc-300" />
-                  </div>
-                )}
-              </div>
-              <div className="p-2.5">
-                <p className="truncate text-[11px] font-semibold text-zinc-900">{p.title}</p>
-                {p.attributes?.brand && (
-                  <p className="truncate text-[10px] text-zinc-400">{p.attributes.brand}</p>
-                )}
-              </div>
-              {isSelected && (
-                <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950 text-white shadow">
-                  <Check className="h-3.5 w-3.5" />
-                </div>
-              )}
-              {p.marketingBucket === 'NEW' && !isSelected && (
-                <span className="absolute left-2 top-2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                  NEW
-                </span>
-              )}
-            </button>
-          );
-        })}
+    <div className="flex h-full flex-col">
+      {/* Tab bar */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-zinc-100 px-6 pt-6 pb-0">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setPickerTab(t.id)}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium transition ${
+              pickerTab === t.id
+                ? 'border-b-2 border-zinc-950 text-zinc-950'
+                : 'text-zinc-400 hover:text-zinc-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {products.length === 0 && (
-        <p className="mt-8 text-sm text-zinc-400">No new products found. Try syncing your integration.</p>
+      {/* Products tab */}
+      {pickerTab === 'products' && (
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-2xl px-6 py-8">
+            <p className="text-sm text-zinc-500">Choose up to 6 products to create content for.</p>
+            {loadingProducts ? (
+              <div className="flex h-40 items-center justify-center gap-3 text-sm text-zinc-400">
+                <Loader2 className="h-5 w-5 animate-spin" /> Loading products…
+              </div>
+            ) : (
+              <>
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {products.map(p => {
+                    const isSelected = selected.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => toggle(p.id)}
+                        className={`group relative overflow-hidden rounded-2xl border text-left transition ${
+                          isSelected ? 'border-zinc-950 shadow-md' : 'border-zinc-200 hover:border-zinc-400'
+                        }`}
+                      >
+                        <div className="aspect-[4/5] w-full bg-zinc-100">
+                          {p.imageUrls[0] ? (
+                            <img src={p.imageUrls[0]} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <ImageOff className="h-6 w-6 text-zinc-300" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-2.5">
+                          <p className="truncate text-[11px] font-semibold text-zinc-900">{p.title}</p>
+                          {p.attributes?.brand && (
+                            <p className="truncate text-[10px] text-zinc-400">{p.attributes.brand}</p>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950 text-white shadow">
+                            <Check className="h-3.5 w-3.5" />
+                          </div>
+                        )}
+                        {p.marketingBucket === 'NEW' && !isSelected && (
+                          <span className="absolute left-2 top-2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                            NEW
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {products.length === 0 && (
+                  <p className="mt-8 text-sm text-zinc-400">No new products found. Try syncing your integration.</p>
+                )}
+              </>
+            )}
+            <div className="sticky bottom-0 mt-8 border-t border-zinc-100 bg-white pt-4 pb-6">
+              <button
+                type="button"
+                disabled={selected.length === 0}
+                onClick={() => onContinue(selected, products.filter(p => selected.includes(p.id)))}
+                className="w-full rounded-2xl bg-zinc-950 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-40"
+              >
+                Continue with {selected.length} {selected.length === 1 ? 'product' : 'products'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      <div className="sticky bottom-0 mt-8 border-t border-zinc-100 bg-white pt-4">
-        <button
-          type="button"
-          disabled={selected.length === 0}
-          onClick={() => onContinue(selected, products.filter(p => selected.includes(p.id)))}
-          className="w-full rounded-2xl bg-zinc-950 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-40"
-        >
-          Continue with {selected.length} {selected.length === 1 ? 'product' : 'products'}
-        </button>
-      </div>
+      {/* My Media tab */}
+      {pickerTab === 'media' && (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-2xl px-6 py-6">
+              <p className="text-sm text-zinc-500">Select an image from your library, then describe what the post is about.</p>
+
+              {loadingMedia ? (
+                <div className="flex h-40 items-center justify-center gap-3 text-sm text-zinc-400">
+                  <Loader2 className="h-5 w-5 animate-spin" /> Loading media…
+                </div>
+              ) : mediaAssets.length === 0 ? (
+                <div className="mt-10 flex flex-col items-center gap-4 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50">
+                    <Upload className="h-7 w-7 text-zinc-300" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-900">No media yet</p>
+                    <p className="mt-1 text-xs text-zinc-500">Upload images in the Media Library tab of Creative Studio first.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {mediaAssets.map(a => {
+                    const isVideo = a.mimeType.startsWith('video/');
+                    const isSelected = selectedAssetId === a.id;
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setSelectedAssetId(isSelected ? null : a.id)}
+                        className={`group relative overflow-hidden rounded-2xl border text-left transition ${
+                          isSelected ? 'border-zinc-950 shadow-md' : 'border-zinc-200 hover:border-zinc-400'
+                        }`}
+                      >
+                        <div className="aspect-square w-full bg-zinc-100">
+                          {previewUrls[a.id] ? (
+                            isVideo ? (
+                              <video src={previewUrls[a.id]} className="h-full w-full object-cover" muted playsInline />
+                            ) : (
+                              <img src={previewUrls[a.id]} alt="" className="h-full w-full object-cover" />
+                            )
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              {isVideo ? <Video className="h-6 w-6 text-zinc-300" /> : <Image className="h-6 w-6 text-zinc-300" />}
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-2.5">
+                          <p className="truncate text-[11px] font-semibold text-zinc-900">{a.originalFilename ?? a.id.slice(0, 8)}</p>
+                        </div>
+                        {isSelected && (
+                          <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950 text-white shadow">
+                            <Check className="h-3.5 w-3.5" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Brief + Generate — sticky footer */}
+          <div className="shrink-0 border-t border-zinc-100 bg-white px-6 py-4">
+            <textarea
+              value={brief}
+              onChange={e => setBrief(e.target.value)}
+              placeholder="What's this post about? e.g. 'Summer drop - new linen pieces just landed, perfect for the weekend'"
+              rows={2}
+              className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:bg-white focus:outline-none"
+            />
+            <button
+              type="button"
+              disabled={!selectedAssetId || !brief.trim()}
+              onClick={() => {
+                if (selectedAssetId && brief.trim()) onContinueWithMedia(selectedAssetId, brief.trim());
+              }}
+              className="mt-3 w-full rounded-2xl bg-zinc-950 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-40"
+            >
+              {selectedAssetId ? 'Generate post from this image' : 'Select an image above'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1202,6 +1358,15 @@ function LivePreview({
   );
 }
 
+function studioFormatToPreviewFormat(fmt: StudioFormat | null): string {
+  switch (fmt) {
+    case 'CAROUSEL': return 'carousel';
+    case 'STORY': return 'story';
+    case 'EMAIL': return 'newsletter';
+    default: return 'feed';
+  }
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 type PageStep = 'source-select' | 'format' | 'setup' | 'studio' | 'whole-set' | 'error';
@@ -1244,7 +1409,10 @@ export default function OperatorStudioPage() {
   const [revising, setRevising] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [schedulePublicationMode, setSchedulePublicationMode] = useState<PublicationMode>('DIRECT');
   const [studioTab, setStudioTab] = useState<'edit' | 'preview'>('edit');
+  const [carouselSlideImages, setCarouselSlideImages] = useState<string[]>([]);
+  const [publishingDestinations, setPublishingDestinations] = useState<PublishingDestination[]>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [pickerProducts, setPickerProducts] = useState<StudioProduct[]>([]);
@@ -1308,6 +1476,26 @@ export default function OperatorStudioPage() {
     const id = setInterval(() => setSetupMsgIdx(i => (i + 1) % 4), 1400);
     return () => clearInterval(id);
   }, [step, format]);
+
+  useEffect(() => {
+    if (!session || !activeEntity) return;
+    setCarouselSlideImages([]);
+    void api.getCreative(session.campaignId, session.contentKey, activeEntity.id)
+      .then(artifact => {
+        if (artifact.carouselSlideImages?.length) {
+          setCarouselSlideImages(artifact.carouselSlideImages.filter(Boolean));
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.campaignId, session?.contentKey, activeEntity?.id]);
+
+  useEffect(() => {
+    if (step !== 'studio' || !activeEntity) return;
+    void api.getPublishingDestinations(activeEntity.id, 'INSTAGRAM')
+      .then(setPublishingDestinations)
+      .catch(() => {});
+  }, [step, activeEntity?.id]);
 
   const setupStudio = useCallback(
     async (selectedFormat: StudioFormat) => {
@@ -1375,6 +1563,34 @@ export default function OperatorStudioPage() {
       setStep('error');
     }
   }, [activeEntity, selectedSourceProductIds, creativeDirection, setStudioWholeSetResult]);
+
+  const setupFromMedia = useCallback(
+    async (assetId: string, brief: string) => {
+      if (!activeEntity) return;
+      setStep('setup');
+      setSetupError(null);
+      try {
+        await api.establishLocalOperatorSession();
+        const result = await api.createFromMedia(activeEntity.id, assetId, brief, 'POST', creativeDirection);
+        const s: Session = {
+          campaignId: result.campaignId,
+          campaignName: result.campaignName,
+          contentKey: result.contentKey,
+          artifact: result.artifact as unknown as Artifact,
+          products: [],
+          aiGenerated: result.aiGenerated,
+          creativeDirection,
+        };
+        setSession(s);
+        setContent(s.artifact.content);
+        setStep('studio');
+      } catch (err) {
+        setSetupError((err as Error).message);
+        setStep('error');
+      }
+    },
+    [activeEntity, creativeDirection],
+  );
 
   const persistEdit = useCallback(
     async (newContent: ArtifactContent) => {
@@ -1484,9 +1700,10 @@ export default function OperatorStudioPage() {
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
-          <span className="text-xs font-semibold text-zinc-950">Select products</span>
+          <span className="text-xs font-semibold text-zinc-950">Select source</span>
         </div>
         <SourceProductPicker
+          workspaceId={activeEntity?.id ?? ''}
           onContinue={(ids, prods) => {
             setSelectedSourceProductIds(ids);
             setPickerProducts(prods.map(p => ({
@@ -1504,6 +1721,7 @@ export default function OperatorStudioPage() {
             })));
             setStep('format');
           }}
+          onContinueWithMedia={(assetId, brief) => void setupFromMedia(assetId, brief)}
         />
       </div>
     );
@@ -1665,17 +1883,71 @@ export default function OperatorStudioPage() {
                     setRepurposeSourceArtifactId(session.artifact.id);
                     setActiveTab('repurpose');
                   }}
-                  className="rounded-xl border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                  className="hidden rounded-xl border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:inline-flex items-center gap-1.5"
                 >
                   Create versions
                 </button>
               )}
-              <button
-                onClick={() => setScheduleOpen(true)}
-                className="rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800"
-              >
-                Schedule
-              </button>
+              {(format === 'STORY' || format === 'CAROUSEL') ? (
+                <>
+                  {/* Story / Carousel: DIRECT not supported — Finish in Instagram is primary */}
+                  <button
+                    onClick={() => { setSchedulePublicationMode('MANUAL'); setScheduleOpen(true); }}
+                    className="rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 inline-flex items-center gap-1.5"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Finish in Instagram
+                  </button>
+                  <button
+                    onClick={() => { setSchedulePublicationMode('MANUAL'); setScheduleOpen(true); }}
+                    className="hidden rounded-xl border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:inline-flex items-center gap-1.5"
+                  >
+                    Schedule
+                  </button>
+                </>
+              ) : format === 'POST' ? (
+                <>
+                  {/* POST: DIRECT only if the Instagram connection is live */}
+                  {(() => {
+                    const dest = publishingDestinations[0];
+                    const ready = dest?.selectable === true;
+                    const needsReconnect = dest != null && !ready
+                      && (dest.connectionStatus === 'REAUTH_REQUIRED' || dest.connectionStatus === 'EXPIRED');
+                    if (ready) {
+                      return (
+                        <button
+                          onClick={() => { setSchedulePublicationMode('DIRECT'); setScheduleOpen(true); }}
+                          className="rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800"
+                        >
+                          Schedule / Publish
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        disabled
+                        className="rounded-xl bg-zinc-100 px-4 py-2 text-xs font-semibold text-zinc-400 cursor-not-allowed inline-flex items-center gap-1.5"
+                      >
+                        <AlertCircle className="h-3 w-3" />
+                        {needsReconnect ? 'Reconnect Instagram / Meta' : 'Connect Instagram / Meta'}
+                      </button>
+                    );
+                  })()}
+                  <button
+                    onClick={() => { setSchedulePublicationMode('MANUAL'); setScheduleOpen(true); }}
+                    className="hidden rounded-xl border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:inline-flex items-center gap-1.5"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Finish in Instagram
+                  </button>
+                </>
+              ) : (
+                /* Email: schedule only */
+                <button
+                  onClick={() => { setSchedulePublicationMode('DIRECT'); setScheduleOpen(true); }}
+                  className="rounded-xl bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800"
+                >
+                  Schedule
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1754,12 +2026,13 @@ export default function OperatorStudioPage() {
         </div>
 
         {/* Right: preview — always visible at lg+, tab-controlled below */}
-        <div className={`overflow-y-auto p-5 lg:block lg:w-72 xl:w-88 ${studioTab === 'preview' ? 'block w-full' : 'hidden'}`}>
-          <LivePreview
-            content={content}
-            format={format!}
-            products={sessionProducts}
-            activeSlide={activeSlide}
+        <div className={`overflow-y-auto bg-zinc-100 flex items-start justify-center p-5 lg:flex lg:w-80 xl:w-96 ${studioTab === 'preview' ? 'flex w-full' : 'hidden'}`}>
+          <PlatformPreview
+            channel={session.artifact.channel}
+            format={studioFormatToPreviewFormat(format)}
+            creative={content as unknown as CreativeContent}
+            mediaItems={carouselSlideImages}
+            imageUrl={sessionProducts[0]?.imageUrls[0]}
           />
         </div>
       </div>
@@ -1775,6 +2048,7 @@ export default function OperatorStudioPage() {
           channel={session.artifact.channel as import('../../types').MarketingChannel}
           creativeArtifactId={session.artifact.id}
           creativeVersion={session.artifact.version}
+          initialPublicationMode={schedulePublicationMode}
           onClose={() => setScheduleOpen(false)}
           onSaved={() => {
             setScheduleOpen(false);

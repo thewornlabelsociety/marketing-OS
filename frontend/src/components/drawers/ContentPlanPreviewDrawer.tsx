@@ -30,14 +30,23 @@ function previewFormat(contentType: string): string {
   }
 }
 
+function MetaRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-[10px] font-medium uppercase tracking-wide text-[#A1A1AA]">{label}</p>
+      <p className="mt-0.5 text-xs leading-relaxed text-[#3F3F46]">{value}</p>
+    </div>
+  );
+}
+
 export function ContentPlanPreviewDrawer({ plan, capabilities, initialDeliverableId, onClose }: Props) {
   const [deliverableId, setDeliverableId] = useState(initialDeliverableId ?? plan.deliverables[0]?.id ?? '');
 
   const deliverable = plan.deliverables.find((d) => d.id === deliverableId) ?? plan.deliverables[0];
   const capability = capabilities.find((c) => c.channel === deliverable?.channel);
 
-  const devices = capability?.supportedDevices ?? ['mobile'];
-  const [device, setDevice] = useState<PreviewDevice>(deliverable?.deviceTargets?.[0] ?? devices[0] ?? 'mobile');
+  const [device, setDevice] = useState<PreviewDevice>(deliverable?.deviceTargets?.[0] ?? 'mobile');
 
   const validDevices = useMemo(() => {
     if (!capability) return ['mobile'] as PreviewDevice[];
@@ -57,75 +66,75 @@ export function ContentPlanPreviewDrawer({ plan, capabilities, initialDeliverabl
     device: activeDevice,
   };
 
+  const planned = {
+    title: deliverable.title,
+    purpose: deliverable.purpose,
+    hookDirection: deliverable.hookDirection,
+    primaryMessage: deliverable.primaryMessage,
+    mediaRequirement: deliverable.assetRequirements[0]?.description,
+    ctaRole: deliverable.ctaRole,
+  };
+
   return (
     <>
       <button type="button" aria-label="Close preview" className="fixed inset-0 z-40 bg-black/10" onClick={onClose} />
       <aside className="fixed right-0 top-0 z-50 flex h-full w-[640px] flex-col border-l border-[#E4E4E7] bg-[#FAFAFA] shadow-xl">
-        <header className="flex shrink-0 items-center justify-between border-b border-[#E4E4E7] bg-white px-5 py-4">
-          <p className="text-sm font-semibold text-[#09090B]">Content Plan Preview</p>
-          <button type="button" aria-label="Close" onClick={onClose} className="rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]">
-            <X className="h-4 w-4" />
-          </button>
-        </header>
 
-        <div className="space-y-3 border-b border-[#E4E4E7] bg-white px-5 py-4">
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-[#A1A1AA]">
-            Content
-            <select
-              value={deliverable.id}
-              onChange={(e) => setDeliverableId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm text-[#09090B]"
-            >
-              {plan.deliverables.map((d) => (
-                <option key={d.id} value={d.id}>{d.title}</option>
-              ))}
-            </select>
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[11px] font-medium uppercase tracking-wide text-[#A1A1AA]">
-              Channel
-              <div className="mt-1 rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm text-[#09090B]">
-                {deliverable.channel}
-              </div>
-            </label>
-            <label className="block text-[11px] font-medium uppercase tracking-wide text-[#A1A1AA]">
-              Format / View
-              <div className="mt-1 rounded-lg border border-[#E4E4E7] px-3 py-2 text-sm text-[#09090B]">
-                {deliverable.contentType.replaceAll('_', ' ')} · {deliverable.format.replaceAll('_', ' ')}
-              </div>
-            </label>
-          </div>
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-[#A1A1AA]">Device</p>
-            <div className="mt-1 flex gap-2">
+        {/* Compact single-row header */}
+        <header className="flex shrink-0 items-center gap-2.5 border-b border-[#E4E4E7] bg-white px-4 py-2.5">
+          <p className="shrink-0 text-sm font-semibold text-[#09090B]">Content Plan Preview</p>
+          <select
+            value={deliverable.id}
+            onChange={(e) => setDeliverableId(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-[#E4E4E7] bg-white px-2.5 py-1.5 text-xs text-[#09090B]"
+          >
+            {plan.deliverables.map((d) => (
+              <option key={d.id} value={d.id}>{d.title}</option>
+            ))}
+          </select>
+          {validDevices.length > 1 && (
+            <div className="flex shrink-0 gap-1">
               {validDevices.map((d) => (
                 <button
                   key={d}
                   type="button"
                   onClick={() => setDevice(d)}
-                  className={`rounded-lg px-3 py-1.5 text-sm capitalize ${
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs capitalize ${
                     activeDevice === d ? 'bg-[#09090B] text-white' : 'border border-[#E4E4E7] text-[#71717A]'
                   }`}
                 >
+                  {d === 'desktop' && <Monitor className="h-3 w-3" />}
                   {d}
                 </button>
               ))}
             </div>
-          </div>
-        </div>
+          )}
+          <button type="button" aria-label="Close" onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-[#71717A] hover:bg-[#FAFAFA]">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
 
-        <div className="flex-1 overflow-y-auto p-5">
-          <ChannelPreview
-            descriptor={descriptor}
-            planned={{
-              title: deliverable.title,
-              purpose: deliverable.purpose,
-              hookDirection: deliverable.hookDirection,
-              primaryMessage: deliverable.primaryMessage,
-              mediaRequirement: deliverable.assetRequirements[0]?.description,
-              ctaRole: deliverable.ctaRole,
-            }}
-          />
+        {/* Two-column body */}
+        <div className="flex flex-1 overflow-hidden">
+
+          {/* Left: post/campaign details */}
+          <div className="w-[210px] shrink-0 space-y-4 overflow-y-auto border-r border-[#E4E4E7] bg-white p-4">
+            <MetaRow label="Channel" value={deliverable.channel} />
+            <MetaRow
+              label="Format"
+              value={`${deliverable.contentType.replaceAll('_', ' ')} · ${deliverable.format.replaceAll('_', ' ')}`}
+            />
+            <MetaRow label="Purpose" value={deliverable.purpose} />
+            <MetaRow label="Hook" value={deliverable.hookDirection} />
+            <MetaRow label="Message" value={deliverable.primaryMessage} />
+            <MetaRow label="Media" value={deliverable.assetRequirements[0]?.description} />
+            <MetaRow label="CTA" value={deliverable.ctaRole} />
+          </div>
+
+          {/* Right: platform preview */}
+          <div className="flex-1 overflow-y-auto bg-zinc-50 p-5">
+            <ChannelPreview descriptor={descriptor} planned={planned} />
+          </div>
         </div>
       </aside>
     </>

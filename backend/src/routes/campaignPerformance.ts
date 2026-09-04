@@ -38,6 +38,9 @@ function statusFor(code?: string): number {
   if (code === 'FORBIDDEN') return 403;
   if (code === 'INVALID_METRICS') return 422;
   if (code === 'PERFORMANCE_PROVIDER_UNAVAILABLE') return 503;
+  if (code === 'CONNECTION_REQUIRED') return 503;
+  if (code === 'CREDENTIAL_UNAVAILABLE') return 503;
+  if (code === 'AUTH_EXPIRED') return 503;
   return 400;
 }
 

@@ -6,6 +6,7 @@ interface ChannelPreviewProps {
   planned?: PlatformPreviewPlanned;
   creative?: CreativeContent | null;
   imageUrl?: string;
+  mediaItems?: string[];
   loading?: boolean;
 }
 
@@ -18,7 +19,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   website: 'Website',
 };
 
-export function ChannelPreview({ descriptor, planned, creative, imageUrl, loading }: ChannelPreviewProps) {
+export function ChannelPreview({ descriptor, planned, creative, imageUrl, mediaItems, loading }: ChannelPreviewProps) {
   const { channel, format, device } = descriptor;
   const channelLabel = CHANNEL_LABELS[channel] ?? channel;
   const isCreative = Boolean(creative);
@@ -40,6 +41,7 @@ export function ChannelPreview({ descriptor, planned, creative, imageUrl, loadin
         creative={creative}
         planned={planned}
         imageUrl={imageUrl}
+        mediaItems={mediaItems}
         loading={loading}
       />
     </div>

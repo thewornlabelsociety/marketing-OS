@@ -6,7 +6,8 @@ import type {
   PerformanceProvider,
   ProviderPerformanceResult,
 } from '../contracts/PerformanceProvider';
-import { metaGraphClient } from './MetaGraphClient';
+import { credentialVault } from '../../services/credentials/CredentialVault';
+import { metaGraphClient, isMetaMockMode } from './MetaGraphClient';
 
 interface ScheduleRow {
   id: string;
@@ -16,6 +17,21 @@ interface ScheduleRow {
   channel: string;
   destination_id: string | null;
   external_publish_id: string | null;
+}
+
+interface DestinationRow {
+  id: string;
+  workspace_id: string;
+  connection_id: string;
+  channel: string;
+}
+
+interface ConnectionRow {
+  id: string;
+  workspace_id: string;
+  status: string;
+  access_credential_ref: string | null;
+  expires_at: string | null;
 }
 
 export class MetaPerformanceProvider implements PerformanceProvider {
@@ -36,13 +52,80 @@ export class MetaPerformanceProvider implements PerformanceProvider {
       ? schedules.filter((s) => request.scheduleIds!.includes(s.id))
       : schedules;
 
+    // Cache resolved tokens per destination_id to avoid repeated vault reads.
+    const tokenCache = new Map<string, string>();
+
     const items: ProviderPerformanceResult['items'] = [];
     for (const schedule of filtered) {
       if (!schedule.external_publish_id) continue;
+
+      let accessToken = '';
+
+      if (!isMetaMockMode()) {
+        if (!schedule.destination_id) {
+          throw Object.assign(
+            new Error('Published schedule has no destination — cannot resolve credential'),
+            { code: 'CONNECTION_REQUIRED' },
+          );
+        }
+
+        if (tokenCache.has(schedule.destination_id)) {
+          accessToken = tokenCache.get(schedule.destination_id)!;
+        } else {
+          const destination = db.prepare(
+            'SELECT id, workspace_id, connection_id, channel FROM publishing_destinations WHERE id = ?'
+          ).get(schedule.destination_id) as DestinationRow | undefined;
+          if (!destination) {
+            throw Object.assign(
+              new Error('Publishing destination not found'),
+              { code: 'CONNECTION_REQUIRED' },
+            );
+          }
+
+          const connection = db.prepare(
+            'SELECT id, workspace_id, status, access_credential_ref, expires_at FROM integration_connections WHERE id = ?'
+          ).get(destination.connection_id) as ConnectionRow | undefined;
+          if (!connection || connection.workspace_id !== request.workspaceId) {
+            throw Object.assign(
+              new Error('Meta connection not found for this workspace'),
+              { code: 'CONNECTION_REQUIRED' },
+            );
+          }
+          if (connection.status === 'REAUTH_REQUIRED' || connection.status === 'EXPIRED') {
+            throw Object.assign(
+              new Error('Meta connection needs reauthorization'),
+              { code: 'AUTH_EXPIRED' },
+            );
+          }
+          if (connection.expires_at && new Date(connection.expires_at).getTime() < Date.now()) {
+            throw Object.assign(
+              new Error('Meta token expired'),
+              { code: 'AUTH_EXPIRED' },
+            );
+          }
+          if (!connection.access_credential_ref) {
+            throw Object.assign(
+              new Error('No credential stored for this Meta connection'),
+              { code: 'CREDENTIAL_UNAVAILABLE' },
+            );
+          }
+          const resolved = credentialVault.read(connection.access_credential_ref, request.workspaceId);
+          if (!resolved) {
+            throw Object.assign(
+              new Error('Credential could not be resolved for this workspace'),
+              { code: 'CREDENTIAL_UNAVAILABLE' },
+            );
+          }
+          accessToken = resolved;
+          tokenCache.set(schedule.destination_id, accessToken);
+        }
+      }
+
       const insights = await metaGraphClient.fetchInsights({
         externalPublishId: schedule.external_publish_id,
         channel: schedule.channel as 'INSTAGRAM' | 'FACEBOOK',
         measurementWindow: '7_DAYS',
+        accessToken,
       });
       items.push({
         scheduleId: schedule.id,

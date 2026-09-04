@@ -162,6 +162,32 @@ businessSourcesRouter.post('/studio', async (req, res) => {
   res.json(result);
 });
 
+businessSourcesRouter.post('/studio/from-media', async (req, res) => {
+  const { workspaceId, mediaAssetId, brief, format, creativeDirection } = req.body as {
+    workspaceId?: string;
+    mediaAssetId?: string;
+    brief?: string;
+    format?: string;
+    creativeDirection?: 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL' | null;
+  };
+  if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required', code: 'BAD_REQUEST' });
+  if (!mediaAssetId) return res.status(400).json({ error: 'mediaAssetId is required', code: 'BAD_REQUEST' });
+  if (!brief?.trim()) return res.status(400).json({ error: 'brief is required', code: 'BAD_REQUEST' });
+
+  const result = await operatorStudioService.setupFromMedia({
+    workspaceId,
+    mediaAssetId,
+    brief,
+    format: (format as 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL') ?? 'POST',
+    creativeDirection: creativeDirection ?? null,
+  });
+  if ('error' in result) {
+    const status = result.code === 'NOT_FOUND' ? 404 : 400;
+    return res.status(status).json(result);
+  }
+  res.json(result);
+});
+
 // Approve all artifacts in a whole-set — uses existing approval semantics per artifact
 businessSourcesRouter.post('/studio/approve-all', async (req, res) => {
   const { workspaceId, campaignId, artifacts } = req.body as {

@@ -157,7 +157,14 @@ export class CampaignPerformanceService {
     const provider = PerformanceProviderRegistry.get(key);
     if (!provider) return { error: 'Performance provider unavailable', code: 'PERFORMANCE_PROVIDER_UNAVAILABLE' };
 
-    const result = await provider.fetchPerformance({ workspaceId, campaignId });
+    let result: Awaited<ReturnType<typeof provider.fetchPerformance>>;
+    try {
+      result = await provider.fetchPerformance({ workspaceId, campaignId });
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? 'PERFORMANCE_PROVIDER_ERROR';
+      const message = (err as Error).message ?? 'Performance provider error';
+      return { error: message, code };
+    }
     let ingested = 0;
 
     for (const item of result.items) {

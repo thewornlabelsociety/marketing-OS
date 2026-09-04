@@ -13,6 +13,7 @@ interface BaseProps {
   campaignId: string;
   workspaceId: string;
   campaignName: string;
+  initialPublicationMode?: PublicationMode;
   onClose: () => void;
   onSaved: () => void;
   onNavigateToCampaign?: (campaignId: string) => void;
@@ -64,7 +65,7 @@ export function ScheduleItemDrawer(props: Props) {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('09:00');
   const [timezone, setTimezone] = useState('UTC');
-  const [publicationMode, setPublicationMode] = useState<PublicationMode>('MANUAL');
+  const [publicationMode, setPublicationMode] = useState<PublicationMode>(props.initialPublicationMode ?? 'MANUAL');
   const [destinationId, setDestinationId] = useState('');
   const [destinations, setDestinations] = useState<PublishingDestination[]>([]);
   const [pinnedMedia, setPinnedMedia] = useState<PinnedMedia | null>(null);

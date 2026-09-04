@@ -287,6 +287,7 @@ function VersionReviewDrawer({
   const [approved, setApproved] = useState(false);
   const [approving, setApproving] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+  const [mediaItems, setMediaItems] = useState<string[]>([]);
   const [previewChannel, setPreviewChannel] = useState('instagram');
   const [previewFormat, setPreviewFormat] = useState('feed');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -304,7 +305,9 @@ function VersionReviewDrawer({
         setApproved(a.status === 'APPROVED');
         setPreviewChannel(String(a.channel).toLowerCase());
         setPreviewFormat(repurposeContentTypeToFormat(String(a.contentType)));
-        if (a.mediaAssetId) {
+        if (a.carouselSlideImages?.length) {
+          if (!cancelled) setMediaItems(a.carouselSlideImages.filter(Boolean));
+        } else if (a.mediaAssetId) {
           try {
             const { url } = await api.getMediaPreviewUrl(a.mediaAssetId, workspaceId);
             if (!cancelled) setImageUrl(url);
@@ -386,6 +389,7 @@ function VersionReviewDrawer({
                   format={previewFormat}
                   creative={content}
                   imageUrl={imageUrl}
+                  mediaItems={mediaItems}
                 />
               </div>
               {content && (

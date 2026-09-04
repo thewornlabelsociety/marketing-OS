@@ -17,6 +17,7 @@ export const CREATIVE_DESTINATIONS: CreativeDestination[] = [
   { channel: 'INSTAGRAM', contentType: 'CAROUSEL',       format: 'PORTRAIT_4_5',  label: 'Instagram Carousel',    supportsCreative: true, supportsScheduling: true,  supportsPublishing: false },
   { channel: 'INSTAGRAM', contentType: 'STORY',          format: 'VERTICAL_9_16', label: 'Instagram Story',       supportsCreative: true, supportsScheduling: true,  supportsPublishing: false },
   { channel: 'FACEBOOK',  contentType: 'STATIC_POST',    format: 'PORTRAIT_4_5',  label: 'Facebook Post',         supportsCreative: true, supportsScheduling: true,  supportsPublishing: true  },
+  { channel: 'FACEBOOK',  contentType: 'CAROUSEL',       format: 'PORTRAIT_4_5',  label: 'Facebook Carousel',     supportsCreative: true, supportsScheduling: true,  supportsPublishing: false },
   { channel: 'EMAIL',     contentType: 'EMAIL',          format: 'NEWSLETTER',    label: 'Email',                 supportsCreative: true, supportsScheduling: false, supportsPublishing: false },
   { channel: 'TIKTOK',   contentType: 'TALKING_POINTS', format: 'VERTICAL_9_16', label: 'Reel / TikTok Concept', supportsCreative: true, supportsScheduling: false, supportsPublishing: false },
 ];

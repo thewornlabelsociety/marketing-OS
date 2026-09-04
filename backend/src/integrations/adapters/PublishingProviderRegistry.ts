@@ -1,6 +1,7 @@
 import type { MarketingChannel } from '../../types/channels';
 import type { PublishingProvider } from '../../integrations/contracts/PublishingProvider';
 import { mockPublishingAdapter } from '../../integrations/adapters/MockPublishingAdapter';
+import { metaPublishingProvider } from '../meta/MetaPublishingProvider';
 
 export class PublishingProviderRegistry {
   private static providers = new Map<string, PublishingProvider>();
@@ -31,3 +32,4 @@ export class PublishingProviderRegistry {
 }
 
 PublishingProviderRegistry.register(mockPublishingAdapter);
+PublishingProviderRegistry.register(metaPublishingProvider);
