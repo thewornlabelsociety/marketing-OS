@@ -5,6 +5,7 @@ import {
   Layers,
   LayoutDashboard,
   Rocket,
+  Settings,
 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import type { AppTab } from '../../types';
@@ -22,6 +23,10 @@ const PRIMARY_NAV: NavItem[] = [
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
   { id: 'planner', label: 'Planner', icon: LayoutGrid },
   { id: 'learn', label: 'Learn', icon: BarChart3 },
+];
+
+const SETTINGS_NAV: NavItem[] = [
+  { id: 'integrations', label: 'Settings', icon: Settings },
 ];
 
 export function SidebarNav() {
@@ -43,6 +48,26 @@ export function SidebarNav() {
                 active
                   ? 'bg-[#09090B] text-white'
                   : 'text-[#09090B] hover:bg-[#FAFAFA]'
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-auto border-t border-[#E4E4E7] p-3">
+        {SETTINGS_NAV.map(({ id, label, icon: Icon }) => {
+          const active = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                active
+                  ? 'bg-[#09090B] text-white'
+                  : 'text-[#09090B] hover:bg-[#F4F4F5]'
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" />

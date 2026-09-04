@@ -103,7 +103,8 @@ export default function IntegrationsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8 p-6">
       <div>
-        <h1 className="text-lg font-semibold text-[#09090B]">Integrations</h1>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#A1A1AA]">Integrations / Connections</p>
+        <h1 className="mt-1 text-lg font-semibold text-[#09090B]">Settings</h1>
         <p className="mt-1 text-sm text-[#71717A]">Connect publishing platforms for approved content delivery and performance ingestion.</p>
       </div>
 
