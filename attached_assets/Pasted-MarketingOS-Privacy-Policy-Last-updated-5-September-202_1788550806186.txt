@@ -1,0 +1,143 @@
+MarketingOS Privacy Policy
+
+Last updated: 5 September 2026
+
+MarketingOS (“MOS”) is a marketing operating system operated by Worn Label Society in New Zealand.
+
+This Privacy Policy explains how MarketingOS collects, uses, stores and handles information when you use the MarketingOS platform or connect third-party services such as Facebook and Instagram.
+
+1. Information we collect
+
+MarketingOS may collect information that you provide directly when using the platform, including your name, email address, business or brand information, marketing preferences, campaign information, content and other information you choose to enter into the service.
+
+When you connect a third-party platform such as Facebook or Instagram, MarketingOS may also receive information made available through that platform's authorised APIs.
+
+Depending on the permissions you grant, this may include information about:
+
+Facebook Pages you manage;
+connected Instagram professional accounts;
+Page or account identifiers;
+published posts and media;
+content required to publish posts on your behalf;
+engagement, insights and performance information; and
+information necessary to maintain and manage the authorised connection.
+
+MarketingOS only requests access required to provide the features you choose to use.
+
+2. Facebook and Instagram connections
+
+MarketingOS uses Meta's authorised APIs to provide Facebook and Instagram functionality.
+
+When you choose to connect Meta to MarketingOS, you will be directed to Meta to authenticate your account and approve the permissions requested by MarketingOS.
+
+MarketingOS currently uses Meta permissions to enable functionality such as:
+
+identifying Facebook Pages available to the authorised user;
+identifying eligible connected Instagram accounts;
+publishing authorised content to Facebook Pages;
+publishing authorised content to Instagram;
+reading Page engagement and content performance information; and
+maintaining the connection between MarketingOS and the selected Meta destinations.
+
+MarketingOS will not publish content to a Facebook Page or Instagram account unless that account has been connected and the relevant publishing action has been authorised through the MarketingOS workflow.
+
+3. Access tokens and credentials
+
+When you connect an external platform, MarketingOS may receive access tokens or other credentials required to communicate with that platform.
+
+These credentials are used only to provide the connected functionality you have authorised.
+
+MarketingOS does not intentionally expose access tokens or platform credentials to other MarketingOS users.
+
+You can disconnect a connected Meta account through MarketingOS. Access may also be revoked through your Facebook or Meta account settings.
+
+4. How we use information
+
+We use information processed through MarketingOS to:
+
+operate and maintain the platform;
+create and manage brand workspaces;
+create, plan and manage marketing campaigns;
+generate and manage marketing content and creative assets;
+schedule and publish authorised content;
+connect MarketingOS with authorised third-party platforms;
+retrieve marketing and content performance information;
+improve the reliability and functionality of MarketingOS;
+troubleshoot technical issues; and
+protect the platform against misuse or unauthorised activity.
+
+We do not sell personal information.
+
+5. Artificial intelligence services
+
+MarketingOS may use artificial intelligence services to assist with marketing planning, content generation, revisions and other creative functions.
+
+Information relevant to a requested AI function may be processed by third-party AI service providers where necessary to provide that function.
+
+We aim to send only information reasonably required to perform the requested service.
+
+6. Third-party services
+
+MarketingOS relies on third-party service providers to operate parts of the platform. These may include hosting, database, storage, artificial intelligence and social-media platform providers.
+
+These providers may process information as necessary to deliver their services and are subject to their own terms and privacy practices.
+
+Connecting MarketingOS to a third-party platform is optional. Your use of Facebook, Instagram and other external platforms also remains subject to the privacy policies and terms of those providers.
+
+7. Storage and retention
+
+We retain information for as long as reasonably necessary to operate MarketingOS, provide requested functionality, meet legitimate business or legal requirements, and maintain appropriate business records.
+
+Information that is no longer required may be deleted or anonymised where appropriate.
+
+The length of time particular information is retained may depend on the nature of the information and the service for which it was collected.
+
+8. Disconnecting Facebook or Instagram
+
+You may disconnect a Meta integration from MarketingOS using the available connection controls within the platform.
+
+You may also revoke MarketingOS access through your Facebook or Meta account settings.
+
+Disconnecting an integration prevents MarketingOS from using that connection for future API requests, subject to any information that must reasonably be retained for legal, security or record-keeping purposes.
+
+9. Data deletion requests
+
+You may request deletion of personal information or information associated with a connected Meta account by contacting:
+
+hello@wornlabelsociety.co.nz
+
+Please include enough information for us to identify the relevant MarketingOS account or workspace.
+
+We may need to verify your identity or authority over the relevant account before completing a deletion request.
+
+Where appropriate, we will delete or anonymise information associated with the request, subject to information we are required or reasonably entitled to retain.
+
+Detailed instructions are also available on the MarketingOS Data Deletion page.
+
+10. Security
+
+We take reasonable technical and organisational measures designed to protect information handled through MarketingOS from unauthorised access, loss, misuse or disclosure.
+
+No online service or method of electronic storage can guarantee absolute security.
+
+11. Your privacy rights
+
+Depending on the laws that apply to you, you may have rights relating to access, correction or deletion of your personal information.
+
+MarketingOS is operated from New Zealand and handles personal information in accordance with applicable New Zealand privacy requirements.
+
+To request access to or correction of personal information held about you, contact us using the details below.
+
+12. Changes to this policy
+
+We may update this Privacy Policy as MarketingOS develops or where our legal, technical or operational requirements change.
+
+The current version will be published on this page and the “Last updated” date will be updated when material changes are made.
+
+13. Contact
+
+For privacy enquiries, requests or concerns relating to MarketingOS, contact:
+
+MarketingOS / Worn Label Society
+Email: hello@wornlabelsociety.co.nz
+New Zealand
