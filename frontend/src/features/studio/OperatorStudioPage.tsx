@@ -1324,8 +1324,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-// ─── Live Preview Panel ────────────────────────────────────────────────────────
-
+// Retained for the legacy studio layout; the active layout uses a phone shell.
 function LivePreview({
   content,
   format,
@@ -1357,6 +1356,7 @@ function LivePreview({
     </div>
   );
 }
+void LivePreview;
 
 function studioFormatToPreviewFormat(fmt: StudioFormat | null): string {
   switch (fmt) {

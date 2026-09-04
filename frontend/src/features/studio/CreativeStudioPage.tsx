@@ -801,7 +801,6 @@ export default function CreativeStudioPage() {
     setActiveTab,
     setStudioReturnTarget,
     setSelectedSourceProductIds,
-    newStudioSession,
     setRepurposeSourceArtifactId,
   } = useApp();
 
