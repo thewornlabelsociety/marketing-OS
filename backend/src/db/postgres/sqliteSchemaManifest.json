@@ -1,0 +1,6753 @@
+{
+  "tables": {
+    "ai_usage_records": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "model",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "task_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "input_tokens",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "output_tokens",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "total_tokens",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cost_usd",
+          "sqliteType": "REAL",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "estimated_cost_nzd",
+          "sqliteType": "REAL",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "fx_rate_used",
+          "sqliteType": "REAL",
+          "notNull": true,
+          "defaultValue": "1.64",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "fx_rate_source",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'static'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "artifact_id",
+          "to": "id",
+          "table": "creative_artifacts",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "attention_signals": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "signal_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "signal_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "severity",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "entity_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "entity_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_version",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'0'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "title",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "summary",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "action_label",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "action_target",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "dismissible",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'OPEN'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "detected_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "resolved_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "dismissed_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    "blueprint_usages": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "blueprint_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "blueprint_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "blueprint_id",
+          "to": "id",
+          "table": "campaign_blueprints",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "business_integration_credentials": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "integration_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "encrypted_value",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "integration_id",
+          "to": "id",
+          "table": "business_integrations",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "business_integrations": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "integration_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "display_name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'DISCONNECTED'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "capabilities",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "config",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "credential_ref",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "sync_checkpoint",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_attempted_sync_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_successful_sync_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_error_summary",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "campaign_blueprint_versions": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "blueprint_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "strategic_pattern",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_pattern",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channel_pattern",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cadence_pattern",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "evidence_summary",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_examples",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "learned_why",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "blueprint_id",
+          "to": "id",
+          "table": "campaign_blueprints",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "campaign_blueprints": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "objective_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'DRAFT'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "current_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "1",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "source_campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "campaign_briefs": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_summary",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "objective_summary",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "audience_description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "audience_segment",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "audience_problem",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "audience_desire",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "proposition",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "key_details",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "offer_description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "offer_value",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "offer_urgency",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "offer_constraints",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "timing_start_date",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "timing_end_date",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "timing_important_dates",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "constraints",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "additional_context",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "completeness_status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'NEEDS_INPUT'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "completeness_missing_fields",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "campaign_library_records": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "classifications",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "archived_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cancellation_reason_type",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cancellation_notes",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "evergreen",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "seasonal",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "blueprint_candidate",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "blueprint_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "notes",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "campaign_plans": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "1",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'DRAFT'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_current",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "1",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "strategy_campaign_angle",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "strategy_core_message",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "strategy_proposition",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "strategy_audience_focus",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "hooks",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{\"primary\":\"\",\"supporting\":[]}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "proof_points",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cta_primary",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cta_alternatives",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channels",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_mix",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cadence_summary",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cadence_duration",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_visual_direction",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_photography_direction",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_video_direction",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_copy_direction",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "measurement_objective",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "measurement_primary_kpi",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "measurement_supporting_kpis",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "measurement_conversion_event",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "rationale_summary",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "campaigns": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "objective_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'DRAFTING'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_title",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_metadata",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "brief",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channels",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cancellation_reason",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "scheduled_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "published_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "completed_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_blueprint_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_blueprint_version",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "marketing_scope",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "recommendation_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "objective_id",
+          "to": "id",
+          "table": "objectives",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "recommendation_id",
+          "to": "id",
+          "table": "marketing_recommendations",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        }
+      ]
+    },
+    "content_items": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "tenant_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "entity_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "title",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "body_markdown",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "assets",
+          "sqliteType": "JSON",
+          "notNull": false,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": "'draft'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "target_channels",
+          "sqliteType": "JSON",
+          "notNull": false,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "scheduled_for",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_archived",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "entity_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "content_plan_approvals": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_plan_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_plan_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "approved_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "content_plan_revision_requests": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "from_content_plan_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "from_content_plan_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "resulting_content_plan_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "resulting_content_plan_version",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "request_text",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'PENDING'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "content_plans": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_plan_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_plan_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'READY_FOR_REVIEW'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_current",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "1",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "body",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "conversion_events": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_key",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "schedule_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "conversion_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "value",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "currency",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "external_conversion_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "occurred_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "attribution_model",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "attribution_confidence",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "attribution_evidence",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'MANUAL'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "metadata",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "creative_approvals": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "approved_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "approved_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "creative_artifacts": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_content_plan_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_content_plan_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "deliverable_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'READY_FOR_REVIEW'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_current",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "1",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channel",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "format",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "title",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "quality",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "media_asset_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_direction",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "marketing_scope",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "ai_provider",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "ai_model",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "ai_generated",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "ai_task_type",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "repurpose_request_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "marketing_scopes_json",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "repurpose_request_id",
+          "to": "id",
+          "table": "repurpose_requests",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "from": "media_asset_id",
+          "to": "id",
+          "table": "media_assets",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        }
+      ]
+    },
+    "creative_derivations": {
+      "columns": [
+        {
+          "name": "parent_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "child_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "relationship",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'REPURPOSED_FROM'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "child_artifact_id",
+          "to": "id",
+          "table": "creative_artifacts",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "parent_artifact_id",
+          "to": "id",
+          "table": "creative_artifacts",
+          "onUpdate": "NO ACTION",
+          "onDelete": "RESTRICT"
+        }
+      ]
+    },
+    "creative_feedback": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "feedback_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "sentiment",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "feedback_text",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "operator_decision",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "context_json",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "artifact_id",
+          "to": "id",
+          "table": "creative_artifacts",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "creative_revision_requests": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "request_text",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "target_hint",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "resulting_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "resulting_version",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'PENDING'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "creative_source_links": {
+      "columns": [
+        {
+          "name": "creative_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "source_record_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 2
+        },
+        {
+          "name": "position",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "media_asset_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "source_record_id",
+          "to": "id",
+          "table": "source_records",
+          "onUpdate": "NO ACTION",
+          "onDelete": "RESTRICT"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "creative_artifact_id",
+          "to": "id",
+          "table": "creative_artifacts",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "media_asset_id",
+          "to": "id",
+          "table": "media_assets",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        }
+      ]
+    },
+    "entities": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "tenant_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "slug",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "brand_kit",
+          "sqliteType": "JSON",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "api_keys",
+          "sqliteType": "JSON",
+          "notNull": false,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_archived",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "tenant_id",
+          "to": "id",
+          "table": "tenants",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "experiment_analyses": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "experiment_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "measurement_window",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "analyzed_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "primary_kpi",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "variant_results",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "winner_variant_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "outcome",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "confidence",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "reasons",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "evidence_completeness",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'PARTIAL'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "warnings",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_objective_impact",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "experiment_id",
+          "to": "id",
+          "table": "experiments",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "experiment_distributions": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "experiment_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "variant_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "schedule_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "started_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "ended_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channel",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "destination_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "estimated_audience",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "actual_audience",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "allocation_percentage",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "mode",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "variant_id",
+          "to": "id",
+          "table": "experiment_variants",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "experiment_id",
+          "to": "id",
+          "table": "experiments",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "experiment_variants": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "experiment_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "label",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "role",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "schedule_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channel",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "destination_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "experiment_id",
+          "to": "id",
+          "table": "experiments",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "experiments": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "hypothesis",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "hypothesis_structured",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "experiment_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'AB'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "objective_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "primary_kpi",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "experiment_kpi",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "experiment_kpi_rationale",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "guardrail_metrics",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "variable_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "control_description",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "variant_description",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'DRAFT'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "mode",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'OBSERVATIONAL_COMPARISON'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "minimum_evidence_policy",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "minimum_meaningful_lift",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "outcome",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "winner_variant_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "confidence",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cancellation_reason",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "started_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "ended_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "objective_id",
+          "to": "id",
+          "table": "objectives",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "intake_queue": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "tenant_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "entity_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "brand",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "title",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "fabric",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "price",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "photos",
+          "sqliteType": "JSON",
+          "notNull": false,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": "'pending'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "entity_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "integration_connections": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'DISCONNECTED'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "display_name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "capabilities",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider_account_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider_account_name",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "access_credential_ref",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "refresh_credential_ref",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "expires_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "scopes",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_verified_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_error_code",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_error_summary",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "learning_evidence": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "learning_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "observed_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "weight",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "learning_id",
+          "to": "id",
+          "table": "workspace_learnings",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "marketing_recommendations": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "fingerprint",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'NEW'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "recommendation_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "generation_source",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'RULE_BASED'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "title",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "summary",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "rationale",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "priority",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "50",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "confidence",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "marketing_scopes_json",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "objective_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "primary_channel",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "secondary_channels_json",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_type",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_direction",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_product_ids_json",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_seller_ids_json",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "hook",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "angle",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cta",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "talking_points_json",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "suggested_duration_seconds",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "accepted_campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "accepted_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "expires_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "accepted_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "dismissed_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "completed_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "accepted_artifact_id",
+          "to": "id",
+          "table": "creative_artifacts",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "accepted_campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "objective_id",
+          "to": "id",
+          "table": "objectives",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "media_assets": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_key",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "creative_version",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "storage_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "mime_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "file_size",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "width",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "height",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "checksum",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "original_filename",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'ACTIVE'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "oauth_states": {
+      "columns": [
+        {
+          "name": "state",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "expires_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "objectives": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "objective_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "primary_kpi",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "supporting_kpis",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "conversion_event",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "success_criteria",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "default_channels",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_system",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_active",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "1",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    "performance_evaluations": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "objective_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "objective_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "measurement_window",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "classification",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "confidence",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "primary_kpi",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "primary_kpi_value",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "score",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "reasons",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "evaluated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "performance_logs": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "tenant_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "entity_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "impressions",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "revenue",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": "0.0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "conversions",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "hook",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "ai_learnings",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_synced_to_vault",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "entity_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "content_id",
+          "to": "id",
+          "table": "content_items",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "performance_observations": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "schedule_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_creative_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_creative_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channel",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider_key",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "destination_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "external_publish_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "observed_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "measurement_window",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'7_DAYS'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "metrics",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'MANUAL'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "raw_metadata",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "media_asset_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "schedule_id",
+          "to": "id",
+          "table": "scheduled_content_items",
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "plan_approvals": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "approved_plan_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "approved_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "approved_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "provider_credentials": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "connection_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "credential_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "encrypted_value",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "connection_id",
+          "to": "id",
+          "table": "integration_connections",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "publish_attempts": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "schedule_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "attempt_number",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_creative_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_creative_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "idempotency_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'PENDING'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "external_publish_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "external_url",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "error_code",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "error_message",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "started_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "completed_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "destination_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "connection_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider_status",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "error_category",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "media_asset_ids",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "media_checksums",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "media_delivery_metadata",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "resolution_method",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "resolution_evidence",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "resolved_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "from": "schedule_id",
+          "to": "id",
+          "table": "scheduled_content_items",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "publishing_destinations": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "connection_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "provider_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channel",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "external_destination_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "display_name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'ACTIVE'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "capabilities",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "connection_id",
+          "to": "id",
+          "table": "integration_connections",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "recurring_drop_templates": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "tenant_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "entity_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "name",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "enabled",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": "1",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "slots",
+          "sqliteType": "JSON",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "entity_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "repurpose_requests": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "idempotency_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "request_hash",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'IN_PROGRESS'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "source_artifact_id",
+          "to": "id",
+          "table": "creative_artifacts",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "revision_requests": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "from_plan_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "from_plan_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "request_text",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'PENDING'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "scheduled_content_items": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "campaign_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "content_key",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_creative_artifact_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_creative_version",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channel",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "destination_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "scheduled_for",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "timezone",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'SCHEDULED'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "publication_mode",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'MANUAL'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "media_assets",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "notes",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "published_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "external_publish_id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "external_url",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "cancelled_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "block_reason",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "campaign_id",
+          "to": "id",
+          "table": "campaigns",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "sops": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "tenant_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "entity_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "title",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "category",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "recurrence",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": "'one_time'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "steps",
+          "sqliteType": "JSON",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_completed_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "is_archived",
+          "sqliteType": "INTEGER",
+          "notNull": false,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "entity_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "source_records": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "integration_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "external_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "title",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "subtitle",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "description",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "image_urls",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "price_amount",
+          "sqliteType": "REAL",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "price_currency",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "availability",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'AVAILABLE'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "occurred_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "source_updated_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "payload",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_synced_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "integration_id",
+          "to": "id",
+          "table": "business_integrations",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "tenants": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "plan_tier",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": "'pro'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "license_key",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    "workspace_ai_budget": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "monthly_limit_usd",
+          "sqliteType": "REAL",
+          "notNull": true,
+          "defaultValue": "10.0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "alert_threshold_pct",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "80",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_recommendation_context_sig",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "last_recommendation_generated_at",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "workspace_channel_strategy": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "channels_json",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'{}'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    },
+    "workspace_learnings": {
+      "columns": [
+        {
+          "name": "id",
+          "sqliteType": "TEXT",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": true,
+          "pkOrder": 1
+        },
+        {
+          "name": "workspace_id",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "type",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "category",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "statement",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": null,
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "confidence",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'LOW'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "evidence_count",
+          "sqliteType": "INTEGER",
+          "notNull": true,
+          "defaultValue": "0",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "status",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'CANDIDATE'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "relevance_tags",
+          "sqliteType": "TEXT",
+          "notNull": true,
+          "defaultValue": "'[]'",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "created_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        },
+        {
+          "name": "updated_at",
+          "sqliteType": "DATETIME",
+          "notNull": true,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "primaryKey": false,
+          "pkOrder": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "from": "workspace_id",
+          "to": "id",
+          "table": "entities",
+          "onUpdate": "NO ACTION",
+          "onDelete": "CASCADE"
+        }
+      ]
+    }
+  },
+  "indexes": [
+    {
+      "name": "idx_attention_campaign",
+      "table": "attention_signals",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_attention_campaign ON attention_signals(campaign_id)"
+    },
+    {
+      "name": "idx_attention_workspace_status",
+      "table": "attention_signals",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_attention_workspace_status ON attention_signals(workspace_id, status)"
+    },
+    {
+      "name": "idx_blueprint_usages",
+      "table": "blueprint_usages",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_blueprint_usages ON blueprint_usages(blueprint_id)"
+    },
+    {
+      "name": "idx_blueprints_workspace",
+      "table": "campaign_blueprints",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_blueprints_workspace ON campaign_blueprints(workspace_id, status)"
+    },
+    {
+      "name": "idx_conversion_campaign",
+      "table": "conversion_events",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_conversion_campaign ON conversion_events(campaign_id)"
+    },
+    {
+      "name": "idx_conversion_external",
+      "table": "conversion_events",
+      "unique": true,
+      "partialPredicate": "external_conversion_id IS NOT NULL",
+      "sql": "CREATE UNIQUE INDEX idx_conversion_external\n  ON conversion_events(workspace_id, external_conversion_id)\n  WHERE external_conversion_id IS NOT NULL"
+    },
+    {
+      "name": "idx_experiment_analyses",
+      "table": "experiment_analyses",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_experiment_analyses ON experiment_analyses(experiment_id, measurement_window)"
+    },
+    {
+      "name": "idx_experiment_distributions",
+      "table": "experiment_distributions",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_experiment_distributions ON experiment_distributions(experiment_id)"
+    },
+    {
+      "name": "idx_experiment_variants",
+      "table": "experiment_variants",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_experiment_variants ON experiment_variants(experiment_id)"
+    },
+    {
+      "name": "idx_experiments_campaign",
+      "table": "experiments",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_experiments_campaign ON experiments(campaign_id)"
+    },
+    {
+      "name": "idx_experiments_workspace",
+      "table": "experiments",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_experiments_workspace ON experiments(workspace_id, status)"
+    },
+    {
+      "name": "idx_learning_evidence",
+      "table": "learning_evidence",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_learning_evidence ON learning_evidence(learning_id)"
+    },
+    {
+      "name": "idx_learnings_workspace",
+      "table": "workspace_learnings",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_learnings_workspace ON workspace_learnings(workspace_id, status)"
+    },
+    {
+      "name": "idx_library_classifications",
+      "table": "campaign_library_records",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_library_classifications ON campaign_library_records(workspace_id, archived_at)"
+    },
+    {
+      "name": "idx_library_workspace",
+      "table": "campaign_library_records",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_library_workspace ON campaign_library_records(workspace_id)"
+    },
+    {
+      "name": "idx_marketing_recommendations_workspace_status",
+      "table": "marketing_recommendations",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_marketing_recommendations_workspace_status\n  ON marketing_recommendations(workspace_id, status, priority DESC)"
+    },
+    {
+      "name": "idx_media_assets_creative",
+      "table": "media_assets",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_media_assets_creative ON media_assets(campaign_id, content_key, creative_artifact_id, creative_version)"
+    },
+    {
+      "name": "idx_media_assets_workspace",
+      "table": "media_assets",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_media_assets_workspace ON media_assets(workspace_id)"
+    },
+    {
+      "name": "idx_oauth_states_expires",
+      "table": "oauth_states",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_oauth_states_expires ON oauth_states(expires_at)"
+    },
+    {
+      "name": "idx_perf_eval_campaign",
+      "table": "performance_evaluations",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_perf_eval_campaign ON performance_evaluations(campaign_id, measurement_window)"
+    },
+    {
+      "name": "idx_perf_obs_campaign",
+      "table": "performance_observations",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_perf_obs_campaign ON performance_observations(campaign_id)"
+    },
+    {
+      "name": "idx_perf_obs_content",
+      "table": "performance_observations",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_perf_obs_content ON performance_observations(campaign_id, content_key)"
+    },
+    {
+      "name": "idx_perf_obs_schedule",
+      "table": "performance_observations",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_perf_obs_schedule ON performance_observations(schedule_id)"
+    },
+    {
+      "name": "idx_provider_credentials_connection",
+      "table": "provider_credentials",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_provider_credentials_connection ON provider_credentials(connection_id)"
+    },
+    {
+      "name": "idx_publish_attempts_idempotency",
+      "table": "publish_attempts",
+      "unique": true,
+      "partialPredicate": "status = 'SUCCEEDED'",
+      "sql": "CREATE UNIQUE INDEX idx_publish_attempts_idempotency ON publish_attempts(idempotency_key) WHERE status = 'SUCCEEDED'"
+    },
+    {
+      "name": "idx_repurpose_requests_workspace_source",
+      "table": "repurpose_requests",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_repurpose_requests_workspace_source\n  ON repurpose_requests(workspace_id, source_artifact_id)"
+    },
+    {
+      "name": "idx_scheduled_content_campaign",
+      "table": "scheduled_content_items",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_scheduled_content_campaign ON scheduled_content_items(campaign_id)"
+    },
+    {
+      "name": "idx_scheduled_content_due",
+      "table": "scheduled_content_items",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_scheduled_content_due ON scheduled_content_items(status, scheduled_for)"
+    },
+    {
+      "name": "idx_source_records_workspace_type",
+      "table": "source_records",
+      "unique": false,
+      "partialPredicate": null,
+      "sql": "CREATE INDEX idx_source_records_workspace_type\n  ON source_records(workspace_id, source_type, occurred_at DESC)"
+    }
+  ],
+  "generatedAt": "2026-09-04T22:13:49.533Z",
+  "checksum": "21fa9143cac6d418cda14043584fc642031c8e104ca6a473d69dda0f8d0e1f5d"
+}
