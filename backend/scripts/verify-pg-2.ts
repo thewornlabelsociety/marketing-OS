@@ -23,6 +23,7 @@ import {
 import { deleteOwnedPostgresFixtures, deleteOwnedSqliteFixtures } from '../src/db/core/fixtureCleanup';
 import { withPostgresTransaction } from '../src/db/core/withPostgresTransaction';
 import { computeMigrationChecksum, migrationsDirectory } from '../src/db/postgres/runPostgresMigrations';
+import { ACCEPTED_MIGRATION_CHECKSUMS } from '../src/db/postgres/acceptedMigrations';
 import { getDatabaseUrl, redactDatabaseUrl } from '../src/db/postgres/postgresConfig';
 import { resetPostgresPoolForTests, shutdownPostgresPool } from '../src/db/postgres/postgresPool';
 import { mapEntityRow } from '../src/utils/mappers';
@@ -32,10 +33,7 @@ import { entitiesRouter } from '../src/routes/entities';
 import { objectivesRouter } from '../src/routes/objectives';
 import { campaignsRouter } from '../src/routes/campaigns';
 
-const CANONICAL_CHECKSUMS: Record<string, string> = {
-  '001_mos_baseline.sql': '527d63704e668248a8e584088231042ce3db902cc25e33b1326e529aa7617f5c',
-  '002_system_objectives_seed.sql': '70014cea1d7f590260feb7399c17ce3de0266c086d8d93144a2b7ed1927c92fc',
-};
+const CANONICAL_CHECKSUMS = ACCEPTED_MIGRATION_CHECKSUMS;
 
 /** Exact fixture IDs owned by this verification run — cleanup uses this set only. */
 const FIXTURE = {

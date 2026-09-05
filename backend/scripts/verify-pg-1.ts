@@ -14,8 +14,23 @@ import {
   scanVerifyPg1LiveSql,
 } from '../src/db/postgres/migrationSafety';
 import {
+  ACCEPTED_MIGRATION_CHECKSUMS,
+  REQUIRED_BASELINE_MIGRATION_FILENAMES,
+  validateAcceptedMigrationInventory,
+  validateDiscoveredMigrationInventory,
+  validateLiveMigrationTracking,
+} from '../src/db/postgres/acceptedMigrations';
+import {
+  additiveNonPkIndexCount,
+  baselineNonPkIndexCount,
+  effectiveNonPkIndexCount,
+  validateAdditiveIndexExpectation,
+  type AdditiveIndexExpectation,
+} from '../src/db/postgres/forwardMigrationExpectations';
+import {
   assertChecksumMatch,
   computeMigrationChecksum,
+  computeMigrationFileChecksum,
   ensureMigrationsTable,
   listMigrationFiles,
   MigrationChecksumMismatchError,
@@ -30,7 +45,7 @@ import {
   normalizeSqliteDefaultValue,
   sqliteSchemaManifest,
 } from '../src/db/postgres/baselineManifest';
-import { verifyPostgresSchema } from '../src/db/postgres/verifyPostgresSchema';
+import { verifyPostgresAdditiveSchema, verifyPostgresBaselineSchema } from '../src/db/postgres/verifyPostgresSchema';
 
 const SYSTEM_OBJECTIVE_IDS = [
   'obj_sys_sales',
@@ -48,7 +63,24 @@ const SYSTEM_OBJECTIVE_IDS = [
   'obj_sys_clearance',
 ];
 
-const CANONICAL_MIGRATIONS = ['001_mos_baseline.sql', '002_system_objectives_seed.sql'];
+const MIGRATION_003_INDEX_EXPECTATIONS: AdditiveIndexExpectation[] = [
+  {
+    migration: '003_pg3_unique_constraints.sql',
+    name: 'uq_campaign_briefs_campaign_id',
+    table: 'campaign_briefs',
+    column: 'campaign_id',
+    unique: true,
+    sql: 'CREATE UNIQUE INDEX uq_campaign_briefs_campaign_id ON campaign_briefs (campaign_id)',
+  },
+  {
+    migration: '003_pg3_unique_constraints.sql',
+    name: 'uq_plan_approvals_campaign_id',
+    table: 'plan_approvals',
+    column: 'campaign_id',
+    unique: true,
+    sql: 'CREATE UNIQUE INDEX uq_plan_approvals_campaign_id ON plan_approvals (campaign_id)',
+  },
+];
 
 const SQLITE_DEFAULT_NULL_COLUMNS: ReadonlyArray<[string, string]> = [
   ['campaigns', 'marketing_scope'],
@@ -64,20 +96,147 @@ const SQLITE_DEFAULT_NULL_COLUMNS: ReadonlyArray<[string, string]> = [
 function runStaticChecks(
   check: (label: string, condition: boolean, reason?: string) => void,
 ) {
-  console.log('\n[1/9] Static — canonical migrations');
+  console.log('\n[1/9] Static — accepted migration inventory');
 
-  for (const filename of CANONICAL_MIGRATIONS) {
+  for (const filename of REQUIRED_BASELINE_MIGRATION_FILENAMES) {
     const filePath = path.join(migrationsDirectory(), filename);
-    check(`Canonical migration present: ${filename}`, fs.existsSync(filePath));
+    check(`Baseline migration present: ${filename}`, fs.existsSync(filePath));
   }
 
   const migrationFiles = listMigrationFiles();
+  const inventoryIssues = validateAcceptedMigrationInventory();
   check(
-    'Exactly two canonical Postgres migrations (001, 002)',
-    migrationFiles.length === 2
-      && migrationFiles[0] === CANONICAL_MIGRATIONS[0]
-      && migrationFiles[1] === CANONICAL_MIGRATIONS[1],
-    `found: ${migrationFiles.join(', ')}`,
+    'Discovered migrations match accepted registry (ordered, complete, checksum-pinned)',
+    inventoryIssues.length === 0,
+    inventoryIssues.map((i) => `${i.code}: ${i.detail}`).join('; '),
+  );
+
+  for (const filename of Object.keys(ACCEPTED_MIGRATION_CHECKSUMS)) {
+    check(
+      `Accepted migration checksum pinned: ${filename}`,
+      ACCEPTED_MIGRATION_CHECKSUMS[filename]?.length === 64,
+    );
+  }
+
+  check(
+    'Baseline migrations 001 and 002 required in accepted set',
+    REQUIRED_BASELINE_MIGRATION_FILENAMES.every((f) => f in ACCEPTED_MIGRATION_CHECKSUMS),
+  );
+
+  check(
+    'Forward migration 003 registered in accepted set',
+    '003_pg3_unique_constraints.sql' in ACCEPTED_MIGRATION_CHECKSUMS,
+  );
+
+  console.log('\n[1b/9] Static — migration inventory tamper simulations');
+
+  const mockChecksum = (filename: string) => ACCEPTED_MIGRATION_CHECKSUMS[filename] ?? 'deadbeef';
+
+  check(
+    'Tamper simulation: changed 001 checksum fails validation',
+    validateDiscoveredMigrationInventory(
+      migrationFiles,
+      (f) => (f === '001_mos_baseline.sql' ? 'tampered' : mockChecksum(f)),
+    ).some((i) => i.code === 'checksum_mismatch' && i.detail.includes('001_mos_baseline.sql')),
+  );
+
+  check(
+    'Tamper simulation: changed 002 checksum fails validation',
+    validateDiscoveredMigrationInventory(
+      migrationFiles,
+      (f) => (f === '002_system_objectives_seed.sql' ? 'tampered' : mockChecksum(f)),
+    ).some((i) => i.code === 'checksum_mismatch' && i.detail.includes('002_system_objectives_seed.sql')),
+  );
+
+  check(
+    'Tamper simulation: changed 003 checksum fails validation',
+    validateDiscoveredMigrationInventory(
+      migrationFiles,
+      (f) => (f === '003_pg3_unique_constraints.sql' ? 'tampered' : mockChecksum(f)),
+    ).some((i) => i.code === 'checksum_mismatch' && i.detail.includes('003_pg3_unique_constraints.sql')),
+  );
+
+  check(
+    'Tamper simulation: missing 003 fails validation',
+    validateDiscoveredMigrationInventory(
+      migrationFiles.filter((f) => f !== '003_pg3_unique_constraints.sql'),
+      mockChecksum,
+    ).some((i) => i.code === 'missing_accepted_migration'),
+  );
+
+  check(
+    'Tamper simulation: unaccepted migration file fails validation',
+    validateDiscoveredMigrationInventory(
+      [...migrationFiles, '004_bad.sql'],
+      mockChecksum,
+    ).some((i) => i.code === 'unaccepted_migration' && i.detail === '004_bad.sql'),
+  );
+
+  check(
+    'Tamper simulation: missing required 003 index fails additive validation',
+    validateAdditiveIndexExpectation(
+      MIGRATION_003_INDEX_EXPECTATIONS[0],
+      undefined,
+    ) != null,
+  );
+
+  check(
+    'Tamper simulation: non-unique 003 index fails additive validation',
+    validateAdditiveIndexExpectation(
+      MIGRATION_003_INDEX_EXPECTATIONS[0],
+      {
+        indexname: 'uq_campaign_briefs_campaign_id',
+        tablename: 'campaign_briefs',
+        indexdef: 'CREATE INDEX uq_campaign_briefs_campaign_id ON public.campaign_briefs USING btree (campaign_id)',
+        indisunique: false,
+      },
+    ) != null,
+  );
+
+  check(
+    'Tamper simulation: wrong column on 003 index fails additive validation',
+    validateAdditiveIndexExpectation(
+      MIGRATION_003_INDEX_EXPECTATIONS[1],
+      {
+        indexname: 'uq_plan_approvals_campaign_id',
+        tablename: 'plan_approvals',
+        indexdef: 'CREATE UNIQUE INDEX uq_plan_approvals_campaign_id ON public.plan_approvals USING btree (workspace_id)',
+        indisunique: true,
+      },
+    ) != null,
+  );
+
+  check(
+    'Tamper simulation: wrong table on 003 index fails additive validation',
+    validateAdditiveIndexExpectation(
+      MIGRATION_003_INDEX_EXPECTATIONS[0],
+      {
+        indexname: 'uq_campaign_briefs_campaign_id',
+        tablename: 'campaigns',
+        indexdef: 'CREATE UNIQUE INDEX uq_campaign_briefs_campaign_id ON public.campaigns USING btree (campaign_id)',
+        indisunique: true,
+      },
+    ) != null,
+  );
+
+  const validLive003 = {
+    indexname: 'uq_campaign_briefs_campaign_id',
+    tablename: 'campaign_briefs',
+    indexdef: 'CREATE UNIQUE INDEX uq_campaign_briefs_campaign_id ON public.campaign_briefs USING btree (campaign_id)',
+    indisunique: true,
+  };
+  check(
+    'Tamper simulation: valid 003 index expectation passes validation helper',
+    validateAdditiveIndexExpectation(MIGRATION_003_INDEX_EXPECTATIONS[0], validLive003) === null,
+  );
+
+  check(
+    'Tamper simulation: live tracking rejects tampered 003 checksum',
+    validateLiveMigrationTracking([
+      { filename: '001_mos_baseline.sql', checksum: ACCEPTED_MIGRATION_CHECKSUMS['001_mos_baseline.sql'] },
+      { filename: '002_system_objectives_seed.sql', checksum: ACCEPTED_MIGRATION_CHECKSUMS['002_system_objectives_seed.sql'] },
+      { filename: '003_pg3_unique_constraints.sql', checksum: 'tampered' },
+    ]).some((i) => i.code === 'live_checksum_mismatch'),
   );
 
   console.log('\n[2/9] Static — non-destructive SQL guard');
@@ -99,12 +258,27 @@ function runStaticChecks(
   console.log('\n[3/9] Static — manifest and checksum helpers');
 
   check(
-    'Manifest defines expected table count',
+    'Baseline manifest defines expected table count',
     expectedTableNames().length === 51,
     `got ${expectedTableNames().length}`,
   );
   check(
-    'Manifest defines expected index count',
+    'Baseline non-PK index count',
+    baselineNonPkIndexCount() === 29,
+    `got ${baselineNonPkIndexCount()}`,
+  );
+  check(
+    'Additive accepted migration non-PK index count',
+    additiveNonPkIndexCount() === 2,
+    `got ${additiveNonPkIndexCount()}`,
+  );
+  check(
+    'Effective expected non-PK index count',
+    effectiveNonPkIndexCount() === 31,
+    `got ${effectiveNonPkIndexCount()}`,
+  );
+  check(
+    'Baseline manifest index list unchanged (29)',
     sqliteSchemaManifest.indexes.length === 29,
     `got ${sqliteSchemaManifest.indexes.length}`,
   );
@@ -121,6 +295,11 @@ function runStaticChecks(
       'Migration checksum validation rejects tampered content',
       err instanceof MigrationChecksumMismatchError,
     );
+  }
+
+  for (const [filename, expected] of Object.entries(ACCEPTED_MIGRATION_CHECKSUMS)) {
+    const actual = computeMigrationFileChecksum(filename);
+    check(`On-disk checksum matches accepted registry: ${filename}`, actual === expected, actual);
   }
 
   console.log('\n[3b/9] Static — SQLite default normalization');
@@ -256,23 +435,56 @@ async function main() {
     'SELECT filename, checksum FROM postgres_migrations ORDER BY filename',
   );
   check(
-    'postgres_migrations records all migration files',
+    'postgres_migrations records all accepted migration files',
     migrationRows.rowCount === listMigrationFiles().length,
   );
 
+  const trackingIssues = validateLiveMigrationTracking(migrationRows.rows);
+  check(
+    'Live postgres_migrations rows match accepted registry (checksums, no duplicates)',
+    trackingIssues.length === 0,
+    trackingIssues.map((i) => `${i.code}: ${i.detail}`).join('; '),
+  );
+
+  for (const [filename, expected] of Object.entries(ACCEPTED_MIGRATION_CHECKSUMS)) {
+    const row = migrationRows.rows.find((r: { filename: string }) => r.filename === filename);
+    check(
+      `Live tracking checksum: ${filename}`,
+      row?.checksum === expected,
+      row ? `got ${row.checksum}` : 'row missing',
+    );
+  }
+
   console.log('\n[7/9] Live schema structure');
 
-  const schemaResult = await verifyPostgresSchema(pool);
-  if (schemaResult.ok) {
+  const baselineResult = await verifyPostgresBaselineSchema(pool);
+  if (baselineResult.ok) {
     ok('Postgres baseline matches SQLite manifest (tables, columns, types, constraints, indexes)');
   } else {
     ko('Postgres baseline matches SQLite manifest (tables, columns, types, constraints, indexes)');
-    for (const mismatch of schemaResult.mismatches.slice(0, 15)) {
+    for (const mismatch of baselineResult.mismatches.slice(0, 15)) {
       console.error(`       ${mismatch.category}: ${mismatch.detail}`);
     }
-    if (schemaResult.mismatches.length > 15) {
-      console.error(`       ... and ${schemaResult.mismatches.length - 15} more`);
+    if (baselineResult.mismatches.length > 15) {
+      console.error(`       ... and ${baselineResult.mismatches.length - 15} more`);
     }
+  }
+
+  const additiveResult = await verifyPostgresAdditiveSchema(pool);
+  if (additiveResult.ok) {
+    ok('Postgres additive migration indexes match accepted forward expectations');
+  } else {
+    ko('Postgres additive migration indexes match accepted forward expectations');
+    for (const mismatch of additiveResult.mismatches) {
+      console.error(`       ${mismatch.category}: ${mismatch.detail}`);
+    }
+  }
+
+  for (const exp of MIGRATION_003_INDEX_EXPECTATIONS) {
+    check(
+      `Migration 003 requires unique index: ${exp.name}`,
+      !additiveResult.mismatches.some((m) => m.detail.includes(exp.name)),
+    );
   }
 
   console.log('\n[8/9] Live transactions and round-trips');

@@ -11,6 +11,10 @@ import {
   normalizePostgresType,
   type ManifestForeignKey,
 } from './baselineManifest';
+import {
+  collectAdditiveIndexValidationFailures,
+  type LiveIndexSnapshot,
+} from './forwardMigrationExpectations';
 
 export interface SchemaMismatch {
   category: string;
@@ -39,6 +43,29 @@ interface LiveIndex {
   indexdef: string;
   indisunique: boolean;
   indisprimary: boolean;
+}
+
+async function fetchLiveNonPrimaryIndexes(pool: Pool): Promise<Map<string, LiveIndexSnapshot>> {
+  const indexResult = await pool.query<LiveIndex>(`
+    SELECT
+      i.relname AS indexname,
+      t.relname AS tablename,
+      pg_get_indexdef(i.oid) AS indexdef,
+      ix.indisunique,
+      ix.indisprimary
+    FROM pg_class t
+    JOIN pg_index ix ON t.oid = ix.indrelid
+    JOIN pg_class i ON i.oid = ix.indexrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = 'public'
+      AND t.relkind = 'r'
+  `);
+
+  return new Map(
+    indexResult.rows
+      .filter((idx) => !idx.indisprimary)
+      .map((idx) => [idx.indexname, idx]),
+  );
 }
 
 interface LiveTableRow {
@@ -202,26 +229,7 @@ export async function collectSchemaMismatches(pool: Pool): Promise<SchemaMismatc
     }
   }
 
-  const indexResult = await pool.query<LiveIndex>(`
-    SELECT
-      i.relname AS indexname,
-      t.relname AS tablename,
-      pg_get_indexdef(i.oid) AS indexdef,
-      ix.indisunique,
-      ix.indisprimary
-    FROM pg_class t
-    JOIN pg_index ix ON t.oid = ix.indrelid
-    JOIN pg_class i ON i.oid = ix.indexrelid
-    JOIN pg_namespace n ON n.oid = t.relnamespace
-    WHERE n.nspname = 'public'
-      AND t.relkind = 'r'
-  `);
-
-  const liveIndexesByName = new Map(
-    indexResult.rows
-      .filter((idx) => !idx.indisprimary)
-      .map((idx) => [idx.indexname, idx]),
-  );
+  const liveIndexesByName = await fetchLiveNonPrimaryIndexes(pool);
 
   for (const expIdx of expectedIndexes()) {
     const live = liveIndexesByName.get(expIdx.name);
@@ -261,9 +269,40 @@ export async function collectSchemaMismatches(pool: Pool): Promise<SchemaMismatc
   return mismatches;
 }
 
-export async function verifyPostgresSchema(pool: Pool): Promise<{ ok: boolean; mismatches: SchemaMismatch[] }> {
+export async function collectAdditiveSchemaMismatches(pool: Pool): Promise<SchemaMismatch[]> {
+  const liveIndexesByName = await fetchLiveNonPrimaryIndexes(pool);
+  const failures = collectAdditiveIndexValidationFailures(liveIndexesByName);
+  return failures.map((detail) => ({
+    category: 'additive-indexes',
+    detail,
+  }));
+}
+
+export async function verifyPostgresBaselineSchema(
+  pool: Pool,
+): Promise<{ ok: boolean; mismatches: SchemaMismatch[] }> {
   const mismatches = await collectSchemaMismatches(pool);
   return { ok: mismatches.length === 0, mismatches };
+}
+
+export async function verifyPostgresAdditiveSchema(
+  pool: Pool,
+): Promise<{ ok: boolean; mismatches: SchemaMismatch[] }> {
+  const mismatches = await collectAdditiveSchemaMismatches(pool);
+  return { ok: mismatches.length === 0, mismatches };
+}
+
+export async function verifyEffectivePostgresSchema(
+  pool: Pool,
+): Promise<{ ok: boolean; mismatches: SchemaMismatch[] }> {
+  const baseline = await collectSchemaMismatches(pool);
+  const additive = await collectAdditiveSchemaMismatches(pool);
+  const mismatches = [...baseline, ...additive];
+  return { ok: mismatches.length === 0, mismatches };
+}
+
+export async function verifyPostgresSchema(pool: Pool): Promise<{ ok: boolean; mismatches: SchemaMismatch[] }> {
+  return verifyEffectivePostgresSchema(pool);
 }
 
 /** @internal exported for unit-style checks in verify script */
