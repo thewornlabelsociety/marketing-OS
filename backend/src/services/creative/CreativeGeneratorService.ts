@@ -254,13 +254,13 @@ class CreativeGeneratorService {
     return (row.max_v ?? 0) + 1;
   }
 
-  persistFromStructured(
+  async persistFromStructured(
     campaignId: string,
     contentKey: string,
     rawContent: Record<string, unknown>,
     options?: { previous?: CreativeContent | null; targetHint?: string },
-  ): { artifact: CreativeArtifact } | CreativeServiceError {
-    const ctxResult = creativeGenerationContextBuilder.build(campaignId, contentKey);
+  ): Promise<{ artifact: CreativeArtifact } | CreativeServiceError> {
+    const ctxResult = await creativeGenerationContextBuilder.build(campaignId, contentKey);
     if ('error' in ctxResult) return ctxResult;
     const ctx = ctxResult;
     const { deliverable, approvedContentPlan, campaignContext } = ctx;
@@ -332,7 +332,7 @@ class CreativeGeneratorService {
     const planResult = contentPlannerService.resolveApprovedContentPlan(campaignId);
     if ('error' in planResult) return planResult;
 
-    const ctxResult = creativeGenerationContextBuilder.build(campaignId, contentKey);
+    const ctxResult = await creativeGenerationContextBuilder.build(campaignId, contentKey);
     if ('error' in ctxResult) return ctxResult;
 
     const ai = this.aiFactory();
@@ -350,7 +350,7 @@ class CreativeGeneratorService {
         model: aiEnv.campaignModel,
         maxTokens: 8192,
       });
-      return this.persistFromStructured(campaignId, contentKey, parseJson(rawJson));
+      return await this.persistFromStructured(campaignId, contentKey, parseJson(rawJson));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { error: `Creative generation failed. (${message})`, code: 'GENERATION_FAILED' };
@@ -394,7 +394,7 @@ class CreativeGeneratorService {
     const current = this.getCurrent(campaignId, contentKey);
     if (!current) return { error: 'No creative exists to revise.', code: 'NOT_FOUND' };
 
-    const ctxResult = creativeGenerationContextBuilder.build(campaignId, contentKey);
+    const ctxResult = await creativeGenerationContextBuilder.build(campaignId, contentKey);
     if ('error' in ctxResult) return ctxResult;
 
     const ai = this.aiFactory();
@@ -427,7 +427,7 @@ class CreativeGeneratorService {
         maxTokens: 8192,
       });
 
-      const result = this.persistFromStructured(campaignId, contentKey, parseJson(rawJson), {
+      const result = await this.persistFromStructured(campaignId, contentKey, parseJson(rawJson), {
         previous: current.content,
         targetHint,
       });
@@ -453,13 +453,13 @@ class CreativeGeneratorService {
     }
   }
 
-  reviseFromStructured(
+  async reviseFromStructured(
     campaignId: string,
     contentKey: string,
     requestText: string,
     rawContent: Record<string, unknown>,
     options?: { targetHint?: string },
-  ): { artifact: CreativeArtifact } | CreativeServiceError {
+  ): Promise<{ artifact: CreativeArtifact } | CreativeServiceError> {
     if (detectPlanningChangeRequest(requestText)) {
       return { error: 'Planning change required.', code: 'PLANNING_CHANGE_REQUIRED' };
     }
@@ -467,7 +467,7 @@ class CreativeGeneratorService {
     const current = this.getCurrent(campaignId, contentKey);
     if (!current) return { error: 'No creative exists to revise.', code: 'NOT_FOUND' };
 
-    const ctxResult = creativeGenerationContextBuilder.build(campaignId, contentKey);
+    const ctxResult = await creativeGenerationContextBuilder.build(campaignId, contentKey);
     if ('error' in ctxResult) return ctxResult;
 
     const revId = `crev_${randomUUID()}`;
@@ -489,7 +489,7 @@ class CreativeGeneratorService {
       now,
     );
 
-    const result = this.persistFromStructured(campaignId, contentKey, rawContent, {
+    const result = await this.persistFromStructured(campaignId, contentKey, rawContent, {
       previous: current.content,
       targetHint: options?.targetHint,
     });

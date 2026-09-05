@@ -1,7 +1,10 @@
-import { db } from '../../db/database';
+import {
+  getCoreRepositories,
+} from '../../db/core/createCoreRepositories';
+import type { CoreDomainRepositories } from '../../db/core/coreDomainTypes';
 import { learningService } from '../performance/LearningService';
 import { blueprintService } from '../library/BlueprintService';
-import type { CampaignRow, EntityRow, ObjectiveRow } from '../../types';
+import type { CampaignRow } from '../../types';
 
 export interface CampaignContext {
   workspace: {
@@ -103,87 +106,62 @@ export interface CampaignContext {
   };
 }
 
-interface BriefRow {
-  source_summary: string | null;
-  objective_summary: string | null;
-  audience_description: string | null;
-  audience_problem: string | null;
-  audience_desire: string | null;
-  proposition: string | null;
-  key_details: string;
-  offer_description: string | null;
-  offer_value: string | null;
-  offer_urgency: string | null;
-  timing_start_date: string | null;
-  timing_end_date: string | null;
-  timing_important_dates: string;
-  constraints: string;
-  additional_context: string | null;
-}
-
 /**
  * CampaignContextBuilder assembles a clean planning object from database records.
  * CampaignPlannerService must use this — it must not query arbitrary tables itself.
  */
 export class CampaignContextBuilder {
-  build(campaignId: string): CampaignContext | null {
-    const campaign = db
-      .prepare('SELECT * FROM campaigns WHERE id = ?')
-      .get(campaignId) as CampaignRow | undefined;
+  constructor(
+    private readonly reposFactory: () => CoreDomainRepositories = getCoreRepositories,
+  ) {}
 
+  async build(campaignId: string): Promise<CampaignContext | null> {
+    const repos = this.reposFactory();
+
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign) return null;
 
-    const entity = db
-      .prepare('SELECT * FROM entities WHERE id = ?')
-      .get(campaign.workspace_id) as EntityRow | undefined;
-
+    const entity = await repos.workspace.findById(campaign.workspace_id);
     if (!entity) return null;
 
-    const objective = db
-      .prepare('SELECT * FROM objectives WHERE id = ?')
-      .get(campaign.objective_id) as ObjectiveRow | undefined;
-
+    const objective = await repos.objective.findById(campaign.objective_id);
     if (!objective) return null;
 
-    // Parse brand brain from entity's brand_kit
     let brandKit: Record<string, unknown> = {};
     try { brandKit = JSON.parse(entity.brand_kit) as Record<string, unknown>; } catch { /* empty */ }
     const bb = (brandKit.brandBrain ?? {}) as Record<string, unknown>;
 
-    const identity   = (bb.identity   ?? {}) as Record<string, unknown>;
-    const audience   = (bb.audience   ?? {}) as Record<string, unknown>;
+    const identity = (bb.identity ?? {}) as Record<string, unknown>;
+    const audience = (bb.audience ?? {}) as Record<string, unknown>;
     const personality = (bb.personality ?? {}) as Record<string, unknown>;
-    const language   = (bb.language   ?? {}) as Record<string, unknown>;
-    const visual     = (bb.visual     ?? {}) as Record<string, unknown>;
-    const marketing  = (bb.marketing  ?? {}) as Record<string, unknown>;
+    const language = (bb.language ?? {}) as Record<string, unknown>;
+    const visual = (bb.visual ?? {}) as Record<string, unknown>;
+    const marketing = (bb.marketing ?? {}) as Record<string, unknown>;
     const channels = JSON.parse(campaign.channels || '[]') as string[];
     const activeLearnings = learningService.getActiveForContext(entity.id, {
       objectiveType: objective.objective_type,
       channels,
     });
 
-    // Load brief if exists
-    const briefRow = db
-      .prepare('SELECT * FROM campaign_briefs WHERE campaign_id = ?')
-      .get(campaignId) as BriefRow | undefined;
+    const briefRow = await repos.planning.brief.findByCampaignId(campaignId);
 
     const brief: CampaignContext['brief'] = briefRow
       ? {
-          sourceSummary: briefRow.source_summary,
-          objectiveSummary: briefRow.objective_summary,
-          audienceDescription: briefRow.audience_description,
-          audienceProblem: briefRow.audience_problem,
-          audienceDesire: briefRow.audience_desire,
+          sourceSummary: briefRow.sourceSummary,
+          objectiveSummary: briefRow.objectiveSummary,
+          audienceDescription: briefRow.audienceDescription,
+          audienceProblem: briefRow.audienceProblem,
+          audienceDesire: briefRow.audienceDesire,
           proposition: briefRow.proposition,
-          keyDetails: JSON.parse(briefRow.key_details || '[]') as string[],
-          offerDescription: briefRow.offer_description,
-          offerValue: briefRow.offer_value,
-          offerUrgency: briefRow.offer_urgency,
-          timingStartDate: briefRow.timing_start_date,
-          timingEndDate: briefRow.timing_end_date,
-          timingImportantDates: JSON.parse(briefRow.timing_important_dates || '[]') as string[],
-          constraints: JSON.parse(briefRow.constraints || '[]') as string[],
-          additionalContext: briefRow.additional_context,
+          keyDetails: briefRow.keyDetails,
+          offerDescription: briefRow.offerDescription,
+          offerValue: briefRow.offerValue,
+          offerUrgency: briefRow.offerUrgency,
+          timingStartDate: briefRow.timingStartDate,
+          timingEndDate: briefRow.timingEndDate,
+          timingImportantDates: briefRow.timingImportantDates,
+          constraints: briefRow.constraints,
+          additionalContext: briefRow.additionalContext,
         }
       : null;
 
@@ -219,57 +197,57 @@ export class CampaignContextBuilder {
       },
       brand: {
         identity: {
-          name:        (identity.name        as string | undefined),
+          name: (identity.name as string | undefined),
           description: (identity.description as string | undefined),
-          website:     (identity.website     as string | undefined),
-          market:      (identity.market      as string | undefined),
+          website: (identity.website as string | undefined),
+          market: (identity.market as string | undefined),
         },
         audience: {
           primaryAudience: (audience.primaryAudience as string | undefined),
-          needs:           (audience.needs           as string[] | undefined),
-          problems:        (audience.problems        as string[] | undefined),
-          desires:         (audience.desires         as string[] | undefined),
+          needs: (audience.needs as string[] | undefined),
+          problems: (audience.problems as string[] | undefined),
+          desires: (audience.desires as string[] | undefined),
         },
         personality: {
-          archetype:   (personality.archetype   as string | undefined),
-          traits:      (personality.traits      as string[] | undefined),
-          principles:  (personality.principles  as string[] | undefined),
-          tone:        (personality.tone        as CampaignContext['brand']['personality']['tone']),
+          archetype: (personality.archetype as string | undefined),
+          traits: (personality.traits as string[] | undefined),
+          principles: (personality.principles as string[] | undefined),
+          tone: (personality.tone as CampaignContext['brand']['personality']['tone']),
         },
         language: {
-          preferredWords:   (language.preferredWords   as string[] | undefined),
-          bannedWords:      (language.bannedWords      as string[] | undefined),
+          preferredWords: (language.preferredWords as string[] | undefined),
+          bannedWords: (language.bannedWords as string[] | undefined),
           preferredPhrases: (language.preferredPhrases as string[] | undefined),
-          bannedPhrases:    (language.bannedPhrases    as string[] | undefined),
-          ctaStyle:         (language.ctaStyle         as string | undefined),
-          exampleCopy:      (language.exampleCopy      as string | undefined),
+          bannedPhrases: (language.bannedPhrases as string[] | undefined),
+          ctaStyle: (language.ctaStyle as string | undefined),
+          exampleCopy: (language.exampleCopy as string | undefined),
         },
         visual: {
-          palette:          (visual.palette          as string[] | undefined),
-          fonts:            (visual.fonts            as string[] | undefined),
+          palette: (visual.palette as string[] | undefined),
+          fonts: (visual.fonts as string[] | undefined),
           visualStyleNotes: (visual.visualStyleNotes as string | undefined),
-          imageStyleNotes:  (visual.imageStyleNotes  as string | undefined),
+          imageStyleNotes: (visual.imageStyleNotes as string | undefined),
         },
         marketing: {
           defaultChannels: (marketing.defaultChannels as string[] | undefined),
-          contentPillars:  (marketing.contentPillars  as string[] | undefined),
-          primaryGoals:    (marketing.primaryGoals    as string[] | undefined),
+          contentPillars: (marketing.contentPillars as string[] | undefined),
+          primaryGoals: (marketing.primaryGoals as string[] | undefined),
         },
       },
       campaign: {
-        id:                campaign.id,
-        name:              campaign.name,
-        sourceType:        campaign.source_type,
-        sourceTitle:       campaign.source_title,
+        id: campaign.id,
+        name: campaign.name,
+        sourceType: campaign.source_type,
+        sourceTitle: campaign.source_title,
         sourceDescription: campaign.source_description ?? null,
       },
       objective: {
-        id:              objective.id,
-        name:            objective.name,
-        objectiveType:   objective.objective_type,
-        description:     objective.description ?? null,
-        primaryKpi:      objective.primary_kpi,
-        supportingKpis:  JSON.parse(objective.supporting_kpis || '[]') as string[],
+        id: objective.id,
+        name: objective.name,
+        objectiveType: objective.objective_type,
+        description: objective.description ?? null,
+        primaryKpi: objective.primary_kpi,
+        supportingKpis: JSON.parse(objective.supporting_kpis || '[]') as string[],
         conversionEvent: objective.conversion_event ?? null,
         successCriteria: objective.success_criteria ?? null,
       },

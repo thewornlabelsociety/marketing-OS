@@ -39,6 +39,13 @@ export class SqliteCampaignRepository implements CampaignRepository {
     return row ?? null;
   }
 
+  async findByIdForWorkspace(id: string, workspaceId: string): Promise<CampaignRow | null> {
+    const row = db
+      .prepare('SELECT * FROM campaigns WHERE id = ? AND workspace_id = ?')
+      .get(id, workspaceId) as CampaignRow | undefined;
+    return row ?? null;
+  }
+
   async create(input: CampaignCreateInput): Promise<CampaignRow> {
     db.prepare(
       `INSERT INTO campaigns
@@ -123,6 +130,24 @@ export class SqliteCampaignRepository implements CampaignRepository {
 
     db.prepare(`UPDATE campaigns SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
     return this.findByIdWithObjective(id);
+  }
+
+  async updateStatus(
+    id: string,
+    status: string,
+    updatedAt: string,
+    options?: { onlyIfStatus?: string },
+  ): Promise<boolean> {
+    if (options?.onlyIfStatus) {
+      const result = db
+        .prepare('UPDATE campaigns SET status = ?, updated_at = ? WHERE id = ? AND status = ?')
+        .run(status, updatedAt, id, options.onlyIfStatus);
+      return result.changes > 0;
+    }
+    const result = db
+      .prepare('UPDATE campaigns SET status = ?, updated_at = ? WHERE id = ?')
+      .run(status, updatedAt, id);
+    return result.changes > 0;
   }
 
   async deleteById(id: string): Promise<boolean> {

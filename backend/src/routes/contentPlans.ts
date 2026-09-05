@@ -60,13 +60,13 @@ contentPlansRouter.get('/versions', (req: PlanReq, res: Response) => {
   res.json(contentPlannerService.getAllVersions(campaignId));
 });
 
-contentPlansRouter.get('/status', (req: PlanReq, res: Response) => {
+contentPlansRouter.get('/status', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
   const current = contentPlannerService.getCurrent(campaignId);
   const approval = contentPlannerService.getApproval(campaignId);
-  const strategy = contentPlannerService.resolveApprovedStrategy(campaignId);
+  const strategy = await contentPlannerService.resolveApprovedStrategy(campaignId);
 
   res.json({
     aiConfigured: aiEnv.isConfigured,

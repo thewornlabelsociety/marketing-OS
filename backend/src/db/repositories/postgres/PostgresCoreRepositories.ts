@@ -1,5 +1,7 @@
+import type { PoolClient } from 'pg';
 import { getPostgresPool } from '../../postgres/postgresPool';
-import type { TenantInsert, TenantRepository } from '../../core/coreDomainTypes';
+import { PostgresQueryable } from '../../core/postgresQueryable';
+import type { TenantInsert, TenantRepository, CampaignStatusUpdateOptions } from '../../core/coreDomainTypes';
 import { mapPostgresEntityRow, mapPostgresObjectiveRow, mapPostgresCampaignRow } from '../../core/postgresRowUtils';
 import type { EntityRow, ObjectiveRow, CampaignRow } from '../../../types';
 import type {
@@ -14,6 +16,7 @@ import type {
   CampaignRepository,
 } from '../../core/coreDomainTypes';
 import { CAMPAIGN_JOIN_POSTGRES as JOIN_SQL } from '../../core/coreDomainTypes';
+import { maybeInjectPlanningFailure } from '../../core/planningVerificationHooks';
 
 export class PostgresTenantRepository implements TenantRepository {
   async findById(id: string): Promise<{ id: string } | null> {
@@ -191,6 +194,12 @@ export class PostgresObjectiveRepository implements ObjectiveRepository {
 }
 
 export class PostgresCampaignRepository implements CampaignRepository {
+  private readonly db: PostgresQueryable;
+
+  constructor(client?: PoolClient) {
+    this.db = new PostgresQueryable(client);
+  }
+
   async list(filters: CampaignListFilters): Promise<CampaignRow[]> {
     const conditions: string[] = ['1=1'];
     const params: unknown[] = [];
@@ -205,7 +214,7 @@ export class PostgresCampaignRepository implements CampaignRepository {
       params.push(filters.status);
     }
 
-    const result = await getPostgresPool().query(
+    const result = await this.db.query(
       `${JOIN_SQL} WHERE ${conditions.join(' AND ')} ORDER BY c.created_at DESC`,
       params,
     );
@@ -213,19 +222,28 @@ export class PostgresCampaignRepository implements CampaignRepository {
   }
 
   async findByIdWithObjective(id: string): Promise<CampaignRow | null> {
-    const result = await getPostgresPool().query(`${JOIN_SQL} WHERE c.id = $1`, [id]);
+    const result = await this.db.query(`${JOIN_SQL} WHERE c.id = $1`, [id]);
     const row = result.rows[0] as Record<string, unknown> | undefined;
     return row ? mapPostgresCampaignRow(row) : null;
   }
 
   async findById(id: string): Promise<CampaignRow | null> {
-    const result = await getPostgresPool().query('SELECT * FROM campaigns WHERE id = $1', [id]);
+    const result = await this.db.query('SELECT * FROM campaigns WHERE id = $1', [id]);
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? mapPostgresCampaignRow(row) : null;
+  }
+
+  async findByIdForWorkspace(id: string, workspaceId: string): Promise<CampaignRow | null> {
+    const result = await this.db.query(
+      'SELECT * FROM campaigns WHERE id = $1 AND workspace_id = $2',
+      [id, workspaceId],
+    );
     const row = result.rows[0] as Record<string, unknown> | undefined;
     return row ? mapPostgresCampaignRow(row) : null;
   }
 
   async create(input: CampaignCreateInput): Promise<CampaignRow> {
-    await getPostgresPool().query(
+    await this.db.query(
       `INSERT INTO campaigns
          (id, workspace_id, objective_id, name, status, source_type, source_id,
           source_title, source_description, source_metadata, brief, channels, created_at, updated_at)
@@ -279,7 +297,7 @@ export class PostgresCampaignRepository implements CampaignRepository {
     add('updated_at', updatedAt);
     vals.push(id);
 
-    const result = await getPostgresPool().query(
+    const result = await this.db.query(
       `UPDATE campaigns SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
       vals,
     );
@@ -287,8 +305,29 @@ export class PostgresCampaignRepository implements CampaignRepository {
     return this.findByIdWithObjective(id);
   }
 
+  async updateStatus(
+    id: string,
+    status: string,
+    updatedAt: string,
+    options?: CampaignStatusUpdateOptions,
+  ): Promise<boolean> {
+    maybeInjectPlanningFailure('approve_after_campaign_status');
+    if (options?.onlyIfStatus) {
+      const result = await this.db.query(
+        'UPDATE campaigns SET status = $1, updated_at = $2 WHERE id = $3 AND status = $4',
+        [status, updatedAt, id, options.onlyIfStatus],
+      );
+      return (result.rowCount ?? 0) > 0;
+    }
+    const result = await this.db.query(
+      'UPDATE campaigns SET status = $1, updated_at = $2 WHERE id = $3',
+      [status, updatedAt, id],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async deleteById(id: string): Promise<boolean> {
-    const result = await getPostgresPool().query('DELETE FROM campaigns WHERE id = $1', [id]);
+    const result = await this.db.query('DELETE FROM campaigns WHERE id = $1', [id]);
     return (result.rowCount ?? 0) > 0;
   }
 }

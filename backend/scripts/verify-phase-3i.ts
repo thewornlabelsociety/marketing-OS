@@ -76,23 +76,23 @@ async function main() {
       VALUES (?, ?, ?, ?, 1, ?, ?)`).run(`cpa_${campaignId}`, campaignId, workspaceId, `cplan_${campaignId}`, now, now);
   }
 
-  function persistCreative(campaignId: string, contentKey: string, fixture: object) {
-    const result = creativeGeneratorService.persistFromStructured(campaignId, contentKey, fixture as never);
+  async function persistCreative(campaignId: string, contentKey: string, fixture: object) {
+    const result = await creativeGeneratorService.persistFromStructured(campaignId, contentKey, fixture as never);
     if ('error' in result) throw new Error(result.error);
     return result.artifact;
   }
 
-  function persistAndApprove(campaignId: string, contentKey: string, fixture: object) {
-    const artifact = persistCreative(campaignId, contentKey, fixture);
+  async function persistAndApprove(campaignId: string, contentKey: string, fixture: object) {
+    const artifact = await persistCreative(campaignId, contentKey, fixture);
     creativeGeneratorService.approve(campaignId, contentKey, artifact.id);
     return artifact;
   }
 
-  function approveAllFour(campaignId: string) {
-    persistAndApprove(campaignId, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-    persistAndApprove(campaignId, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
-    persistAndApprove(campaignId, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
-    persistAndApprove(campaignId, 'launch-tiktok-01', REEL_CREATIVE_FIXTURE);
+  async function approveAllFour(campaignId: string) {
+    await persistAndApprove(campaignId, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+    await persistAndApprove(campaignId, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
+    await persistAndApprove(campaignId, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
+    await persistAndApprove(campaignId, 'launch-tiktok-01', REEL_CREATIVE_FIXTURE);
   }
 
   function openOfType(workspaceId: string, signalType: AttentionSignalType) {
@@ -158,16 +158,16 @@ async function main() {
     return sched.item.id;
   }
 
-  function setupInstagramAb(
+  async function setupInstagramAb(
     campaignId: string,
     workspaceId: string,
     controlFixture: object,
     variantFixture: object,
     contentKey = 'launch-carousel-01',
   ) {
-    const control = persistAndApprove(campaignId, contentKey, controlFixture);
+    const control = await persistAndApprove(campaignId, contentKey, controlFixture);
     const scheduleA = publishVariant(campaignId, workspaceId, contentKey, control.id, control.version, 'INSTAGRAM');
-    const variantResult = creativeGeneratorService.reviseFromStructured(campaignId, contentKey, 'Variant', variantFixture as never);
+    const variantResult = await creativeGeneratorService.reviseFromStructured(campaignId, contentKey, 'Variant', variantFixture as never);
     if ('error' in variantResult) throw new Error(variantResult.error);
     creativeGeneratorService.approve(campaignId, contentKey, variantResult.artifact.id);
     const scheduleB = publishVariant(campaignId, workspaceId, contentKey, variantResult.artifact.id, variantResult.artifact.version, 'INSTAGRAM');
@@ -195,7 +195,7 @@ async function main() {
   const campB = `camp_b_${randomUUID()}`;
   insertCampaign(campB, wsA, 'obj_sys_sales', 'APPROVED');
   seedPlanChain(campB, wsA);
-  const artB = persistCreative(campB, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  const artB = await persistCreative(campB, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   attentionSignalService.reconcile(wsA);
   const beforeB = openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.sourceId === 'launch-carousel-01' && s.campaignId === campB);
   check('B unapproved signal', beforeB.length === 1);
@@ -208,13 +208,13 @@ async function main() {
   const campC = `camp_c_${randomUUID()}`;
   insertCampaign(campC, wsA, 'obj_sys_sales', 'APPROVED');
   seedPlanChain(campC, wsA);
-  persistAndApprove(campC, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  const v2 = creativeGeneratorService.reviseFromStructured(campC, 'launch-carousel-01', 'V2 hook', CAROUSEL_CREATIVE_FIXTURE);
+  await persistAndApprove(campC, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  const v2 = await creativeGeneratorService.reviseFromStructured(campC, 'launch-carousel-01', 'V2 hook', CAROUSEL_CREATIVE_FIXTURE);
   if ('error' in v2) throw new Error(v2.error);
   creativeGeneratorService.approve(campC, 'launch-carousel-01', v2.artifact.id);
   attentionSignalService.reconcile(wsA);
   check('C V2 approved no signal', openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.campaignId === campC).length === 0);
-  const v3 = creativeGeneratorService.reviseFromStructured(campC, 'launch-carousel-01', 'V3 hook', {
+  const v3 = await creativeGeneratorService.reviseFromStructured(campC, 'launch-carousel-01', 'V3 hook', {
     ...CAROUSEL_CREATIVE_FIXTURE,
     caption: 'Version 3 unapproved caption',
   });
@@ -238,7 +238,7 @@ async function main() {
   const campE = `camp_e_${randomUUID()}`;
   insertCampaign(campE, wsA, 'obj_sys_sales', 'APPROVED');
   seedPlanChain(campE, wsA);
-  approveAllFour(campE);
+  await approveAllFour(campE);
   attentionSignalService.reconcile(wsA);
   const schedSignalsE = openOfType(wsA, 'READY_TO_SCHEDULE').filter((s) => s.campaignId === campE);
   check('E one grouped schedule signal', schedSignalsE.length === 1);
@@ -259,7 +259,7 @@ async function main() {
   const campG = `camp_g_${randomUUID()}`;
   insertCampaign(campG, wsA, 'obj_sys_sales', 'SCHEDULED');
   seedPlanChain(campG, wsA);
-  const artG = persistAndApprove(campG, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  const artG = await persistAndApprove(campG, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   const schedG = schedulingService.create(campG, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() - 7200000).toISOString(),
@@ -286,7 +286,7 @@ async function main() {
   const campI = `camp_i_${randomUUID()}`;
   insertCampaign(campI, wsA, 'obj_sys_sales', 'PUBLISHED');
   seedPlanChain(campI, wsA);
-  persistAndApprove(campI, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  await persistAndApprove(campI, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   const pubI = publishManual(campI, wsA, 'launch-carousel-01');
   performanceIngestionService.createObservation({
     workspaceId: wsA, campaignId: campI, scheduleId: pubI.schedule.id, contentKey: 'launch-carousel-01',
@@ -318,7 +318,7 @@ async function main() {
   const campK = `camp_k_${randomUUID()}`;
   insertCampaign(campK, wsA, 'obj_sys_awareness', 'PUBLISHED');
   seedPlanChain(campK, wsA);
-  persistAndApprove(campK, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  await persistAndApprove(campK, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   const pubK = publishManual(campK, wsA, 'launch-carousel-01');
   performanceIngestionService.createObservation({
     workspaceId: wsA, campaignId: campK, scheduleId: pubK.schedule.id, contentKey: 'launch-carousel-01',
@@ -336,7 +336,7 @@ async function main() {
   const campL = `camp_l_${randomUUID()}`;
   insertCampaign(campL, wsA, 'obj_sys_sales', 'PUBLISHED');
   seedPlanChain(campL, wsA);
-  persistAndApprove(campL, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  await persistAndApprove(campL, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   const pubL = publishManual(campL, wsA, 'launch-carousel-01');
   performanceIngestionService.createObservation({
     workspaceId: wsA, campaignId: campL, scheduleId: pubL.schedule.id, contentKey: 'launch-carousel-01',
@@ -354,7 +354,7 @@ async function main() {
   const campM = `camp_m_${randomUUID()}`;
   insertCampaign(campM, wsA, 'obj_sys_sales', 'PUBLISHED');
   seedPlanChain(campM, wsA);
-  const abM = setupInstagramAb(campM, wsA, CAROUSEL_CREATIVE_FIXTURE, { ...CAROUSEL_CREATIVE_FIXTURE, caption: 'Benefit hook wins' });
+  const abM = await setupInstagramAb(campM, wsA, CAROUSEL_CREATIVE_FIXTURE, { ...CAROUSEL_CREATIVE_FIXTURE, caption: 'Benefit hook wins' });
   const expM = experimentService.create(campM, wsA, {
     name: 'Hook test M', hypothesis: 'Benefit wins', variableType: 'HOOK',
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
@@ -400,7 +400,7 @@ async function main() {
   const campN = `camp_n_${randomUUID()}`;
   insertCampaign(campN, wsA, 'obj_sys_sales', 'PUBLISHED');
   seedPlanChain(campN, wsA);
-  const abN = setupInstagramAb(campN, wsA, CAROUSEL_CREATIVE_FIXTURE, CAROUSEL_CREATIVE_FIXTURE);
+  const abN = await setupInstagramAb(campN, wsA, CAROUSEL_CREATIVE_FIXTURE, CAROUSEL_CREATIVE_FIXTURE);
   const expN = experimentService.create(campN, wsA, {
     name: 'Inconclusive N', hypothesis: 'Null vs zero', variableType: 'HOOK',
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
@@ -439,7 +439,7 @@ async function main() {
   const campO = `camp_o_${randomUUID()}`;
   insertCampaign(campO, wsA, 'obj_sys_sales', 'PUBLISHED');
   seedPlanChain(campO, wsA);
-  const abO = setupInstagramAb(campO, wsA, CAROUSEL_CREATIVE_FIXTURE, { ...CAROUSEL_CREATIVE_FIXTURE, caption: 'Obs variant' });
+  const abO = await setupInstagramAb(campO, wsA, CAROUSEL_CREATIVE_FIXTURE, { ...CAROUSEL_CREATIVE_FIXTURE, caption: 'Obs variant' });
   const expO = experimentService.create(campO, wsA, {
     name: 'Observational O', hypothesis: 'Obs compare', variableType: 'HOOK',
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
@@ -478,7 +478,7 @@ async function main() {
   const campP = `camp_p_${randomUUID()}`;
   insertCampaign(campP, wsA, 'obj_sys_sales', 'COMPLETE');
   seedPlanChain(campP, wsA);
-  creativeGeneratorService.persistFromStructured(campP, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  await creativeGeneratorService.persistFromStructured(campP, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   creativeGeneratorService.approve(campP, 'launch-carousel-01', creativeGeneratorService.getCurrent(campP, 'launch-carousel-01')!.id);
   const pubP = publishManual(campP, wsA, 'launch-carousel-01');
   for (let i = 0; i < 25; i++) {
@@ -533,7 +533,7 @@ async function main() {
   const campR = `camp_r_${randomUUID()}`;
   insertCampaign(campR, wsA, 'obj_sys_sales', 'COMPLETE');
   seedPlanChain(campR, wsA);
-  persistAndApprove(campR, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
+  await persistAndApprove(campR, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
   const pubR = publishManual(campR, wsA, 'launch-newsletter-01');
   for (let i = 0; i < 25; i++) {
     performanceIngestionService.createConversion({
@@ -565,7 +565,7 @@ async function main() {
   const campS = `camp_s_${randomUUID()}`;
   insertCampaign(campS, wsA, 'obj_sys_awareness', 'PUBLISHED');
   seedPlanChain(campS, wsA);
-  persistAndApprove(campS, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  await persistAndApprove(campS, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   const pubS = publishManual(campS, wsA, 'launch-carousel-01');
   performanceIngestionService.createObservation({
     workspaceId: wsA, campaignId: campS, scheduleId: pubS.schedule.id, contentKey: 'launch-carousel-01',
@@ -597,7 +597,7 @@ async function main() {
   const campT = `camp_t_${randomUUID()}`;
   insertCampaign(campT, wsA, 'obj_sys_sales', 'SCHEDULED');
   seedPlanChain(campT, wsA);
-  const artT = persistAndApprove(campT, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  const artT = await persistAndApprove(campT, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   const schedT = schedulingService.create(campT, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() - 3600000).toISOString(),
@@ -616,19 +616,19 @@ async function main() {
   const campU = `camp_u_${randomUUID()}`;
   insertCampaign(campU, wsA, 'obj_sys_sales', 'SCHEDULED');
   seedPlanChain(campU, wsA);
-  persistAndApprove(campU, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  await persistAndApprove(campU, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   const todaySched = schedulingService.create(campU, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
     publicationMode: 'MANUAL',
   });
-  persistAndApprove(campU, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
+  await persistAndApprove(campU, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
   const weekSched = schedulingService.create(campU, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() + 6 * 86400000).toISOString(),
     publicationMode: 'MANUAL',
   });
-  persistAndApprove(campU, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
+  await persistAndApprove(campU, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
   const farSched = schedulingService.create(campU, wsA, {
     contentKey: 'launch-newsletter-01',
     scheduledFor: new Date(Date.now() + 10 * 86400000).toISOString(),
@@ -722,7 +722,7 @@ async function main() {
   const campNoAi = `camp_noai_${randomUUID()}`;
   insertCampaign(campNoAi, wsEmpty, 'obj_sys_sales', 'APPROVED');
   seedPlanChain(campNoAi, wsEmpty);
-  const noAiArt = persistCreative(campNoAi, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  const noAiArt = await persistCreative(campNoAi, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   check('No AI manual creative', Boolean(noAiArt.id));
 
   // Restore obj_sys_sales to its seeded defaults after the run.

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db/database';
+import { getCoreRepositories } from '../db/core/createCoreRepositories';
 import { campaignBriefService } from '../services/campaigns/CampaignBriefService';
 
 export const campaignBriefRouter = Router({ mergeParams: true });
@@ -8,8 +8,8 @@ type BriefReq = Request<{ campaignId: string }>;
 
 interface CampaignRecord { id: string; workspace_id: string }
 
-function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): CampaignRecord | null {
-  const campaign = db.prepare('SELECT id, workspace_id FROM campaigns WHERE id = ?').get(campaignId) as CampaignRecord | undefined;
+async function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): Promise<CampaignRecord | null> {
+  const campaign = await getCoreRepositories().campaign.findById(campaignId);
   if (!campaign) {
     res.status(404).json({ error: 'Campaign not found' });
     return null;
@@ -18,17 +18,17 @@ function resolveCampaign(campaignId: string, workspaceId: string | undefined, re
     res.status(403).json({ error: 'Campaign does not belong to the specified workspace' });
     return null;
   }
-  return campaign;
+  return { id: campaign.id, workspace_id: campaign.workspace_id };
 }
 
 // GET /api/campaigns/:campaignId/brief?workspaceId=...
-campaignBriefRouter.get('/', (req: BriefReq, res: Response) => {
+campaignBriefRouter.get('/', async (req: BriefReq, res: Response) => {
   const { campaignId } = req.params;
   const { workspaceId } = req.query as Record<string, string | undefined>;
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
-  const brief = campaignBriefService.assemble(campaignId);
+  const brief = await campaignBriefService.assemble(campaignId);
   if (!brief) {
     res.status(404).json({ error: 'Could not assemble brief — campaign data incomplete' });
     return;
@@ -38,21 +38,21 @@ campaignBriefRouter.get('/', (req: BriefReq, res: Response) => {
 });
 
 // PATCH /api/campaigns/:campaignId/brief?workspaceId=...
-campaignBriefRouter.patch('/', (req: BriefReq, res: Response) => {
+campaignBriefRouter.patch('/', async (req: BriefReq, res: Response) => {
   const { campaignId } = req.params;
   const { workspaceId } = req.query as Record<string, string | undefined>;
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
   const body = req.body as Record<string, unknown>;
-  const updated = campaignBriefService.patch(campaignId, {
-    timingStartDate:     body.timingStartDate     as string | undefined,
-    timingEndDate:       body.timingEndDate       as string | undefined,
-    offerDescription:    body.offerDescription    as string | undefined,
-    offerValue:          body.offerValue          as string | undefined,
-    offerUrgency:        body.offerUrgency        as string | undefined,
-    additionalContext:   body.additionalContext   as string | undefined,
-    proposition:         body.proposition        as string | undefined,
+  const updated = await campaignBriefService.patch(campaignId, {
+    timingStartDate: body.timingStartDate as string | undefined,
+    timingEndDate: body.timingEndDate as string | undefined,
+    offerDescription: body.offerDescription as string | undefined,
+    offerValue: body.offerValue as string | undefined,
+    offerUrgency: body.offerUrgency as string | undefined,
+    additionalContext: body.additionalContext as string | undefined,
+    proposition: body.proposition as string | undefined,
     audienceDescription: body.audienceDescription as string | undefined,
   });
 

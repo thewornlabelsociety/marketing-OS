@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db/database';
+import { getCoreRepositories } from '../db/core/createCoreRepositories';
 import { aiEnv } from '../config/aiEnvironment';
 import { campaignPlannerService } from '../services/campaigns/CampaignPlannerService';
 
@@ -7,8 +7,8 @@ type PlanReq = Request<{ campaignId: string }>;
 
 interface CampaignRecord { id: string; workspace_id: string }
 
-function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): CampaignRecord | null {
-  const campaign = db.prepare('SELECT id, workspace_id FROM campaigns WHERE id = ?').get(campaignId) as CampaignRecord | undefined;
+async function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): Promise<CampaignRecord | null> {
+  const campaign = await getCoreRepositories().campaign.findById(campaignId);
   if (!campaign) {
     res.status(404).json({ error: 'Campaign not found' });
     return null;
@@ -17,19 +17,19 @@ function resolveCampaign(campaignId: string, workspaceId: string | undefined, re
     res.status(403).json({ error: 'Campaign does not belong to the specified workspace' });
     return null;
   }
-  return campaign;
+  return { id: campaign.id, workspace_id: campaign.workspace_id };
 }
 
 export const campaignPlansRouter = Router({ mergeParams: true });
 
 // GET /api/campaigns/:campaignId/plan?workspaceId=...
-campaignPlansRouter.get('/', (req: PlanReq, res: Response) => {
+campaignPlansRouter.get('/', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
   const { workspaceId } = req.query as Record<string, string | undefined>;
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
-  const plan = campaignPlannerService.getCurrentPlan(campaignId);
+  const plan = await campaignPlannerService.getCurrentPlan(campaignId);
   if (!plan) {
     res.status(404).json({ error: 'No plan exists for this campaign' });
     return;
@@ -39,26 +39,27 @@ campaignPlansRouter.get('/', (req: PlanReq, res: Response) => {
 });
 
 // GET /api/campaigns/:campaignId/plan/versions?workspaceId=...
-campaignPlansRouter.get('/versions', (req: PlanReq, res: Response) => {
+campaignPlansRouter.get('/versions', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
   const { workspaceId } = req.query as Record<string, string | undefined>;
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
-  res.json(campaignPlannerService.getAllVersions(campaignId));
+  res.json(await campaignPlannerService.getAllVersions(campaignId));
 });
 
 // GET /api/campaigns/:campaignId/plan/status?workspaceId=...
-campaignPlansRouter.get('/status', (req: PlanReq, res: Response) => {
+campaignPlansRouter.get('/status', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
   const { workspaceId } = req.query as Record<string, string | undefined>;
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
+  const current = await campaignPlannerService.getCurrentPlan(campaignId);
   res.json({
     aiConfigured: aiEnv.isConfigured,
     aiProvider: aiEnv.provider,
-    hasPlan: campaignPlannerService.getCurrentPlan(campaignId) !== null,
+    hasPlan: current !== null,
   });
 });
 
@@ -67,7 +68,7 @@ campaignPlansRouter.post('/', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
   const { workspaceId } = req.query as Record<string, string | undefined>;
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
   const result = await campaignPlannerService.generate(campaignId);
   if ('error' in result) {
@@ -88,7 +89,7 @@ campaignPlansRouter.post('/revisions', async (req: PlanReq, res: Response) => {
     return;
   }
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
   const result = await campaignPlannerService.revise(campaignId, requestText.trim());
   if ('error' in result) {
@@ -100,7 +101,7 @@ campaignPlansRouter.post('/revisions', async (req: PlanReq, res: Response) => {
 });
 
 // POST /api/campaigns/:campaignId/plan/approve (workspaceId in body)
-campaignPlansRouter.post('/approve', (req: PlanReq, res: Response) => {
+campaignPlansRouter.post('/approve', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
   const { planId, workspaceId } = req.body as { planId?: string; workspaceId?: string };
 
@@ -109,9 +110,9 @@ campaignPlansRouter.post('/approve', (req: PlanReq, res: Response) => {
     return;
   }
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
-  const result = campaignPlannerService.approvePlan(campaignId, planId);
+  const result = await campaignPlannerService.approvePlan(campaignId, planId);
   if (result.error) {
     res.status(400).json({ error: result.error });
     return;
@@ -121,13 +122,13 @@ campaignPlansRouter.post('/approve', (req: PlanReq, res: Response) => {
 });
 
 // GET /api/campaigns/:campaignId/plan/approval?workspaceId=...
-campaignPlansRouter.get('/approval', (req: PlanReq, res: Response) => {
+campaignPlansRouter.get('/approval', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
   const { workspaceId } = req.query as Record<string, string | undefined>;
 
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
-  const approval = campaignPlannerService.getApproval(campaignId);
+  const approval = await campaignPlannerService.getApproval(campaignId);
   if (!approval) {
     res.status(404).json({ error: 'No approval record found' });
     return;

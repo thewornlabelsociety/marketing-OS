@@ -73,9 +73,15 @@ export interface CampaignPatchInput {
   objectiveId?: string;
 }
 
+import type { PlanningRepositories } from './planningDomainTypes';
+
 export interface CampaignListFilters {
   workspaceId?: string;
   status?: string;
+}
+
+export interface CampaignStatusUpdateOptions {
+  onlyIfStatus?: string;
 }
 
 export interface TenantRepository {
@@ -107,8 +113,15 @@ export interface CampaignRepository {
   list(filters: CampaignListFilters): Promise<CampaignRow[]>;
   findByIdWithObjective(id: string): Promise<CampaignRow | null>;
   findById(id: string): Promise<CampaignRow | null>;
+  findByIdForWorkspace(id: string, workspaceId: string): Promise<CampaignRow | null>;
   create(input: CampaignCreateInput): Promise<CampaignRow>;
   patch(id: string, patch: CampaignPatchInput, updatedAt: string): Promise<CampaignRow | null>;
+  updateStatus(
+    id: string,
+    status: string,
+    updatedAt: string,
+    options?: CampaignStatusUpdateOptions,
+  ): Promise<boolean>;
   deleteById(id: string): Promise<boolean>;
 }
 
@@ -118,6 +131,7 @@ export interface CoreDomainRepositories {
   workspace: WorkspaceRepository;
   objective: ObjectiveRepository;
   campaign: CampaignRepository;
+  planning: PlanningRepositories;
 }
 
 /** Verification-only: delete owned fixture rows by exact ID in FK-safe order. */

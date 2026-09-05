@@ -1,147 +1,20 @@
 import { randomUUID } from 'crypto';
-import { db } from '../../db/database';
 import { aiEnv } from '../../config/aiEnvironment';
+import {
+  createCoreRepositoriesWithClient,
+  getCoreRepositories,
+} from '../../db/core/createCoreRepositories';
+import type { CoreDomainRepositories } from '../../db/core/coreDomainTypes';
+import { withPostgresTransaction } from '../../db/core/withPostgresTransaction';
+import type {
+  CampaignChannelRecommendation,
+  CampaignContentRecommendation,
+  CampaignPlan,
+} from '../../db/core/planningDomainTypes';
+export type { CampaignChannelRecommendation, CampaignContentRecommendation, CampaignPlan };
 import { getAIProvider } from '../../integrations/adapters/AIProviderFactory';
-import { campaignContextBuilder, type CampaignContext } from './CampaignContextBuilder';
-
-export interface CampaignChannelRecommendation {
-  channel: string;
-  role: string;
-  rationale: string;
-}
-
-export interface CampaignContentRecommendation {
-  contentType: string;
-  channel: string;
-  format: string;
-  quantity: number;
-  purpose: string;
-}
-
-export interface CampaignPlan {
-  id: string;
-  campaignId: string;
-  workspaceId: string;
-  version: number;
-  status: string;
-  isCurrent: boolean;
-  strategy: {
-    campaignAngle: string;
-    coreMessage: string;
-    proposition: string;
-    audienceFocus: string;
-  };
-  hooks: {
-    primary: string;
-    supporting: string[];
-  };
-  proofPoints: string[];
-  callToAction: {
-    primary: string;
-    alternatives: string[];
-  };
-  channels: CampaignChannelRecommendation[];
-  contentMix: CampaignContentRecommendation[];
-  cadence: {
-    summary: string;
-    duration: string | null;
-  };
-  creativeDirection: {
-    visualDirection: string;
-    photographyDirection: string | null;
-    videoDirection: string | null;
-    copyDirection: string;
-  };
-  measurement: {
-    objective: string;
-    primaryKpi: string;
-    supportingKpis: string[];
-    conversionEvent: string | null;
-  };
-  rationale: {
-    summary: string;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface PlanRow {
-  id: string;
-  campaign_id: string;
-  workspace_id: string;
-  version: number;
-  status: string;
-  is_current: number;
-  strategy_campaign_angle: string | null;
-  strategy_core_message: string | null;
-  strategy_proposition: string | null;
-  strategy_audience_focus: string | null;
-  hooks: string;
-  proof_points: string;
-  cta_primary: string | null;
-  cta_alternatives: string;
-  channels: string;
-  content_mix: string;
-  cadence_summary: string | null;
-  cadence_duration: string | null;
-  creative_visual_direction: string | null;
-  creative_photography_direction: string | null;
-  creative_video_direction: string | null;
-  creative_copy_direction: string | null;
-  measurement_objective: string | null;
-  measurement_primary_kpi: string | null;
-  measurement_supporting_kpis: string;
-  measurement_conversion_event: string | null;
-  rationale_summary: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-function mapPlanRow(r: PlanRow): CampaignPlan {
-  return {
-    id: r.id,
-    campaignId: r.campaign_id,
-    workspaceId: r.workspace_id,
-    version: r.version,
-    status: r.status,
-    isCurrent: r.is_current === 1,
-    strategy: {
-      campaignAngle: r.strategy_campaign_angle ?? '',
-      coreMessage:   r.strategy_core_message   ?? '',
-      proposition:   r.strategy_proposition    ?? '',
-      audienceFocus: r.strategy_audience_focus ?? '',
-    },
-    hooks: JSON.parse(r.hooks || '{"primary":"","supporting":[]}') as CampaignPlan['hooks'],
-    proofPoints: JSON.parse(r.proof_points || '[]') as string[],
-    callToAction: {
-      primary:      r.cta_primary      ?? '',
-      alternatives: JSON.parse(r.cta_alternatives || '[]') as string[],
-    },
-    channels:   JSON.parse(r.channels   || '[]') as CampaignChannelRecommendation[],
-    contentMix: JSON.parse(r.content_mix || '[]') as CampaignContentRecommendation[],
-    cadence: {
-      summary:  r.cadence_summary  ?? '',
-      duration: r.cadence_duration ?? null,
-    },
-    creativeDirection: {
-      visualDirection:       r.creative_visual_direction       ?? '',
-      photographyDirection:  r.creative_photography_direction  ?? null,
-      videoDirection:        r.creative_video_direction        ?? null,
-      copyDirection:         r.creative_copy_direction         ?? '',
-    },
-    measurement: {
-      objective:        r.measurement_objective    ?? '',
-      primaryKpi:       r.measurement_primary_kpi  ?? '',
-      supportingKpis:   JSON.parse(r.measurement_supporting_kpis || '[]') as string[],
-      conversionEvent:  r.measurement_conversion_event ?? null,
-    },
-    rationale: {
-      summary: r.rationale_summary ?? '',
-    },
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  };
-}
+import type { AIProvider } from '../../integrations/contracts/AIProvider';
+import { campaignContextBuilder, CampaignContextBuilder, type CampaignContext } from './CampaignContextBuilder';
 
 function buildSystemPrompt(ctx: CampaignContext, isRevision: boolean): string {
   const objectiveGuidance: Record<string, string> = {
@@ -192,7 +65,7 @@ RESPOND WITH VALID JSON ONLY. No markdown, no commentary, just the JSON object.`
 function buildUserPrompt(ctx: CampaignContext, revisionRequest?: string): string {
   const brand = ctx.brand;
   const bannedLanguage = [
-    ...(brand.language.bannedWords   ?? []),
+    ...(brand.language.bannedWords ?? []),
     ...(brand.language.bannedPhrases ?? []),
   ].filter(Boolean);
 
@@ -202,24 +75,24 @@ function buildUserPrompt(ctx: CampaignContext, revisionRequest?: string): string
     '',
     '=== BRAND IDENTITY ===',
     brand.identity.description ? `Description: ${brand.identity.description}` : '',
-    brand.identity.market      ? `Market: ${brand.identity.market}` : '',
+    brand.identity.market ? `Market: ${brand.identity.market}` : '',
     '',
     '=== TARGET AUDIENCE ===',
     brand.audience.primaryAudience ? `Who: ${brand.audience.primaryAudience}` : '',
     brand.audience.problems?.length ? `Problems: ${brand.audience.problems.join(', ')}` : '',
-    brand.audience.desires?.length  ? `Desires: ${brand.audience.desires.join(', ')}` : '',
-    brand.audience.needs?.length    ? `Needs: ${brand.audience.needs.join(', ')}` : '',
+    brand.audience.desires?.length ? `Desires: ${brand.audience.desires.join(', ')}` : '',
+    brand.audience.needs?.length ? `Needs: ${brand.audience.needs.join(', ')}` : '',
     '',
     '=== BRAND PERSONALITY ===',
-    brand.personality.archetype  ? `Archetype: ${brand.personality.archetype}` : '',
+    brand.personality.archetype ? `Archetype: ${brand.personality.archetype}` : '',
     brand.personality.traits?.length ? `Traits: ${brand.personality.traits.join(', ')}` : '',
     brand.personality.principles?.length ? `Principles: ${brand.personality.principles.join(', ')}` : '',
     '',
     '=== BRAND LANGUAGE ===',
-    brand.language.preferredWords?.length   ? `Preferred words: ${brand.language.preferredWords.join(', ')}` : '',
+    brand.language.preferredWords?.length ? `Preferred words: ${brand.language.preferredWords.join(', ')}` : '',
     brand.language.preferredPhrases?.length ? `Preferred phrases: ${brand.language.preferredPhrases.join(', ')}` : '',
     bannedLanguage.length ? `BANNED — never use: ${bannedLanguage.join(', ')}` : '',
-    brand.language.ctaStyle  ? `CTA style: ${brand.language.ctaStyle}` : '',
+    brand.language.ctaStyle ? `CTA style: ${brand.language.ctaStyle}` : '',
     brand.language.exampleCopy ? `Example voice: "${brand.language.exampleCopy}"` : '',
     '',
     '=== WHAT WE ARE MARKETING ===',
@@ -238,19 +111,19 @@ function buildUserPrompt(ctx: CampaignContext, revisionRequest?: string): string
 
   if (ctx.brief) {
     lines.push('=== CAMPAIGN BRIEF ===');
-    if (ctx.brief.sourceSummary)       lines.push(`Source: ${ctx.brief.sourceSummary}`);
-    if (ctx.brief.objectiveSummary)    lines.push(`Objective context: ${ctx.brief.objectiveSummary}`);
+    if (ctx.brief.sourceSummary) lines.push(`Source: ${ctx.brief.sourceSummary}`);
+    if (ctx.brief.objectiveSummary) lines.push(`Objective context: ${ctx.brief.objectiveSummary}`);
     if (ctx.brief.audienceDescription) lines.push(`Audience: ${ctx.brief.audienceDescription}`);
-    if (ctx.brief.audienceProblem)     lines.push(`Audience problem: ${ctx.brief.audienceProblem}`);
-    if (ctx.brief.audienceDesire)      lines.push(`Audience desire: ${ctx.brief.audienceDesire}`);
-    if (ctx.brief.proposition)         lines.push(`Proposition: ${ctx.brief.proposition}`);
-    if (ctx.brief.offerDescription)    lines.push(`Offer: ${ctx.brief.offerDescription}`);
-    if (ctx.brief.offerValue)          lines.push(`Offer value: ${ctx.brief.offerValue}`);
-    if (ctx.brief.offerUrgency)        lines.push(`Urgency: ${ctx.brief.offerUrgency}`);
-    if (ctx.brief.timingStartDate)     lines.push(`Start date: ${ctx.brief.timingStartDate}`);
-    if (ctx.brief.timingEndDate)       lines.push(`End date: ${ctx.brief.timingEndDate}`);
-    if (ctx.brief.keyDetails.length)   lines.push(`Key details: ${ctx.brief.keyDetails.join(', ')}`);
-    if (ctx.brief.additionalContext)   lines.push(`Additional context: ${ctx.brief.additionalContext}`);
+    if (ctx.brief.audienceProblem) lines.push(`Audience problem: ${ctx.brief.audienceProblem}`);
+    if (ctx.brief.audienceDesire) lines.push(`Audience desire: ${ctx.brief.audienceDesire}`);
+    if (ctx.brief.proposition) lines.push(`Proposition: ${ctx.brief.proposition}`);
+    if (ctx.brief.offerDescription) lines.push(`Offer: ${ctx.brief.offerDescription}`);
+    if (ctx.brief.offerValue) lines.push(`Offer value: ${ctx.brief.offerValue}`);
+    if (ctx.brief.offerUrgency) lines.push(`Urgency: ${ctx.brief.offerUrgency}`);
+    if (ctx.brief.timingStartDate) lines.push(`Start date: ${ctx.brief.timingStartDate}`);
+    if (ctx.brief.timingEndDate) lines.push(`End date: ${ctx.brief.timingEndDate}`);
+    if (ctx.brief.keyDetails.length) lines.push(`Key details: ${ctx.brief.keyDetails.join(', ')}`);
+    if (ctx.brief.additionalContext) lines.push(`Additional context: ${ctx.brief.additionalContext}`);
     lines.push('');
   }
 
@@ -336,247 +209,304 @@ function parsePlanJson(raw: string): Record<string, unknown> {
   }
 }
 
-function storePlan(campaignId: string, workspaceId: string, version: number, data: Record<string, unknown>): PlanRow {
-  const id = `plan_${randomUUID()}`;
-  const now = new Date().toISOString();
+export class CampaignPlannerService {
+  constructor(
+    private readonly aiFactory: () => AIProvider | null = getAIProvider,
+    private readonly reposFactory: () => CoreDomainRepositories = getCoreRepositories,
+    private readonly contextBuilder: CampaignContextBuilder = campaignContextBuilder,
+  ) {}
 
-  const strategy = (data.strategy ?? {}) as Record<string, unknown>;
-  const hooks     = (data.hooks    ?? { primary: '', supporting: [] }) as object;
-  const cta       = (data.callToAction ?? {}) as Record<string, unknown>;
-  const cadence   = (data.cadence      ?? {}) as Record<string, unknown>;
-  const creative  = (data.creativeDirection ?? {}) as Record<string, unknown>;
-  const measurement = (data.measurement ?? {}) as Record<string, unknown>;
-  const rationale   = (data.rationale   ?? {}) as Record<string, unknown>;
+  private get repos() {
+    return this.reposFactory();
+  }
 
-  db.prepare(`
-    INSERT INTO campaign_plans
-      (id, campaign_id, workspace_id, version, status, is_current,
-       strategy_campaign_angle, strategy_core_message, strategy_proposition, strategy_audience_focus,
-       hooks, proof_points, cta_primary, cta_alternatives,
-       channels, content_mix,
-       cadence_summary, cadence_duration,
-       creative_visual_direction, creative_photography_direction,
-       creative_video_direction, creative_copy_direction,
-       measurement_objective, measurement_primary_kpi, measurement_supporting_kpis, measurement_conversion_event,
-       rationale_summary,
-       created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'READY_FOR_REVIEW', 1,
-            ?, ?, ?, ?,
-            ?, ?, ?, ?,
-            ?, ?,
-            ?, ?,
-            ?, ?, ?, ?,
-            ?, ?, ?, ?,
-            ?,
-            ?, ?)
-  `).run(
-    id, campaignId, workspaceId, version,
-    (strategy.campaignAngle as string | null) ?? null,
-    (strategy.coreMessage   as string | null) ?? null,
-    (strategy.proposition   as string | null) ?? null,
-    (strategy.audienceFocus as string | null) ?? null,
-    JSON.stringify(hooks),
-    JSON.stringify(data.proofPoints ?? []),
-    (cta.primary as string | null) ?? null,
-    JSON.stringify(cta.alternatives ?? []),
-    JSON.stringify(data.channels   ?? []),
-    JSON.stringify(data.contentMix ?? []),
-    (cadence.summary  as string | null) ?? null,
-    (cadence.duration as string | null) ?? null,
-    (creative.visualDirection      as string | null) ?? null,
-    (creative.photographyDirection as string | null) ?? null,
-    (creative.videoDirection       as string | null) ?? null,
-    (creative.copyDirection        as string | null) ?? null,
-    (measurement.objective       as string | null) ?? null,
-    (measurement.primaryKpi      as string | null) ?? null,
-    JSON.stringify(measurement.supportingKpis ?? []),
-    (measurement.conversionEvent as string | null) ?? null,
-    (rationale.summary as string | null) ?? null,
-    now, now,
-  );
-
-  return db.prepare('SELECT * FROM campaign_plans WHERE id = ?').get(id) as PlanRow;
-}
-
-class CampaignPlannerService {
   isAvailable(): boolean {
     return aiEnv.isConfigured;
   }
 
-  getCurrentPlan(campaignId: string): CampaignPlan | null {
-    const row = db
-      .prepare('SELECT * FROM campaign_plans WHERE campaign_id = ? AND is_current = 1 ORDER BY version DESC LIMIT 1')
-      .get(campaignId) as PlanRow | undefined;
-    return row ? mapPlanRow(row) : null;
+  async getCurrentPlan(campaignId: string): Promise<CampaignPlan | null> {
+    return this.repos.planning.plan.getCurrent(campaignId);
   }
 
-  getAllVersions(campaignId: string): CampaignPlan[] {
-    const rows = db
-      .prepare('SELECT * FROM campaign_plans WHERE campaign_id = ? ORDER BY version DESC')
-      .all(campaignId) as PlanRow[];
-    return rows.map(mapPlanRow);
+  async getAllVersions(campaignId: string): Promise<CampaignPlan[]> {
+    return this.repos.planning.plan.listVersions(campaignId);
   }
 
-  getPlanById(planId: string, campaignId: string): CampaignPlan | null {
-    const row = db
-      .prepare('SELECT * FROM campaign_plans WHERE id = ? AND campaign_id = ?')
-      .get(planId, campaignId) as PlanRow | undefined;
-    return row ? mapPlanRow(row) : null;
+  async getPlanById(planId: string, campaignId: string): Promise<CampaignPlan | null> {
+    return this.repos.planning.plan.getById(planId, campaignId);
   }
 
-  getApprovedPlan(campaignId: string): CampaignPlan | null {
-    const approval = this.getApproval(campaignId);
+  async getApprovedPlan(campaignId: string): Promise<CampaignPlan | null> {
+    const approval = await this.getApproval(campaignId);
     if (!approval) return null;
-    const plan = this.getPlanById(approval.approvedPlanId, campaignId);
+    const plan = await this.getPlanById(approval.approvedPlanId, campaignId);
     if (!plan) return null;
     if (plan.version !== approval.approvedVersion) return null;
     return plan;
   }
 
   async generate(campaignId: string): Promise<{ plan: CampaignPlan } | { error: string }> {
-    const ai = getAIProvider();
+    const ai = this.aiFactory();
     if (!ai) {
       return { error: 'AI planning is not configured. Add AI_PROVIDER and the corresponding API key to .env to enable campaign planning.' };
     }
 
-    const ctx = campaignContextBuilder.build(campaignId);
+    const ctx = await this.contextBuilder.build(campaignId);
     if (!ctx) return { error: 'Campaign not found' };
 
-    // Determine next version number
-    const existing = db
-      .prepare('SELECT MAX(version) as max_v FROM campaign_plans WHERE campaign_id = ?')
-      .get(campaignId) as { max_v: number | null };
-    const nextVersion = (existing.max_v ?? 0) + 1;
+    const repos = this.repos;
+    const maxVersion = await repos.planning.plan.getMaxVersion(campaignId);
+    const nextVersion = maxVersion + 1;
 
-    // Mark all current plans as not current
-    db.prepare('UPDATE campaign_plans SET is_current = 0 WHERE campaign_id = ?').run(campaignId);
+    if (repos.driver === 'postgres') {
+      try {
+        const rawJson = await ai.generateStructured({
+          systemPrompt: buildSystemPrompt(ctx, false),
+          userPrompt: buildUserPrompt(ctx),
+          model: aiEnv.campaignModel,
+          maxTokens: 4096,
+        });
+        const data = parsePlanJson(rawJson);
+        const now = new Date().toISOString();
+        const plan = await withPostgresTransaction(async (client) => {
+          const txRepos = createCoreRepositoriesWithClient(client);
+          await txRepos.planning.plan.markAllNonCurrent(campaignId);
+          const inserted = await txRepos.planning.plan.insert({
+            id: `plan_${randomUUID()}`,
+            campaignId,
+            workspaceId: ctx.workspace.id,
+            version: nextVersion,
+            status: 'READY_FOR_REVIEW',
+            isCurrent: true,
+            data,
+            createdAt: now,
+            updatedAt: now,
+          });
+          await txRepos.campaign.updateStatus(campaignId, 'READY_FOR_REVIEW', now, { onlyIfStatus: 'DRAFTING' });
+          return inserted;
+        });
+        return { plan };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { error: `Campaign planning could not be completed. Your campaign is safe. (${message})` };
+      }
+    }
+
+    const previousCurrent = await repos.planning.plan.getCurrent(campaignId);
+    await repos.planning.plan.markAllNonCurrent(campaignId);
 
     try {
       const rawJson = await ai.generateStructured({
         systemPrompt: buildSystemPrompt(ctx, false),
-        userPrompt:   buildUserPrompt(ctx),
+        userPrompt: buildUserPrompt(ctx),
         model: aiEnv.campaignModel,
         maxTokens: 4096,
       });
 
       const data = parsePlanJson(rawJson);
-      const row  = storePlan(campaignId, ctx.workspace.id, nextVersion, data);
+      const now = new Date().toISOString();
+      const plan = await repos.planning.plan.insert({
+        id: `plan_${randomUUID()}`,
+        campaignId,
+        workspaceId: ctx.workspace.id,
+        version: nextVersion,
+        status: 'READY_FOR_REVIEW',
+        isCurrent: true,
+        data,
+        createdAt: now,
+        updatedAt: now,
+      });
 
-      // Advance campaign status to READY_FOR_REVIEW
-      db.prepare(`UPDATE campaigns SET status = 'READY_FOR_REVIEW', updated_at = ? WHERE id = ? AND status = 'DRAFTING'`)
-        .run(new Date().toISOString(), campaignId);
+      await repos.campaign.updateStatus(campaignId, 'READY_FOR_REVIEW', now, { onlyIfStatus: 'DRAFTING' });
 
-      return { plan: mapPlanRow(row) };
+      return { plan };
     } catch (err) {
-      // Restore previous current plan on failure
-      db.prepare('UPDATE campaign_plans SET is_current = 1 WHERE campaign_id = ? AND version = (SELECT MAX(version) FROM campaign_plans WHERE campaign_id = ? AND id != (SELECT id FROM campaign_plans WHERE campaign_id = ? ORDER BY version DESC LIMIT 1))')
-        .run(campaignId, campaignId, campaignId);
-      const prevRow = db.prepare('SELECT * FROM campaign_plans WHERE campaign_id = ? ORDER BY version DESC LIMIT 1').get(campaignId) as PlanRow | undefined;
-      if (prevRow) db.prepare('UPDATE campaign_plans SET is_current = 1 WHERE id = ?').run(prevRow.id);
-
+      if (previousCurrent) {
+        await repos.planning.plan.markCurrent(previousCurrent.id);
+      }
       const message = err instanceof Error ? err.message : String(err);
       return { error: `Campaign planning could not be completed. Your campaign is safe. (${message})` };
     }
   }
 
   async revise(campaignId: string, revisionRequest: string): Promise<{ plan: CampaignPlan } | { error: string }> {
-    const ai = getAIProvider();
+    const ai = this.aiFactory();
     if (!ai) return { error: 'AI planning is not configured.' };
 
-    const ctx = campaignContextBuilder.build(campaignId);
+    const ctx = await this.contextBuilder.build(campaignId);
     if (!ctx) return { error: 'Campaign not found' };
 
-    const currentPlan = this.getCurrentPlan(campaignId);
+    const repos = this.repos;
+    const currentPlan = await repos.planning.plan.getCurrent(campaignId);
     if (!currentPlan) return { error: 'No plan exists to revise. Generate a plan first.' };
 
-    const fromPlanId      = currentPlan.id;
+    const fromPlanId = currentPlan.id;
     const fromPlanVersion = currentPlan.version;
-    const nextVersion     = fromPlanVersion + 1;
-
-    // Store revision request
+    const nextVersion = fromPlanVersion + 1;
     const revId = `rev_${randomUUID()}`;
-    const now   = new Date().toISOString();
-    db.prepare(`
-      INSERT INTO revision_requests
-        (id, campaign_id, workspace_id, from_plan_id, from_plan_version, request_text, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'PROCESSING', ?, ?)
-    `).run(revId, campaignId, ctx.workspace.id, fromPlanId, fromPlanVersion, revisionRequest, now, now);
+    const now = new Date().toISOString();
 
-    // Update campaign status to REVISING
-    db.prepare(`UPDATE campaigns SET status = 'REVISING', updated_at = ? WHERE id = ?`)
-      .run(now, campaignId);
+    if (repos.driver === 'postgres') {
+      await withPostgresTransaction(async (client) => {
+        const txRepos = createCoreRepositoriesWithClient(client);
+        await txRepos.planning.revision.create({
+          id: revId,
+          campaignId,
+          workspaceId: ctx.workspace.id,
+          fromPlanId,
+          fromPlanVersion,
+          requestText: revisionRequest,
+          status: 'PROCESSING',
+          createdAt: now,
+          updatedAt: now,
+        });
+        await txRepos.campaign.updateStatus(campaignId, 'REVISING', now);
+        await txRepos.planning.plan.markAllNonCurrent(campaignId);
+      });
 
-    // Deactivate current plan
-    db.prepare('UPDATE campaign_plans SET is_current = 0 WHERE campaign_id = ?').run(campaignId);
+      try {
+        const rawJson = await ai.generateStructured({
+          systemPrompt: buildSystemPrompt(ctx, true),
+          userPrompt: buildUserPrompt(ctx, revisionRequest),
+          model: aiEnv.revisionModel,
+          maxTokens: 4096,
+        });
+        const data = parsePlanJson(rawJson);
+        const appliedAt = new Date().toISOString();
+        const plan = await withPostgresTransaction(async (client) => {
+          const txRepos = createCoreRepositoriesWithClient(client);
+          const inserted = await txRepos.planning.plan.insert({
+            id: `plan_${randomUUID()}`,
+            campaignId,
+            workspaceId: ctx.workspace.id,
+            version: nextVersion,
+            status: 'READY_FOR_REVIEW',
+            isCurrent: true,
+            data,
+            createdAt: appliedAt,
+            updatedAt: appliedAt,
+          });
+          await txRepos.planning.revision.updateStatus(revId, 'APPLIED', appliedAt);
+          await txRepos.campaign.updateStatus(campaignId, 'READY_FOR_APPROVAL', appliedAt);
+          return inserted;
+        });
+        return { plan };
+      } catch (err) {
+        const failedAt = new Date().toISOString();
+        await withPostgresTransaction(async (client) => {
+          const txRepos = createCoreRepositoriesWithClient(client);
+          await txRepos.planning.plan.markCurrent(fromPlanId);
+          await txRepos.planning.revision.updateStatus(revId, 'FAILED', failedAt);
+          await txRepos.campaign.updateStatus(campaignId, 'READY_FOR_REVIEW', failedAt);
+        });
+        const message = err instanceof Error ? err.message : String(err);
+        return { error: `Campaign revision could not be completed. Your plan is safe. (${message})` };
+      }
+    }
+
+    await repos.planning.revision.create({
+      id: revId,
+      campaignId,
+      workspaceId: ctx.workspace.id,
+      fromPlanId,
+      fromPlanVersion,
+      requestText: revisionRequest,
+      status: 'PROCESSING',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await repos.campaign.updateStatus(campaignId, 'REVISING', now);
+    await repos.planning.plan.markAllNonCurrent(campaignId);
 
     try {
       const rawJson = await ai.generateStructured({
         systemPrompt: buildSystemPrompt(ctx, true),
-        userPrompt:   buildUserPrompt(ctx, revisionRequest),
+        userPrompt: buildUserPrompt(ctx, revisionRequest),
         model: aiEnv.revisionModel,
         maxTokens: 4096,
       });
 
       const data = parsePlanJson(rawJson);
-      const row  = storePlan(campaignId, ctx.workspace.id, nextVersion, data);
+      const appliedAt = new Date().toISOString();
+      const plan = await repos.planning.plan.insert({
+        id: `plan_${randomUUID()}`,
+        campaignId,
+        workspaceId: ctx.workspace.id,
+        version: nextVersion,
+        status: 'READY_FOR_REVIEW',
+        isCurrent: true,
+        data,
+        createdAt: appliedAt,
+        updatedAt: appliedAt,
+      });
 
-      // Update revision request status
-      db.prepare('UPDATE revision_requests SET status = \'APPLIED\', updated_at = ? WHERE id = ?')
-        .run(new Date().toISOString(), revId);
+      await repos.planning.revision.updateStatus(revId, 'APPLIED', appliedAt);
+      await repos.campaign.updateStatus(campaignId, 'READY_FOR_APPROVAL', appliedAt);
 
-      // Advance campaign status
-      db.prepare(`UPDATE campaigns SET status = 'READY_FOR_APPROVAL', updated_at = ? WHERE id = ?`)
-        .run(new Date().toISOString(), campaignId);
-
-      return { plan: mapPlanRow(row) };
+      return { plan };
     } catch (err) {
-      // Restore previous plan
-      db.prepare('UPDATE campaign_plans SET is_current = 1 WHERE id = ?').run(fromPlanId);
-      db.prepare('UPDATE revision_requests SET status = \'FAILED\', updated_at = ? WHERE id = ?')
-        .run(new Date().toISOString(), revId);
-      db.prepare(`UPDATE campaigns SET status = 'READY_FOR_REVIEW', updated_at = ? WHERE id = ?`)
-        .run(new Date().toISOString(), campaignId);
+      await repos.planning.plan.markCurrent(fromPlanId);
+      await repos.planning.revision.updateStatus(revId, 'FAILED', new Date().toISOString());
+      await repos.campaign.updateStatus(campaignId, 'READY_FOR_REVIEW', new Date().toISOString());
 
       const message = err instanceof Error ? err.message : String(err);
       return { error: `Campaign revision could not be completed. Your plan is safe. (${message})` };
     }
   }
 
-  approvePlan(campaignId: string, planId: string): { error?: string } {
-    const plan = db.prepare('SELECT * FROM campaign_plans WHERE id = ? AND campaign_id = ?')
-      .get(planId, campaignId) as PlanRow | undefined;
-
+  async approvePlan(campaignId: string, planId: string): Promise<{ error?: string }> {
+    const repos = this.repos;
+    const plan = await repos.planning.plan.getById(planId, campaignId);
     if (!plan) return { error: 'Plan not found' };
 
     const now = new Date().toISOString();
 
-    // Upsert approval record
-    db.prepare(`
-      INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(campaign_id) DO UPDATE SET
-        approved_plan_id = excluded.approved_plan_id,
-        approved_version = excluded.approved_version,
-        approved_at = excluded.approved_at
-    `).run(`approval_${randomUUID()}`, campaignId, plan.workspace_id, planId, plan.version, now, now);
+    if (repos.driver === 'postgres') {
+      try {
+        await withPostgresTransaction(async (client) => {
+          const txRepos = createCoreRepositoriesWithClient(client);
+          await txRepos.planning.approval.upsertByCampaignId({
+            id: `approval_${randomUUID()}`,
+            campaignId,
+            workspaceId: plan.workspaceId,
+            approvedPlanId: planId,
+            approvedVersion: plan.version,
+            approvedAt: now,
+            createdAt: now,
+          });
+          await txRepos.planning.plan.updateStatus(planId, 'APPROVED', now);
+          await txRepos.campaign.updateStatus(campaignId, 'APPROVED', now);
+        });
+        return {};
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { error: message };
+      }
+    }
 
-    // Update plan status
-    db.prepare('UPDATE campaign_plans SET status = \'APPROVED\', updated_at = ? WHERE id = ?')
-      .run(now, planId);
-
-    // Advance campaign lifecycle
-    db.prepare(`UPDATE campaigns SET status = 'APPROVED', updated_at = ? WHERE id = ?`)
-      .run(now, campaignId);
+    await repos.planning.approval.upsertByCampaignId({
+      id: `approval_${randomUUID()}`,
+      campaignId,
+      workspaceId: plan.workspaceId,
+      approvedPlanId: planId,
+      approvedVersion: plan.version,
+      approvedAt: now,
+      createdAt: now,
+    });
+    await repos.planning.plan.updateStatus(planId, 'APPROVED', now);
+    await repos.campaign.updateStatus(campaignId, 'APPROVED', now);
 
     return {};
   }
 
-  getApproval(campaignId: string): { approvedPlanId: string; approvedVersion: number; approvedAt: string } | null {
-    const row = db
-      .prepare('SELECT * FROM plan_approvals WHERE campaign_id = ?')
-      .get(campaignId) as { approved_plan_id: string; approved_version: number; approved_at: string } | undefined;
+  async getApproval(campaignId: string): Promise<{ approvedPlanId: string; approvedVersion: number; approvedAt: string } | null> {
+    const row = await this.repos.planning.approval.findByCampaignId(campaignId);
     if (!row) return null;
-    return { approvedPlanId: row.approved_plan_id, approvedVersion: row.approved_version, approvedAt: row.approved_at };
+    return {
+      approvedPlanId: row.approvedPlanId,
+      approvedVersion: row.approvedVersion,
+      approvedAt: row.approvedAt,
+    };
   }
 }
 

@@ -237,8 +237,8 @@ class ContentPlannerService {
     };
   }
 
-  resolveApprovedStrategy(campaignId: string): { plan: CampaignPlan } | ContentPlanServiceError {
-    const approved = campaignPlannerService.getApprovedPlan(campaignId);
+  async resolveApprovedStrategy(campaignId: string): Promise<{ plan: CampaignPlan } | ContentPlanServiceError> {
+    const approved = await campaignPlannerService.getApprovedPlan(campaignId);
     if (!approved) {
       return { error: 'Approve the campaign strategy before creating the content plan.', code: 'STRATEGY_NOT_APPROVED' };
     }
@@ -309,15 +309,15 @@ class ContentPlannerService {
     return (row.max_v ?? 0) + 1;
   }
 
-  persistFromStructured(
+  async persistFromStructured(
     campaignId: string,
     body: IncomingContentPlanBody,
     options?: { label?: string },
-  ): { plan: ContentPlan } | ContentPlanServiceError {
-    const strategy = this.resolveApprovedStrategy(campaignId);
+  ): Promise<{ plan: ContentPlan } | ContentPlanServiceError> {
+    const strategy = await this.resolveApprovedStrategy(campaignId);
     if ('error' in strategy) return strategy;
 
-    const ctx = contentPlanningContextBuilder.build(campaignId, strategy.plan);
+    const ctx = await contentPlanningContextBuilder.build(campaignId, strategy.plan);
     if (!ctx) return { error: 'Campaign not found', code: 'NOT_FOUND' };
 
     const previous = this.getCurrent(campaignId);
@@ -349,7 +349,7 @@ class ContentPlannerService {
   }
 
   async generate(campaignId: string): Promise<{ plan: ContentPlan } | ContentPlanServiceError> {
-    const strategy = this.resolveApprovedStrategy(campaignId);
+    const strategy = await this.resolveApprovedStrategy(campaignId);
     if ('error' in strategy) return strategy;
 
     const ai = this.aiFactory();
@@ -360,7 +360,7 @@ class ContentPlannerService {
       };
     }
 
-    const ctx = contentPlanningContextBuilder.build(campaignId, strategy.plan);
+    const ctx = await contentPlanningContextBuilder.build(campaignId, strategy.plan);
     if (!ctx) return { error: 'Campaign not found', code: 'NOT_FOUND' };
 
     const existing = this.getCurrent(campaignId);
@@ -373,7 +373,7 @@ class ContentPlannerService {
         maxTokens: 8192,
       });
       const data = parseJson(rawJson);
-      return this.persistFromStructured(campaignId, data);
+      return await this.persistFromStructured(campaignId, data);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (existing) {
@@ -389,13 +389,13 @@ class ContentPlannerService {
       return { error: 'AI planning is not configured.', code: 'AI_UNAVAILABLE' };
     }
 
-    const strategy = this.resolveApprovedStrategy(campaignId);
+    const strategy = await this.resolveApprovedStrategy(campaignId);
     if ('error' in strategy) return strategy;
 
     const current = this.getCurrent(campaignId);
     if (!current) return { error: 'No content plan exists to revise.', code: 'NO_CONTENT_PLAN' };
 
-    const ctx = contentPlanningContextBuilder.build(campaignId, strategy.plan);
+    const ctx = await contentPlanningContextBuilder.build(campaignId, strategy.plan);
     if (!ctx) return { error: 'Campaign not found', code: 'NOT_FOUND' };
 
     const revId = `cprev_${randomUUID()}`;
@@ -414,7 +414,7 @@ class ContentPlannerService {
         maxTokens: 8192,
       });
       const data = parseJson(rawJson);
-      const result = this.persistFromStructured(campaignId, data);
+      const result = await this.persistFromStructured(campaignId, data);
       if ('error' in result) {
         db.prepare(`UPDATE content_plan_revision_requests SET status = 'FAILED', updated_at = ? WHERE id = ?`)
           .run(new Date().toISOString(), revId);
@@ -439,18 +439,18 @@ class ContentPlannerService {
     }
   }
 
-  reviseFromStructured(
+  async reviseFromStructured(
     campaignId: string,
     requestText: string,
     body: IncomingContentPlanBody,
-  ): { plan: ContentPlan } | ContentPlanServiceError {
+  ): Promise<{ plan: ContentPlan } | ContentPlanServiceError> {
     const current = this.getCurrent(campaignId);
     if (!current) return { error: 'No content plan exists to revise.', code: 'NO_CONTENT_PLAN' };
 
-    const strategy = this.resolveApprovedStrategy(campaignId);
+    const strategy = await this.resolveApprovedStrategy(campaignId);
     if ('error' in strategy) return strategy;
 
-    const ctx = contentPlanningContextBuilder.build(campaignId, strategy.plan);
+    const ctx = await contentPlanningContextBuilder.build(campaignId, strategy.plan);
     if (!ctx) return { error: 'Campaign not found', code: 'NOT_FOUND' };
 
     const revId = `cprev_${randomUUID()}`;
@@ -461,7 +461,7 @@ class ContentPlannerService {
       VALUES (?, ?, ?, ?, ?, ?, 'PROCESSING', ?, ?)
     `).run(revId, ctx.campaignContext.workspace.id, campaignId, current.id, current.version, requestText, now, now);
 
-    const result = this.persistFromStructured(campaignId, body);
+    const result = await this.persistFromStructured(campaignId, body);
     if ('error' in result) {
       db.prepare(`UPDATE content_plan_revision_requests SET status = 'FAILED', updated_at = ? WHERE id = ?`)
         .run(new Date().toISOString(), revId);

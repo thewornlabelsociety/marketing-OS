@@ -25,8 +25,8 @@ export interface ContentPlanningContext {
 }
 
 export class ContentPlanningContextBuilder {
-  build(campaignId: string, approvedPlan: CampaignPlan): ContentPlanningContext | null {
-    const campaignContext = campaignContextBuilder.build(campaignId);
+  async build(campaignId: string, approvedPlan: CampaignPlan): Promise<ContentPlanningContext | null> {
+    const campaignContext = await campaignContextBuilder.build(campaignId);
     if (!campaignContext) return null;
 
     return {

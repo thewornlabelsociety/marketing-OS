@@ -19,7 +19,7 @@ export interface CreativeGenerationContext {
 }
 
 export class CreativeGenerationContextBuilder {
-  build(campaignId: string, contentKey: string): CreativeGenerationContext | { error: string; code: string } {
+  async build(campaignId: string, contentKey: string): Promise<CreativeGenerationContext | { error: string; code: string }> {
     const contentPlanResult = contentPlannerService.resolveApprovedContentPlan(campaignId);
     if ('error' in contentPlanResult) {
       return { error: contentPlanResult.error, code: contentPlanResult.code };
@@ -31,12 +31,12 @@ export class CreativeGenerationContextBuilder {
       return { error: `Deliverable ${contentKey} is not in the approved Content Plan.`, code: 'INVALID_CONTENT_KEY' };
     }
 
-    const campaignContext = campaignContextBuilder.build(campaignId);
+    const campaignContext = await campaignContextBuilder.build(campaignId);
     if (!campaignContext) {
       return { error: 'Campaign not found', code: 'NOT_FOUND' };
     }
 
-    const approvedCampaignPlan = campaignPlannerService.getApprovedPlan(campaignId);
+    const approvedCampaignPlan = await campaignPlannerService.getApprovedPlan(campaignId);
     if (!approvedCampaignPlan) {
       return { error: 'Approved campaign strategy not found', code: 'STRATEGY_NOT_APPROVED' };
     }

@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import {
   assertCoreDbDriverAllowed,
   resolveCoreDbDriver,
@@ -8,24 +9,42 @@ import { SqliteTenantRepository } from '../repositories/sqlite/SqliteTenantRepos
 import { SqliteWorkspaceRepository } from '../repositories/sqlite/SqliteWorkspaceRepository';
 import { SqliteObjectiveRepository } from '../repositories/sqlite/SqliteObjectiveRepository';
 import { SqliteCampaignRepository } from '../repositories/sqlite/SqliteCampaignRepository';
+import { createSqlitePlanningRepositories } from '../repositories/sqlite/SqlitePlanningRepositories';
 import {
   PostgresTenantRepository,
   PostgresWorkspaceRepository,
   PostgresObjectiveRepository,
   PostgresCampaignRepository,
 } from '../repositories/postgres/PostgresCoreRepositories';
+import { createPostgresPlanningRepositories } from '../repositories/postgres/PostgresPlanningRepositories';
 
 let cached: CoreDomainRepositories | null = null;
 let cachedDriver: CoreDbDriver | null = null;
 
-function buildRepositories(driver: CoreDbDriver): CoreDomainRepositories {
+export interface CreateCoreRepositoriesOptions {
+  env?: NodeJS.ProcessEnv;
+  postgresClient?: PoolClient;
+}
+
+function normalizeCreateArgs(
+  envOrOptions?: NodeJS.ProcessEnv | CreateCoreRepositoriesOptions,
+): CreateCoreRepositoriesOptions {
+  if (envOrOptions && typeof envOrOptions === 'object' && 'postgresClient' in envOrOptions) {
+    const opts = envOrOptions as CreateCoreRepositoriesOptions;
+    return { env: opts.env ?? process.env, postgresClient: opts.postgresClient };
+  }
+  return { env: (envOrOptions as NodeJS.ProcessEnv | undefined) ?? process.env };
+}
+
+function buildRepositories(driver: CoreDbDriver, postgresClient?: PoolClient): CoreDomainRepositories {
   if (driver === 'postgres') {
     return {
       driver: 'postgres',
       tenant: new PostgresTenantRepository(),
       workspace: new PostgresWorkspaceRepository(),
       objective: new PostgresObjectiveRepository(),
-      campaign: new PostgresCampaignRepository(),
+      campaign: new PostgresCampaignRepository(postgresClient),
+      planning: createPostgresPlanningRepositories(postgresClient),
     };
   }
   return {
@@ -34,6 +53,7 @@ function buildRepositories(driver: CoreDbDriver): CoreDomainRepositories {
     workspace: new SqliteWorkspaceRepository(),
     objective: new SqliteObjectiveRepository(),
     campaign: new SqliteCampaignRepository(),
+    planning: createSqlitePlanningRepositories(),
   };
 }
 
@@ -56,8 +76,22 @@ export function resetCoreRepositoriesForTests(): void {
 }
 
 /** Create a fresh repository bundle without touching the route singleton. */
-export function createCoreRepositories(env: NodeJS.ProcessEnv = process.env): CoreDomainRepositories {
+export function createCoreRepositories(
+  envOrOptions: NodeJS.ProcessEnv | CreateCoreRepositoriesOptions = process.env,
+): CoreDomainRepositories {
+  const { env = process.env, postgresClient } = normalizeCreateArgs(envOrOptions);
   const driver = resolveCoreDbDriver(env);
   assertCoreDbDriverAllowed(driver, env);
-  return buildRepositories(driver);
+  return buildRepositories(driver, postgresClient);
+}
+
+/** Transaction-scoped repositories sharing one Postgres client. */
+export function createCoreRepositoriesWithClient(
+  client: PoolClient,
+  env: NodeJS.ProcessEnv = process.env,
+): CoreDomainRepositories {
+  return createCoreRepositories({
+    env: { ...env, CORE_DB_DRIVER: 'postgres', PG2_VERIFICATION_ALLOWED: '1' },
+    postgresClient: client,
+  });
 }

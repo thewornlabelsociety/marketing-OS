@@ -6,6 +6,10 @@ export interface OwnedFixtureIds {
   entityIds: readonly string[];
   objectiveIds: readonly string[];
   campaignIds: readonly string[];
+  briefIds?: readonly string[];
+  planIds?: readonly string[];
+  revisionIds?: readonly string[];
+  approvalIds?: readonly string[];
 }
 
 export interface FixtureCleanupReport {
@@ -13,48 +17,39 @@ export interface FixtureCleanupReport {
   skipped: Record<string, number>;
 }
 
+function initCounts(keys: string[]): Record<string, number> {
+  return Object.fromEntries(keys.map((k) => [k, 0]));
+}
+
+const PLANNING_TABLES = ['plan_approvals', 'revision_requests', 'campaign_plans', 'campaign_briefs'] as const;
+const CORE_TABLES = ['campaigns', 'objectives', 'entities', 'tenants'] as const;
+
 /**
- * Delete only explicitly tracked PG-2 verification fixture IDs (FK-safe order).
+ * Delete only explicitly tracked verification fixture IDs (FK-safe order).
  * Never uses prefix predicates.
  */
 export async function deleteOwnedPostgresFixtures(
   ids: OwnedFixtureIds,
   client?: PoolClient,
 ): Promise<FixtureCleanupReport> {
-  const removed: Record<string, number> = {
-    campaigns: 0,
-    objectives: 0,
-    entities: 0,
-    tenants: 0,
-  };
-  const skipped: Record<string, number> = {
-    campaigns: 0,
-    objectives: 0,
-    entities: 0,
-    tenants: 0,
-  };
+  const removed = initCounts([...PLANNING_TABLES, ...CORE_TABLES]);
+  const skipped = initCounts([...PLANNING_TABLES, ...CORE_TABLES]);
 
   const run = async (c: PoolClient) => {
-    for (const id of ids.campaignIds) {
-      const r = await c.query('DELETE FROM campaigns WHERE id = $1', [id]);
-      if ((r.rowCount ?? 0) > 0) removed.campaigns += 1;
-      else skipped.campaigns += 1;
-    }
-    for (const id of ids.objectiveIds) {
-      const r = await c.query('DELETE FROM objectives WHERE id = $1', [id]);
-      if ((r.rowCount ?? 0) > 0) removed.objectives += 1;
-      else skipped.objectives += 1;
-    }
-    for (const id of ids.entityIds) {
-      const r = await c.query('DELETE FROM entities WHERE id = $1', [id]);
-      if ((r.rowCount ?? 0) > 0) removed.entities += 1;
-      else skipped.entities += 1;
-    }
-    for (const id of ids.tenantIds) {
-      const r = await c.query('DELETE FROM tenants WHERE id = $1', [id]);
-      if ((r.rowCount ?? 0) > 0) removed.tenants += 1;
-      else skipped.tenants += 1;
-    }
+    const del = async (table: keyof typeof removed, id: string) => {
+      const r = await c.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+      if ((r.rowCount ?? 0) > 0) removed[table] += 1;
+      else skipped[table] += 1;
+    };
+
+    for (const id of ids.approvalIds ?? []) await del('plan_approvals', id);
+    for (const id of ids.revisionIds ?? []) await del('revision_requests', id);
+    for (const id of ids.planIds ?? []) await del('campaign_plans', id);
+    for (const id of ids.briefIds ?? []) await del('campaign_briefs', id);
+    for (const id of ids.campaignIds) await del('campaigns', id);
+    for (const id of ids.objectiveIds) await del('objectives', id);
+    for (const id of ids.entityIds) await del('entities', id);
+    for (const id of ids.tenantIds) await del('tenants', id);
   };
 
   if (client) {
@@ -77,18 +72,8 @@ export function deleteOwnedSqliteFixtures(
   db: { prepare: (sql: string) => { run: (...args: unknown[]) => { changes: number } } },
   ids: OwnedFixtureIds,
 ): FixtureCleanupReport {
-  const removed: Record<string, number> = {
-    campaigns: 0,
-    objectives: 0,
-    entities: 0,
-    tenants: 0,
-  };
-  const skipped: Record<string, number> = {
-    campaigns: 0,
-    objectives: 0,
-    entities: 0,
-    tenants: 0,
-  };
+  const removed = initCounts([...PLANNING_TABLES, ...CORE_TABLES]);
+  const skipped = initCounts([...PLANNING_TABLES, ...CORE_TABLES]);
 
   const del = (table: keyof typeof removed, id: string) => {
     const result = db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
@@ -96,6 +81,10 @@ export function deleteOwnedSqliteFixtures(
     else skipped[table] += 1;
   };
 
+  for (const id of ids.approvalIds ?? []) del('plan_approvals', id);
+  for (const id of ids.revisionIds ?? []) del('revision_requests', id);
+  for (const id of ids.planIds ?? []) del('campaign_plans', id);
+  for (const id of ids.briefIds ?? []) del('campaign_briefs', id);
   for (const id of ids.campaignIds) del('campaigns', id);
   for (const id of ids.objectiveIds) del('objectives', id);
   for (const id of ids.entityIds) del('entities', id);
