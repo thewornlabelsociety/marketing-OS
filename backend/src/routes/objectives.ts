@@ -1,11 +1,12 @@
 import { randomUUID } from 'crypto';
 import { Router } from 'express';
-import { db } from '../db/database';
+import { sanitizeCoreDbError } from '../config/coreDbConfig';
+import { getCoreRepositories } from '../db/core/createCoreRepositories';
 import type { ObjectiveRow } from '../types';
 
 export const objectivesRouter = Router();
 
-function mapRow(r: ObjectiveRow) {
+export function mapObjectiveRow(r: ObjectiveRow) {
   return {
     id: r.id,
     workspaceId: r.workspace_id,
@@ -24,27 +25,29 @@ function mapRow(r: ObjectiveRow) {
   };
 }
 
-// GET /api/objectives?workspaceId=<id>
-// Returns system objectives plus custom objectives for the given workspace
-objectivesRouter.get('/', (req, res) => {
-  const { workspaceId } = req.query as { workspaceId?: string };
-
-  const rows = db
-    .prepare(
-      `SELECT * FROM objectives
-       WHERE is_active = 1
-         AND (workspace_id IS NULL OR workspace_id = ?)
-       ORDER BY is_system DESC, name ASC`
-    )
-    .all(workspaceId ?? '') as ObjectiveRow[];
-
-  res.json(rows.map(mapRow));
+objectivesRouter.get('/', async (req, res) => {
+  try {
+    const { workspaceId } = req.query as { workspaceId?: string };
+    const rows = await getCoreRepositories().objective.listForWorkspace(workspaceId ?? '');
+    res.json(rows.map(mapObjectiveRow));
+  } catch (err) {
+    res.status(503).json({ error: sanitizeCoreDbError(err) });
+  }
 });
 
-// POST /api/objectives — create custom workspace objective
-objectivesRouter.post('/', (req, res) => {
-  const { workspaceId, name, description, objectiveType, primaryKpi, supportingKpis, conversionEvent, successCriteria, defaultChannels } =
-    req.body as {
+objectivesRouter.post('/', async (req, res) => {
+  try {
+    const {
+      workspaceId,
+      name,
+      description,
+      objectiveType,
+      primaryKpi,
+      supportingKpis,
+      conversionEvent,
+      successCriteria,
+      defaultChannels,
+    } = req.body as {
       workspaceId?: string;
       name?: string;
       description?: string;
@@ -56,100 +59,96 @@ objectivesRouter.post('/', (req, res) => {
       defaultChannels?: string[];
     };
 
-  if (!workspaceId || !name || !objectiveType || !primaryKpi) {
-    res.status(400).json({ error: 'workspaceId, name, objectiveType, and primaryKpi are required' });
-    return;
+    if (!workspaceId || !name || !objectiveType || !primaryKpi) {
+      res.status(400).json({ error: 'workspaceId, name, objectiveType, and primaryKpi are required' });
+      return;
+    }
+
+    const repos = getCoreRepositories();
+    if (!(await repos.workspace.exists(workspaceId))) {
+      res.status(404).json({ error: 'Workspace not found' });
+      return;
+    }
+
+    const id = `obj_${randomUUID()}`;
+    const now = new Date().toISOString();
+
+    const created = await repos.objective.create({
+      id,
+      workspaceId,
+      name,
+      description: description ?? null,
+      objectiveType,
+      primaryKpi,
+      supportingKpis: supportingKpis ?? [],
+      conversionEvent: conversionEvent ?? null,
+      successCriteria: successCriteria ?? null,
+      defaultChannels: defaultChannels ?? [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    res.status(201).json(mapObjectiveRow(created));
+  } catch (err) {
+    res.status(503).json({ error: sanitizeCoreDbError(err) });
   }
-
-  const workspace = db.prepare('SELECT id FROM entities WHERE id = ?').get(workspaceId);
-  if (!workspace) {
-    res.status(404).json({ error: 'Workspace not found' });
-    return;
-  }
-
-  const id = `obj_${randomUUID()}`;
-  const now = new Date().toISOString();
-
-  db.prepare(
-    `INSERT INTO objectives
-       (id, workspace_id, name, description, objective_type, primary_kpi, supporting_kpis,
-        conversion_event, success_criteria, default_channels, is_system, is_active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`
-  ).run(
-    id,
-    workspaceId,
-    name,
-    description ?? null,
-    objectiveType,
-    primaryKpi,
-    JSON.stringify(supportingKpis ?? []),
-    conversionEvent ?? null,
-    successCriteria ?? null,
-    JSON.stringify(defaultChannels ?? []),
-    now,
-    now,
-  );
-
-  const created = db.prepare('SELECT * FROM objectives WHERE id = ?').get(id) as ObjectiveRow;
-  res.status(201).json(mapRow(created));
 });
 
-// PATCH /api/objectives/:id — update custom workspace objective (system objectives are immutable)
-objectivesRouter.patch('/:id', (req, res) => {
-  const { id } = req.params;
+objectivesRouter.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const repos = getCoreRepositories();
 
-  const existing = db.prepare('SELECT * FROM objectives WHERE id = ?').get(id) as ObjectiveRow | undefined;
-  if (!existing) {
-    res.status(404).json({ error: 'Objective not found' });
-    return;
-  }
-  if (existing.is_system === 1) {
-    res.status(403).json({ error: 'System objectives are immutable' });
-    return;
-  }
-
-  const body = req.body as Record<string, unknown>;
-  const sets: string[] = [];
-  const vals: unknown[] = [];
-
-  const fieldMap: Record<string, string> = {
-    name: 'name',
-    description: 'description',
-    objectiveType: 'objective_type',
-    primaryKpi: 'primary_kpi',
-    conversionEvent: 'conversion_event',
-    successCriteria: 'success_criteria',
-    isActive: 'is_active',
-  };
-
-  for (const [jsKey, dbCol] of Object.entries(fieldMap)) {
-    if (jsKey in body) {
-      sets.push(`${dbCol} = ?`);
-      const v = body[jsKey];
-      vals.push(jsKey === 'isActive' ? (v ? 1 : 0) : (v ?? null));
+    const existing = await repos.objective.findById(id);
+    if (!existing) {
+      res.status(404).json({ error: 'Objective not found' });
+      return;
     }
+    if (existing.is_system === 1) {
+      res.status(403).json({ error: 'System objectives are immutable' });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+
+    if ('name' in body) patch.name = body.name;
+    if ('description' in body) patch.description = body.description;
+    if ('objectiveType' in body) patch.objectiveType = body.objectiveType;
+    if ('primaryKpi' in body) patch.primaryKpi = body.primaryKpi;
+    if ('conversionEvent' in body) patch.conversionEvent = body.conversionEvent;
+    if ('successCriteria' in body) patch.successCriteria = body.successCriteria;
+    if ('isActive' in body) patch.isActive = body.isActive;
+    if ('supportingKpis' in body) patch.supportingKpis = body.supportingKpis;
+    if ('defaultChannels' in body) patch.defaultChannels = body.defaultChannels;
+
+    if (Object.keys(patch).length === 0) {
+      res.json(mapObjectiveRow(existing));
+      return;
+    }
+
+    const updated = await repos.objective.patch(
+      id,
+      {
+        name: patch.name as string | undefined,
+        description: patch.description as string | null | undefined,
+        objectiveType: patch.objectiveType as string | undefined,
+        primaryKpi: patch.primaryKpi as string | undefined,
+        conversionEvent: patch.conversionEvent as string | null | undefined,
+        successCriteria: patch.successCriteria as string | null | undefined,
+        isActive: patch.isActive as boolean | undefined,
+        supportingKpis: patch.supportingKpis as string[] | undefined,
+        defaultChannels: patch.defaultChannels as string[] | undefined,
+      },
+      new Date().toISOString(),
+    );
+
+    if (!updated) {
+      res.status(404).json({ error: 'Objective not found' });
+      return;
+    }
+    res.json(mapObjectiveRow(updated));
+  } catch (err) {
+    res.status(503).json({ error: sanitizeCoreDbError(err) });
   }
-
-  if ('supportingKpis' in body) {
-    sets.push('supporting_kpis = ?');
-    vals.push(JSON.stringify(body.supportingKpis ?? []));
-  }
-  if ('defaultChannels' in body) {
-    sets.push('default_channels = ?');
-    vals.push(JSON.stringify(body.defaultChannels ?? []));
-  }
-
-  if (sets.length === 0) {
-    res.json(mapRow(existing));
-    return;
-  }
-
-  sets.push('updated_at = ?');
-  vals.push(new Date().toISOString());
-  vals.push(id);
-
-  db.prepare(`UPDATE objectives SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
-
-  const updated = db.prepare('SELECT * FROM objectives WHERE id = ?').get(id) as ObjectiveRow;
-  res.json(mapRow(updated));
 });

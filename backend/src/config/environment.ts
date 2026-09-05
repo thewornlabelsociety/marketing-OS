@@ -3,6 +3,6 @@ export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   /** Legacy stub — database.ts uses SQLITE_PATH, not DB_PATH. Cleanup deferred post-PG-1. */
   dbPath: process.env.DB_PATH || './app_data.db',
-  /** Optional Supabase/Postgres connection string (PG-1+). Not used by server startup in PG-1. */
+  /** Optional Supabase/Postgres connection string (PG-1+). Not used by server startup unless PG-2 verification gate is set. */
   databaseUrl: process.env.DATABASE_URL?.trim() || undefined,
 };

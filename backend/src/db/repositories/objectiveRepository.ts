@@ -1,3 +1,2 @@
-﻿// ObjectiveRepository handles persistence for the objective domain.
+﻿/** @deprecated PG-2 — use getCoreRepositories() from db/core/createCoreRepositories */
 export class ObjectiveRepository {}
-

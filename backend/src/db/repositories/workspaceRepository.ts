@@ -1,3 +1,2 @@
-﻿// WorkspaceRepository handles persistence for the workspace domain.
+﻿/** @deprecated PG-2 — use getCoreRepositories() from db/core/createCoreRepositories */
 export class WorkspaceRepository {}
-
