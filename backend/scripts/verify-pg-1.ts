@@ -82,6 +82,15 @@ const MIGRATION_003_INDEX_EXPECTATIONS: AdditiveIndexExpectation[] = [
   },
 ];
 
+const MIGRATION_004_INDEX_EXPECTATION: AdditiveIndexExpectation = {
+  migration: '004_pg4_content_plan_unique_constraints.sql',
+  name: 'uq_content_plan_approvals_campaign_id',
+  table: 'content_plan_approvals',
+  column: 'campaign_id',
+  unique: true,
+  sql: 'CREATE UNIQUE INDEX uq_content_plan_approvals_campaign_id ON content_plan_approvals (campaign_id)',
+};
+
 const SQLITE_DEFAULT_NULL_COLUMNS: ReadonlyArray<[string, string]> = [
   ['campaigns', 'marketing_scope'],
   ['creative_artifacts', 'creative_direction'],
@@ -128,6 +137,11 @@ function runStaticChecks(
     '003_pg3_unique_constraints.sql' in ACCEPTED_MIGRATION_CHECKSUMS,
   );
 
+  check(
+    'Forward migration 004 registered in accepted set',
+    '004_pg4_content_plan_unique_constraints.sql' in ACCEPTED_MIGRATION_CHECKSUMS,
+  );
+
   console.log('\n[1b/9] Static — migration inventory tamper simulations');
 
   const mockChecksum = (filename: string) => ACCEPTED_MIGRATION_CHECKSUMS[filename] ?? 'deadbeef';
@@ -157,6 +171,14 @@ function runStaticChecks(
   );
 
   check(
+    'Tamper simulation: changed 004 checksum fails validation',
+    validateDiscoveredMigrationInventory(
+      migrationFiles,
+      (f) => (f === '004_pg4_content_plan_unique_constraints.sql' ? 'tampered' : mockChecksum(f)),
+    ).some((i) => i.code === 'checksum_mismatch' && i.detail.includes('004_pg4_content_plan_unique_constraints.sql')),
+  );
+
+  check(
     'Tamper simulation: missing 003 fails validation',
     validateDiscoveredMigrationInventory(
       migrationFiles.filter((f) => f !== '003_pg3_unique_constraints.sql'),
@@ -165,11 +187,19 @@ function runStaticChecks(
   );
 
   check(
+    'Tamper simulation: missing 004 fails validation',
+    validateDiscoveredMigrationInventory(
+      migrationFiles.filter((f) => f !== '004_pg4_content_plan_unique_constraints.sql'),
+      mockChecksum,
+    ).some((i) => i.code === 'missing_accepted_migration'),
+  );
+
+  check(
     'Tamper simulation: unaccepted migration file fails validation',
     validateDiscoveredMigrationInventory(
-      [...migrationFiles, '004_bad.sql'],
+      [...migrationFiles, '005_bad.sql'],
       mockChecksum,
-    ).some((i) => i.code === 'unaccepted_migration' && i.detail === '004_bad.sql'),
+    ).some((i) => i.code === 'unaccepted_migration' && i.detail === '005_bad.sql'),
   );
 
   check(
@@ -219,6 +249,50 @@ function runStaticChecks(
     ) != null,
   );
 
+  check(
+    'Tamper simulation: missing required 004 index fails additive validation',
+    validateAdditiveIndexExpectation(MIGRATION_004_INDEX_EXPECTATION, undefined) != null,
+  );
+
+  check(
+    'Tamper simulation: non-unique 004 index fails additive validation',
+    validateAdditiveIndexExpectation(
+      MIGRATION_004_INDEX_EXPECTATION,
+      {
+        indexname: 'uq_content_plan_approvals_campaign_id',
+        tablename: 'content_plan_approvals',
+        indexdef: 'CREATE INDEX uq_content_plan_approvals_campaign_id ON public.content_plan_approvals USING btree (campaign_id)',
+        indisunique: false,
+      },
+    ) != null,
+  );
+
+  check(
+    'Tamper simulation: wrong column on 004 index fails additive validation',
+    validateAdditiveIndexExpectation(
+      MIGRATION_004_INDEX_EXPECTATION,
+      {
+        indexname: 'uq_content_plan_approvals_campaign_id',
+        tablename: 'content_plan_approvals',
+        indexdef: 'CREATE UNIQUE INDEX uq_content_plan_approvals_campaign_id ON public.content_plan_approvals USING btree (workspace_id)',
+        indisunique: true,
+      },
+    ) != null,
+  );
+
+  check(
+    'Tamper simulation: wrong table on 004 index fails additive validation',
+    validateAdditiveIndexExpectation(
+      MIGRATION_004_INDEX_EXPECTATION,
+      {
+        indexname: 'uq_content_plan_approvals_campaign_id',
+        tablename: 'campaigns',
+        indexdef: 'CREATE UNIQUE INDEX uq_content_plan_approvals_campaign_id ON public.campaigns USING btree (campaign_id)',
+        indisunique: true,
+      },
+    ) != null,
+  );
+
   const validLive003 = {
     indexname: 'uq_campaign_briefs_campaign_id',
     tablename: 'campaign_briefs',
@@ -236,6 +310,17 @@ function runStaticChecks(
       { filename: '001_mos_baseline.sql', checksum: ACCEPTED_MIGRATION_CHECKSUMS['001_mos_baseline.sql'] },
       { filename: '002_system_objectives_seed.sql', checksum: ACCEPTED_MIGRATION_CHECKSUMS['002_system_objectives_seed.sql'] },
       { filename: '003_pg3_unique_constraints.sql', checksum: 'tampered' },
+      { filename: '004_pg4_content_plan_unique_constraints.sql', checksum: ACCEPTED_MIGRATION_CHECKSUMS['004_pg4_content_plan_unique_constraints.sql'] },
+    ]).some((i) => i.code === 'live_checksum_mismatch'),
+  );
+
+  check(
+    'Tamper simulation: live tracking rejects tampered 004 checksum',
+    validateLiveMigrationTracking([
+      { filename: '001_mos_baseline.sql', checksum: ACCEPTED_MIGRATION_CHECKSUMS['001_mos_baseline.sql'] },
+      { filename: '002_system_objectives_seed.sql', checksum: ACCEPTED_MIGRATION_CHECKSUMS['002_system_objectives_seed.sql'] },
+      { filename: '003_pg3_unique_constraints.sql', checksum: ACCEPTED_MIGRATION_CHECKSUMS['003_pg3_unique_constraints.sql'] },
+      { filename: '004_pg4_content_plan_unique_constraints.sql', checksum: 'tampered' },
     ]).some((i) => i.code === 'live_checksum_mismatch'),
   );
 
@@ -269,12 +354,12 @@ function runStaticChecks(
   );
   check(
     'Additive accepted migration non-PK index count',
-    additiveNonPkIndexCount() === 2,
+    additiveNonPkIndexCount() === 3,
     `got ${additiveNonPkIndexCount()}`,
   );
   check(
     'Effective expected non-PK index count',
-    effectiveNonPkIndexCount() === 31,
+    effectiveNonPkIndexCount() === 32,
     `got ${effectiveNonPkIndexCount()}`,
   );
   check(
@@ -486,6 +571,11 @@ async function main() {
       !additiveResult.mismatches.some((m) => m.detail.includes(exp.name)),
     );
   }
+
+  check(
+    'Migration 004 requires unique index: uq_content_plan_approvals_campaign_id',
+    !additiveResult.mismatches.some((m) => m.detail.includes(MIGRATION_004_INDEX_EXPECTATION.name)),
+  );
 
   console.log('\n[8/9] Live transactions and round-trips');
 

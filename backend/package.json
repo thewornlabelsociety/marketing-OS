@@ -23,6 +23,7 @@
     "verify:pg-1": "node scripts/run-verify-pg-1.cjs",
     "verify:pg-2": "node scripts/run-verify-pg-2.cjs",
     "verify:pg-3b": "node scripts/run-verify-pg-3b.cjs",
+    "verify:pg-4a": "node scripts/run-verify-pg-4a.cjs",
     "sync:worn-label": "node scripts/sync-business-integrations.cjs",
     "postbuild": "node -e \"const fs=require('fs');const p='dist/db';fs.mkdirSync(p,{recursive:true});fs.copyFileSync('src/db/schema.sql',p+'/schema.sql')\"",
     "start": "node dist/server.js"

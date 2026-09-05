@@ -87,10 +87,10 @@ const genNoApproval = await contentPlannerService.generate(campA);
 check('A generate without approved strategy rejected', 'error' in genNoApproval && genNoApproval.code === 'STRATEGY_NOT_APPROVED');
 check('A no content plan persisted', contentPlannerService.getCurrent(campA) === beforeA);
 
-const approveV1 = campaignPlannerService.approvePlan(campA, planV1);
+const approveV1 = await campaignPlannerService.approvePlan(campA, planV1);
 check('A strategy V1 can be approved', !approveV1.error);
 
-const afterApprove = contentPlannerService.persistFromStructured(campA, PRODUCT_PROOF_FIXTURE);
+const afterApprove = await contentPlannerService.persistFromStructured(campA, PRODUCT_PROOF_FIXTURE);
 check('A generate after approval allowed', !('error' in afterApprove));
 
 // --- Test B ---
@@ -124,7 +124,7 @@ if (plan && v1) {
     ...PRODUCT_PROOF_FIXTURE,
     deliverables: PRODUCT_PROOF_FIXTURE.deliverables!.filter((d) => d.channel !== 'TIKTOK'),
   };
-  const revised = contentPlannerService.reviseFromStructured(campA, 'Remove TikTok. Keep everything else unchanged.', withoutTikTok);
+  const revised = await contentPlannerService.reviseFromStructured(campA, 'Remove TikTok. Keep everything else unchanged.', withoutTikTok);
   check('E revision persisted', !('error' in revised));
   if (!('error' in revised)) {
     const kept = ['launch-carousel-01', 'launch-reel-01', 'launch-newsletter-01'];
@@ -163,7 +163,7 @@ check('I no version increment when AI unavailable', contentPlannerService.getAll
 check('I no content plan on campaign B', contentPlannerService.getCurrent(campB) === null);
 check('I no version increment on B', contentPlannerService.getAllVersions(campB).length === 0);
 
-const strategyB = contentPlannerService.resolveApprovedStrategy(campB);
+const strategyB = await contentPlannerService.resolveApprovedStrategy(campB);
 check('I campaign B still has no approved strategy requirement intact', 'error' in strategyB);
 
 // --- Test J ---

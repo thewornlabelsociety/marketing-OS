@@ -36,6 +36,14 @@ export const FORWARD_MIGRATION_INDEX_EXPECTATIONS: readonly AdditiveIndexExpecta
     unique: true,
     sql: 'CREATE UNIQUE INDEX uq_plan_approvals_campaign_id ON plan_approvals (campaign_id)',
   },
+  {
+    migration: '004_pg4_content_plan_unique_constraints.sql',
+    name: 'uq_content_plan_approvals_campaign_id',
+    table: 'content_plan_approvals',
+    column: 'campaign_id',
+    unique: true,
+    sql: 'CREATE UNIQUE INDEX uq_content_plan_approvals_campaign_id ON content_plan_approvals (campaign_id)',
+  },
 ];
 
 export function baselineNonPkIndexCount(): number {

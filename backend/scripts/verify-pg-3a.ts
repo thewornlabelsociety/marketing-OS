@@ -125,6 +125,7 @@ async function main() {
     console.log('\n[Migration inventory]');
     const migrationFiles = listMigrationFiles();
     check('accepted migrations on disk include 003', migrationFiles.includes('003_pg3_unique_constraints.sql'));
+    check('accepted migrations on disk include 004', migrationFiles.includes('004_pg4_content_plan_unique_constraints.sql'));
     for (const [filename, expected] of Object.entries(ACCEPTED_MIGRATION_CHECKSUMS)) {
       const actual = computeMigrationFileChecksum(filename);
       check(`checksum pinned: ${filename}`, actual === expected, actual);
@@ -134,10 +135,11 @@ async function main() {
     check('001 skipped on rerun', firstRun.skipped.includes('001_mos_baseline.sql'));
     check('002 skipped on rerun', firstRun.skipped.includes('002_system_objectives_seed.sql'));
     check('003 skipped on rerun', firstRun.skipped.includes('003_pg3_unique_constraints.sql'));
+    check('004 skipped on rerun', firstRun.skipped.includes('004_pg4_content_plan_unique_constraints.sql'));
     check('no migrations applied on acceptance rerun', firstRun.applied.length === 0);
 
     const tracking = await pool.query('SELECT filename, checksum FROM postgres_migrations ORDER BY filename');
-    check('live migration rows = 3', tracking.rowCount === 3, `got ${tracking.rowCount}`);
+    check('live migration rows = 4', tracking.rowCount === 4, `got ${tracking.rowCount}`);
     const trackingIssues = validateLiveMigrationTracking(tracking.rows);
     check('live tracking matches accepted registry', trackingIssues.length === 0);
 
@@ -150,7 +152,7 @@ async function main() {
     check('campaign_briefs unique index present', !!briefIdx);
     check('plan_approvals unique index present', !!approvalIdx);
 
-    for (const expectation of additiveIndexExpectations()) {
+    for (const expectation of additiveIndexExpectations().filter((e) => e.migration === '003_pg3_unique_constraints.sql')) {
       const live = constraints.indexes.find((r) => r.indexname === expectation.name);
       const validationError = validateAdditiveIndexExpectation(
         expectation,
