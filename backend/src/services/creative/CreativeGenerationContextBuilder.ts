@@ -20,7 +20,7 @@ export interface CreativeGenerationContext {
 
 export class CreativeGenerationContextBuilder {
   async build(campaignId: string, contentKey: string): Promise<CreativeGenerationContext | { error: string; code: string }> {
-    const contentPlanResult = contentPlannerService.resolveApprovedContentPlan(campaignId);
+    const contentPlanResult = await contentPlannerService.resolveApprovedContentPlan(campaignId);
     if ('error' in contentPlanResult) {
       return { error: contentPlanResult.error, code: contentPlanResult.code };
     }

@@ -208,8 +208,8 @@ class CreativeGeneratorService {
     return approval.creativeArtifactId === current.id && approval.approvedVersion === current.version;
   }
 
-  getSummary(campaignId: string): CampaignCreativeSummary | CreativeServiceError {
-    const planResult = contentPlannerService.resolveApprovedContentPlan(campaignId);
+  async getSummary(campaignId: string): Promise<CampaignCreativeSummary | CreativeServiceError> {
+    const planResult = await contentPlannerService.resolveApprovedContentPlan(campaignId);
     if ('error' in planResult) return planResult;
     const plan = planResult.plan;
 
@@ -329,7 +329,7 @@ class CreativeGeneratorService {
   }
 
   async generateOne(campaignId: string, contentKey: string): Promise<{ artifact: CreativeArtifact } | CreativeServiceError> {
-    const planResult = contentPlannerService.resolveApprovedContentPlan(campaignId);
+    const planResult = await contentPlannerService.resolveApprovedContentPlan(campaignId);
     if ('error' in planResult) return planResult;
 
     const ctxResult = await creativeGenerationContextBuilder.build(campaignId, contentKey);
@@ -360,7 +360,7 @@ class CreativeGeneratorService {
   async generateAllMissing(campaignId: string): Promise<{
     results: { contentKey: string; artifact?: CreativeArtifact; error?: string; code?: string }[];
   } | CreativeServiceError> {
-    const summary = this.getSummary(campaignId);
+    const summary = await this.getSummary(campaignId);
     if ('error' in summary) return summary;
 
     const missing = summary.deliverables.filter((d) => !d.hasCreative);

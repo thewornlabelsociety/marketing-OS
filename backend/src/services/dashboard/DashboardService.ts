@@ -17,8 +17,8 @@ const RECENT_DAYS = 30;
 const UPCOMING_DAYS = 7;
 
 export class DashboardService {
-  getDashboard(workspaceId: string): DashboardSnapshot {
-    const openSignals = attentionSignalService.reconcile(workspaceId);
+  async getDashboard(workspaceId: string): Promise<DashboardSnapshot> {
+    const openSignals = await attentionSignalService.reconcile(workspaceId);
     const ranked = attentionSignalService.rank(openSignals);
 
     const needsAttention = ranked.filter((s) => attentionSignalService.isNeedsAttention(s));

@@ -82,10 +82,10 @@ check('C Email newsletter desktop accepted', validateChannelCombo({ channel: 'EM
 check('C Instagram story desktop rejected', validateChannelCombo({ channel: 'INSTAGRAM', contentType: 'STORY', format: 'VERTICAL_9_16', deviceTargets: ['desktop'] }).length > 0);
 
 // --- Test A ---
-const beforeA = contentPlannerService.getCurrent(campA);
+const beforeA = await contentPlannerService.getCurrent(campA);
 const genNoApproval = await contentPlannerService.generate(campA);
 check('A generate without approved strategy rejected', 'error' in genNoApproval && genNoApproval.code === 'STRATEGY_NOT_APPROVED');
-check('A no content plan persisted', contentPlannerService.getCurrent(campA) === beforeA);
+check('A no content plan persisted', (await contentPlannerService.getCurrent(campA)) === beforeA);
 
 const approveV1 = await campaignPlannerService.approvePlan(campA, planV1);
 check('A strategy V1 can be approved', !approveV1.error);
@@ -101,7 +101,7 @@ if (!('error' in afterApprove)) {
 }
 
 // --- Test D ---
-const plan = contentPlannerService.getCurrent(campA);
+const plan = await contentPlannerService.getCurrent(campA);
 if (plan) {
   const concept = plan.concepts.find((c) => c.contentKey === 'product-proof');
   const carousel = plan.deliverables.find((d) => d.contentKey === 'launch-carousel-01');
@@ -118,7 +118,7 @@ if (plan) {
 }
 
 // --- Test E ---
-const v1 = contentPlannerService.getCurrent(campA);
+const v1 = await contentPlannerService.getCurrent(campA);
 if (plan && v1) {
   const withoutTikTok: typeof PRODUCT_PROOF_FIXTURE = {
     ...PRODUCT_PROOF_FIXTURE,
@@ -135,7 +135,7 @@ if (plan && v1) {
       check(`E ${key} contentKey retained`, Boolean(next && next.contentKey === key));
     }
     check('E TikTok removed', !revised.plan.deliverables.some((d) => d.channel === 'TIKTOK'));
-    const v1Still = contentPlannerService.getById(v1.id, campA);
+    const v1Still = await contentPlannerService.getById(v1.id, campA);
     check('E V1 retrievable', Boolean(v1Still && v1Still.version === 1));
   }
 }
@@ -144,24 +144,24 @@ if (plan && v1) {
 console.log('BLOCKED  F targeted AI revision — AI PROVIDER NOT CONFIGURED');
 
 // --- Test H ---
-const versions = contentPlannerService.getAllVersions(campA);
+const versions = await contentPlannerService.getAllVersions(campA);
 const first = versions.find((v) => v.version === 1);
 const second = versions.find((v) => v.version === 2) ?? versions[0];
 if (first && second) {
-  const approval = contentPlannerService.approve(campA, first.id);
+  const approval = await contentPlannerService.approve(campA, first.id);
   check('H approve V1 succeeded', !approval.error);
-  const stored = contentPlannerService.getApproval(campA);
+  const stored = await contentPlannerService.getApproval(campA);
   check('H approval references V1 id', stored?.contentPlanId === first.id);
   check('H approval references V1 version', stored?.contentPlanVersion === 1);
 }
 
 // --- Test I ---
-const versionsBeforeI = contentPlannerService.getAllVersions(campA).length;
+const versionsBeforeI = (await contentPlannerService.getAllVersions(campA)).length;
 const genNoAi = await contentPlannerService.generate(campA);
 check('I generate without AI reports unavailable', 'error' in genNoAi && genNoAi.code === 'AI_UNAVAILABLE');
-check('I no version increment when AI unavailable', contentPlannerService.getAllVersions(campA).length === versionsBeforeI);
-check('I no content plan on campaign B', contentPlannerService.getCurrent(campB) === null);
-check('I no version increment on B', contentPlannerService.getAllVersions(campB).length === 0);
+check('I no version increment when AI unavailable', (await contentPlannerService.getAllVersions(campA)).length === versionsBeforeI);
+check('I no content plan on campaign B', (await contentPlannerService.getCurrent(campB)) === null);
+check('I no version increment on B', (await contentPlannerService.getAllVersions(campB)).length === 0);
 
 const strategyB = await contentPlannerService.resolveApprovedStrategy(campB);
 check('I campaign B still has no approved strategy requirement intact', 'error' in strategyB);

@@ -120,7 +120,7 @@ async function main() {
   check('A no creative persisted', creativeGeneratorService.getCurrent(campA, 'launch-reel-01') === null);
 
   approveContentPlan(campA, wsA, planV1, 1);
-  const afterApproval = creativeGeneratorService.persistFromStructured(campA, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
+  const afterApproval = await creativeGeneratorService.persistFromStructured(campA, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
   check('A generate after content plan approval allowed', !('error' in afterApproval));
 
   // --- Test B ---
@@ -132,7 +132,7 @@ async function main() {
 
   // --- Test C ---
   const beforeCarousel = creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
-  const reelOnly = creativeGeneratorService.persistFromStructured(campA, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
+  const reelOnly = await creativeGeneratorService.persistFromStructured(campA, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
   check('C reel generation path executes', !('error' in reelOnly));
   check('C carousel untouched', creativeGeneratorService.getCurrent(campA, 'launch-carousel-01') === beforeCarousel);
   check('C newsletter untouched', creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01') === null);
@@ -143,7 +143,7 @@ async function main() {
   check('D no artifact for invalid key', creativeGeneratorService.getCurrent(campA, 'not-in-approved-plan') === null);
 
   // --- Test E ---
-  const ctx = creativeGenerationContextBuilder.build(campA, 'launch-carousel-01');
+  const ctx = await creativeGenerationContextBuilder.build(campA, 'launch-carousel-01');
   if (!('error' in ctx)) {
     const deliverable = ctx.deliverable;
     check('E carousel no slides rejected', validateCreativeStructure(deliverable, { kind: 'CAROUSEL', caption: 'x', slides: [] }).length > 0);
@@ -160,9 +160,9 @@ async function main() {
       { ...deliverable, contentType: 'EMAIL', format: 'NEWSLETTER' },
       { kind: 'EMAIL', subject: '', body: 'body' },
     ).length > 0);
-    const valid = creativeGeneratorService.persistFromStructured(campA, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+    const valid = await creativeGeneratorService.persistFromStructured(campA, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
     check('E valid carousel accepted', !('error' in valid));
-    const invalidPersist = creativeGeneratorService.persistFromStructured(campA, 'launch-carousel-01', INVALID_CAROUSEL_NO_SLIDES);
+    const invalidPersist = await creativeGeneratorService.persistFromStructured(campA, 'launch-carousel-01', INVALID_CAROUSEL_NO_SLIDES);
     check('E invalid carousel persist rejected', 'error' in invalidPersist);
   }
 
@@ -171,7 +171,7 @@ async function main() {
   const firstVersion = priorVersions.find((v) => v.version === 1);
   const priorCurrent = creativeGeneratorService.getCurrent(campA, 'launch-reel-01');
   const expectedNextVersion = (priorCurrent?.version ?? 0) + 1;
-  const reelV2 = creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'Stronger hook', {
+  const reelV2 = await creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'Stronger hook', {
     ...REEL_CREATIVE_FIXTURE,
     hook: 'A sharper curiosity hook without changing the rest.',
   });
@@ -185,7 +185,7 @@ async function main() {
   // --- Test G ---
   const carouselBefore = creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
   const newsletterBefore = creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01');
-  const reelRevise = creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'Adjust hook only', REEL_CREATIVE_FIXTURE);
+  const reelRevise = await creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'Adjust hook only', REEL_CREATIVE_FIXTURE);
   check('G reel revised', !('error' in reelRevise));
   check('G carousel unchanged', JSON.stringify(creativeGeneratorService.getCurrent(campA, 'launch-carousel-01')) === JSON.stringify(carouselBefore));
   check('G newsletter unchanged', creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01') === newsletterBefore);
@@ -196,7 +196,7 @@ async function main() {
   // --- Test I ---
   const carouselCurrent = creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
   if (carouselCurrent) {
-    const v2Carousel = creativeGeneratorService.reviseFromStructured(campA, 'launch-carousel-01', 'Update slide 5', CAROUSEL_V2_FIXTURE, { targetHint: 'slide 5' });
+    const v2Carousel = await creativeGeneratorService.reviseFromStructured(campA, 'launch-carousel-01', 'Update slide 5', CAROUSEL_V2_FIXTURE, { targetHint: 'slide 5' });
     check('I V2 carousel created', !('error' in v2Carousel));
     const v1 = creativeGeneratorService.getAllVersions(campA, 'launch-carousel-01').find((v) => v.version === 1);
     if (v1 && !('error' in v2Carousel)) {
@@ -212,7 +212,7 @@ async function main() {
   if (reelForJ) {
     creativeGeneratorService.approve(campA, 'launch-reel-01', reelForJ.id);
     const v1Approval = creativeGeneratorService.getApproval(campA, 'launch-reel-01');
-    const vNext = creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'New hook', {
+    const vNext = await creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'New hook', {
       ...REEL_CREATIVE_FIXTURE,
       hook: 'A revised hook for testing.',
     });
@@ -277,12 +277,12 @@ async function main() {
   }
 
   // --- Test N ---
-  const summaryBefore = creativeGeneratorService.getSummary(campA);
+  const summaryBefore = await creativeGeneratorService.getSummary(campA);
   if (!('error' in summaryBefore)) {
     const keys = ['launch-carousel-01', 'launch-reel-01', 'launch-newsletter-01'];
-    const a = creativeGeneratorService.persistFromStructured(campA, keys[0], CAROUSEL_CREATIVE_FIXTURE);
-    const b = creativeGeneratorService.persistFromStructured(campA, keys[1], INVALID_REEL_NO_HOOK);
-    const c = creativeGeneratorService.persistFromStructured(campA, keys[2], NEWSLETTER_CREATIVE_FIXTURE);
+    const a = await creativeGeneratorService.persistFromStructured(campA, keys[0], CAROUSEL_CREATIVE_FIXTURE);
+    const b = await creativeGeneratorService.persistFromStructured(campA, keys[1], INVALID_REEL_NO_HOOK);
+    const c = await creativeGeneratorService.persistFromStructured(campA, keys[2], NEWSLETTER_CREATIVE_FIXTURE);
     check('N A persisted', !('error' in a));
     check('N B failed', 'error' in b);
     check('N C persisted', !('error' in c));

@@ -108,11 +108,11 @@ async function main() {
     return destId;
   }
 
-  function seedCreative(campaignId: string, contentKey: string, fixture: Record<string, unknown>) {
+  async function seedCreative(campaignId: string, contentKey: string, fixture: Record<string, unknown>) {
     return creativeGeneratorService.persistFromStructured(campaignId, contentKey, fixture);
   }
 
-  function approveCreative(campaignId: string, contentKey: string) {
+  async function approveCreative(campaignId: string, contentKey: string) {
     const current = creativeGeneratorService.getCurrent(campaignId, contentKey);
     if (!current) throw new Error(`No creative for ${contentKey}`);
     return creativeGeneratorService.approve(campaignId, contentKey, current.id);
@@ -132,9 +132,9 @@ async function main() {
   seedApprovedContentPlan(campA, wsA, planId, 1, 1);
   approveContentPlan(campA, wsA, planId, 1);
 
-  const reel = seedCreative(campA, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
-  const carousel = seedCreative(campA, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  seedCreative(campA, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
+  const reel = await seedCreative(campA, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
+  const carousel = await seedCreative(campA, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
+  await seedCreative(campA, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
 
   // --- Test A ---
   const unapprovedSchedule = schedulingService.create(campA, wsA, {
@@ -144,7 +144,7 @@ async function main() {
   });
   check('A schedule without approved creative rejected', 'error' in unapprovedSchedule && unapprovedSchedule.code === 'CREATIVE_NOT_APPROVED');
 
-  approveCreative(campA, 'launch-reel-01');
+  await approveCreative(campA, 'launch-reel-01');
   const reelV1 = creativeGeneratorService.getCurrent(campA, 'launch-reel-01')!;
   const scheduled = schedulingService.create(campA, wsA, {
     contentKey: 'launch-reel-01',
@@ -155,7 +155,7 @@ async function main() {
   check('A schedule after approval succeeds', !('error' in scheduled));
 
   // --- Test B ---
-  const reelV2 = creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'New hook', {
+  const reelV2 = await creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'New hook', {
     ...REEL_CREATIVE_FIXTURE,
     hook: 'Updated hook for version 2',
   });
@@ -167,7 +167,7 @@ async function main() {
 
   // --- Test C ---
   check('C schedule remains V1 after V2 generated', !('error' in scheduled) && schedulingService.getById(scheduled.item.id, campA)?.sourceCreativeVersion === 1);
-  approveCreative(campA, 'launch-reel-01');
+  await approveCreative(campA, 'launch-reel-01');
   const stillV1 = schedulingService.getById(scheduled.item.id, campA);
   check('C schedule remains V1 after V2 approved', stillV1?.sourceCreativeArtifactId === reelV1.id);
   const v2Artifact = creativeGeneratorService.getCurrent(campA, 'launch-reel-01')!;
@@ -181,7 +181,7 @@ async function main() {
 
   // --- Test E ---
   resetMockPublishingState();
-  approveCreative(campA, 'launch-carousel-01');
+  await approveCreative(campA, 'launch-carousel-01');
   const igDest = seedConnectionAndDestination(wsA, 'INSTAGRAM');
   const dueSchedule = schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
@@ -212,7 +212,7 @@ async function main() {
   resetMockPublishingState();
   mockPublishShouldFail = true;
   const failDest = seedConnectionAndDestination(wsA, 'EMAIL');
-  approveCreative(campA, 'launch-newsletter-01');
+  await approveCreative(campA, 'launch-newsletter-01');
   let failSchedule = schedulingService.create(campA, wsA, {
     contentKey: 'launch-newsletter-01',
     scheduledFor: new Date(Date.now() - 60000).toISOString(),
@@ -241,7 +241,7 @@ async function main() {
 
   // --- Test I ---
   resetMockPublishingState();
-  approveCreative(campA, 'launch-carousel-01');
+  await approveCreative(campA, 'launch-carousel-01');
   const destA = seedConnectionAndDestination(wsA, 'INSTAGRAM');
   const destB = seedConnectionAndDestination(wsA, 'INSTAGRAM');
   const schedA = schedulingService.create(campA, wsA, {
@@ -258,7 +258,7 @@ async function main() {
     destinationId: destB,
     mediaAssets: [{ id: 'vid_b', type: 'VIDEO', mimeType: 'video/mp4' }],
   });
-  approveCreative(campA, 'launch-newsletter-01');
+  await approveCreative(campA, 'launch-newsletter-01');
   const schedC = schedulingService.create(campA, wsA, {
     contentKey: 'launch-newsletter-01',
     scheduledFor: new Date(Date.now() - 120000).toISOString(),
@@ -277,7 +277,7 @@ async function main() {
   }
 
   // --- Test J ---
-  approveCreative(campA, 'launch-carousel-01');
+  await approveCreative(campA, 'launch-carousel-01');
   const future = schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 86400000).toISOString(),
@@ -292,7 +292,7 @@ async function main() {
   }
 
   // --- Test K ---
-  approveCreative(campA, 'launch-reel-01');
+  await approveCreative(campA, 'launch-reel-01');
   const manual = schedulingService.create(campA, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() - 60000).toISOString(),
@@ -311,7 +311,7 @@ async function main() {
   }
 
   // --- Test L ---
-  approveCreative(campA, 'launch-newsletter-01');
+  await approveCreative(campA, 'launch-newsletter-01');
   const exportSched = schedulingService.create(campA, wsA, {
     contentKey: 'launch-newsletter-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
@@ -330,7 +330,7 @@ async function main() {
   }
 
   // --- Test M ---
-  approveCreative(campA, 'launch-reel-01');
+  await approveCreative(campA, 'launch-reel-01');
   const blocked = schedulingService.create(campA, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
@@ -348,7 +348,7 @@ async function main() {
 
   // --- Test N ---
   const emailDest = seedConnectionAndDestination(wsA, 'EMAIL');
-  approveCreative(campA, 'launch-carousel-01');
+  await approveCreative(campA, 'launch-carousel-01');
   const badDest = schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
@@ -400,7 +400,7 @@ async function main() {
   server.close();
 
   // --- Test P ---
-  approveCreative(campA, 'launch-carousel-01');
+  await approveCreative(campA, 'launch-carousel-01');
   const badProviderDest = `dest_bad_${randomUUID()}`;
   const connId = `conn_${randomUUID()}`;
   const now = new Date().toISOString();
@@ -435,7 +435,7 @@ async function main() {
   }
 
   // --- Test R ---
-  const summary = schedulingService.getSummary(campA);
+  const summary = await schedulingService.getSummary(campA);
   check('R summary generated', !('error' in summary));
   if (!('error' in summary)) {
     check('R has approved creative count', summary.totalApprovedCreative >= 1);

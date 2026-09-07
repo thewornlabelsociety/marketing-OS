@@ -101,8 +101,8 @@ async function main() {
     return 'error' in result ? null : result.item.id;
   }
 
-  function approveCreative(campaignId: string, contentKey: string, fixture: object) {
-    const result = creativeGeneratorService.persistFromStructured(campaignId, contentKey, fixture as never);
+  async function approveCreative(campaignId: string, contentKey: string, fixture: object) {
+    const result = await creativeGeneratorService.persistFromStructured(campaignId, contentKey, fixture as never);
     if ('error' in result) throw new Error(result.error);
     creativeGeneratorService.approve(campaignId, contentKey, result.artifact.id);
     return result.artifact;
@@ -129,7 +129,7 @@ async function main() {
   const campA = `camp_a_${randomUUID()}`;
   insertCampaign(campA, wsA);
   seedPlanChain(campA, wsA);
-  approveCreative(campA, 'launch-static-01', STATIC_POST_FIXTURE);
+  await approveCreative(campA, 'launch-static-01', STATIC_POST_FIXTURE);
   const manual = schedulingService.create(campA, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date(Date.now() + 86400000).toISOString(),
@@ -155,7 +155,7 @@ async function main() {
   const campD = `camp_d_${randomUUID()}`;
   insertCampaign(campD, wsA);
   seedPlanChain(campD, wsA);
-  approveCreative(campD, 'launch-static-01', STATIC_POST_FIXTURE);
+  await approveCreative(campD, 'launch-static-01', STATIC_POST_FIXTURE);
   const limitedDestId = `dest_${randomUUID()}`;
   const now = new Date().toISOString();
   db.prepare(`
@@ -195,7 +195,7 @@ async function main() {
   const campF = `camp_f_${randomUUID()}`;
   insertCampaign(campF, wsA);
   seedPlanChain(campF, wsA);
-  const artF = approveCreative(campF, 'launch-static-01', STATIC_POST_FIXTURE);
+  const artF = await approveCreative(campF, 'launch-static-01', STATIC_POST_FIXTURE);
   const schedF = schedulingService.create(campF, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
@@ -224,7 +224,7 @@ async function main() {
   const campG = `camp_g_${randomUUID()}`;
   insertCampaign(campG, wsA);
   seedPlanChain(campG, wsA);
-  approveCreative(campG, 'launch-static-01', STATIC_POST_FIXTURE);
+  await approveCreative(campG, 'launch-static-01', STATIC_POST_FIXTURE);
   const schedG = schedulingService.create(campG, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
@@ -243,7 +243,7 @@ async function main() {
   const campH = `camp_h_${randomUUID()}`;
   insertCampaign(campH, wsA);
   seedPlanChain(campH, wsA);
-  approveCreative(campH, 'launch-static-01', STATIC_POST_FIXTURE);
+  await approveCreative(campH, 'launch-static-01', STATIC_POST_FIXTURE);
   const schedH = schedulingService.create(campH, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
@@ -253,7 +253,7 @@ async function main() {
   });
   const pubH = schedId(schedH) ? await publishingService.publishSchedule(schedId(schedH)!, campH, { manualPublish: true }) : null;
   check('H failed attempt persisted', Boolean(pubH && !('error' in pubH) && pubH.attempt?.status === 'FAILED'));
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('H dashboard attention', attentionSignalService.list(wsA).some((s) =>
     s.signalType === 'PUBLISHING_FAILED' || s.signalType === 'PUBLISHING_RETRY_REQUIRED'));
   metaMockState.shouldFail = false;
@@ -263,7 +263,7 @@ async function main() {
   const campI = `camp_i_${randomUUID()}`;
   insertCampaign(campI, wsA);
   seedPlanChain(campI, wsA);
-  approveCreative(campI, 'launch-static-01', STATIC_POST_FIXTURE);
+  await approveCreative(campI, 'launch-static-01', STATIC_POST_FIXTURE);
   const expiredDest = integrationConnectionService.listDestinations(wsA).find((d) => d.connectionId === expiredConn && d.channel === 'INSTAGRAM')!;
   const schedI = schedulingService.create(campI, wsA, {
     contentKey: 'launch-static-01',
@@ -285,7 +285,7 @@ async function main() {
   const campJ = `camp_j_${randomUUID()}`;
   insertCampaign(campJ, wsA);
   seedPlanChain(campJ, wsA);
-  approveCreative(campJ, 'launch-static-01', STATIC_POST_FIXTURE);
+  await approveCreative(campJ, 'launch-static-01', STATIC_POST_FIXTURE);
   const schedJ = schedulingService.create(campJ, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
@@ -312,7 +312,7 @@ async function main() {
   const campL = `camp_l_${randomUUID()}`;
   insertCampaign(campL, wsA);
   seedPlanChain(campL, wsA);
-  approveCreative(campL, 'launch-static-01', STATIC_POST_FIXTURE);
+  await approveCreative(campL, 'launch-static-01', STATIC_POST_FIXTURE);
   const schedL = schedulingService.create(campL, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
@@ -422,7 +422,7 @@ async function main() {
   const campW = `camp_w_${randomUUID()}`;
   insertCampaign(campW, wsA);
   seedPlanChain(campW, wsA);
-  approveCreative(campW, 'launch-static-01', STATIC_POST_FIXTURE);
+  await approveCreative(campW, 'launch-static-01', STATIC_POST_FIXTURE);
   const { destinations: destsW } = integrationConnectionService.createMockMetaConnection(wsA);
   const igW = destsW.find((d) => d.channel === 'INSTAGRAM')!;
   const schedW = schedulingService.create(campW, wsA, {
@@ -434,13 +434,13 @@ async function main() {
   });
   const schedWId = schedId(schedW);
   if (schedWId) await publishingService.publishSchedule(schedWId, campW, { manualPublish: true });
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const failCount = attentionSignalService.list(wsA).filter((s) =>
     s.campaignId === campW && (s.signalType === 'PUBLISHING_FAILED' || s.signalType === 'PUBLISHING_RETRY_REQUIRED')).length;
   metaMockState.shouldFail = false;
   if (schedWId) await publishingService.retry(schedWId, campW);
   if (schedWId) db.prepare(`UPDATE scheduled_content_items SET status = 'PUBLISHED' WHERE id = ?`).run(schedWId);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('W failure attention existed', failCount >= 1);
 
   // --- Test X: Runtime route mount ---

@@ -148,8 +148,8 @@ function mapRow(row: AttentionRow): AttentionSignal {
 }
 
 export class AttentionSignalService {
-  reconcile(workspaceId: string): AttentionSignal[] {
-    const derived = this.deriveSignals(workspaceId);
+  async reconcile(workspaceId: string): Promise<AttentionSignal[]> {
+    const derived = await this.deriveSignals(workspaceId);
     const now = new Date().toISOString();
     const derivedKeys = new Set(derived.map((d) => d.signalKey));
 
@@ -275,7 +275,7 @@ export class AttentionSignalService {
     return READY_FOR_YOU_TYPES.has(signal.signalType);
   }
 
-  private deriveSignals(workspaceId: string): DerivedSignal[] {
+  private async deriveSignals(workspaceId: string): Promise<DerivedSignal[]> {
     const signals: DerivedSignal[] = [];
     const campaigns = db.prepare(`
       SELECT c.*, o.name as objective_name, o.objective_type, o.primary_kpi
@@ -286,8 +286,8 @@ export class AttentionSignalService {
 
     for (const campaign of campaigns) {
       this.deriveCampaignSignals(workspaceId, campaign, signals);
-      this.deriveCreativeSignals(workspaceId, campaign, signals);
-      this.deriveScheduleSignals(workspaceId, campaign, signals);
+      await this.deriveCreativeSignals(workspaceId, campaign, signals);
+      await this.deriveScheduleSignals(workspaceId, campaign, signals);
       this.derivePerformanceSignals(workspaceId, campaign, signals);
       this.deriveExperimentSignals(workspaceId, campaign, signals);
     }
@@ -390,12 +390,12 @@ export class AttentionSignalService {
     }
   }
 
-  private deriveCreativeSignals(
+  private async deriveCreativeSignals(
     workspaceId: string,
     campaign: CampaignRow,
     signals: DerivedSignal[],
-  ): void {
-    const summary = creativeGeneratorService.getSummary(campaign.id);
+  ): Promise<void> {
+    const summary = await creativeGeneratorService.getSummary(campaign.id);
     if ('error' in summary) return;
 
     for (const d of summary.deliverables) {
@@ -435,12 +435,12 @@ export class AttentionSignalService {
     }
   }
 
-  private deriveScheduleSignals(
+  private async deriveScheduleSignals(
     workspaceId: string,
     campaign: CampaignRow,
     signals: DerivedSignal[],
-  ): void {
-    const summary = schedulingService.getSummary(campaign.id);
+  ): Promise<void> {
+    const summary = await schedulingService.getSummary(campaign.id);
     if ('error' in summary) return;
 
     if (summary.unscheduled > 0 && ['APPROVED', 'SCHEDULED', 'PUBLISHED', 'MEASURING'].includes(campaign.status)) {

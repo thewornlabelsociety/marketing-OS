@@ -48,10 +48,10 @@ campaignScheduleRouter.get('/', (req: ScheduleReq, res: Response) => {
   res.json(schedulingService.list(campaignId));
 });
 
-campaignScheduleRouter.get('/summary', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.get('/summary', async (req: ScheduleReq, res: Response) => {
   const { campaignId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  const summary = schedulingService.getSummary(campaignId);
+  const summary = await schedulingService.getSummary(campaignId);
   if ('error' in summary) {
     res.status(statusFor(summary.code)).json({ error: summary.error, code: summary.code });
     return;

@@ -90,8 +90,8 @@ async function main() {
       VALUES (?, ?, ?, ?, 1, ?, ?)`).run(`cpa_${campaignId}`, campaignId, workspaceId, `cplan_${campaignId}`, now, now);
   }
 
-  function approveCreative(campaignId: string, contentKey: string) {
-    const result = creativeGeneratorService.persistFromStructured(campaignId, contentKey, STATIC_POST_FIXTURE as never);
+  async function approveCreative(campaignId: string, contentKey: string) {
+    const result = await creativeGeneratorService.persistFromStructured(campaignId, contentKey, STATIC_POST_FIXTURE as never);
     if ('error' in result) throw new Error(result.error);
     creativeGeneratorService.approve(campaignId, contentKey, result.artifact.id);
     return result.artifact;
@@ -135,7 +135,7 @@ async function main() {
   const campC = `camp_c_${randomUUID()}`;
   insertCampaign(campC, wsA, '["INSTAGRAM"]');
   seedPlanChain(campC, wsA, 'INSTAGRAM');
-  approveCreative(campC, 'launch-static-01');
+  await approveCreative(campC, 'launch-static-01');
   const badSched = schedulingService.create(campC, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
@@ -149,7 +149,7 @@ async function main() {
   const campDE = `camp_de_${randomUUID()}`;
   insertCampaign(campDE, wsA, '["INSTAGRAM"]');
   seedPlanChain(campDE, wsA, 'INSTAGRAM');
-  const artV1 = approveCreative(campDE, 'launch-static-01');
+  const artV1 = await approveCreative(campDE, 'launch-static-01');
   const mediaV1 = registerMedia(wsA, campDE, artV1.id, artV1.version);
   const schedDE = schedulingService.create(campDE, wsA, {
     contentKey: 'launch-static-01',
@@ -185,7 +185,7 @@ async function main() {
   const campK = `camp_k_${randomUUID()}`;
   insertCampaign(campK, wsA, '["INSTAGRAM"]');
   seedPlanChain(campK, wsA, 'INSTAGRAM');
-  approveCreative(campK, 'launch-static-01');
+  await approveCreative(campK, 'launch-static-01');
   const schedK = schedulingService.create(campK, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
@@ -221,7 +221,7 @@ async function main() {
   const campN = `camp_n_${randomUUID()}`;
   insertCampaign(campN, wsA, '["INSTAGRAM"]');
   seedPlanChain(campN, wsA, 'INSTAGRAM');
-  const artN = approveCreative(campN, 'launch-static-01');
+  const artN = await approveCreative(campN, 'launch-static-01');
   const mediaN = registerMedia(wsA, campN, artN.id, artN.version);
   const schedN = schedulingService.create(campN, wsA, {
     contentKey: 'launch-static-01', scheduledFor: new Date().toISOString(), publicationMode: 'DIRECT',
@@ -238,7 +238,7 @@ async function main() {
   const campO = `camp_o_${randomUUID()}`;
   insertCampaign(campO, wsA, '["INSTAGRAM"]');
   seedPlanChain(campO, wsA, 'INSTAGRAM');
-  const artO = approveCreative(campO, 'launch-static-01');
+  const artO = await approveCreative(campO, 'launch-static-01');
   const schedO = schedulingService.create(campO, wsA, {
     contentKey: 'launch-static-01', scheduledFor: new Date().toISOString(), publicationMode: 'DIRECT',
     destinationId: igDest.id, mediaAssets: [registerMedia(wsA, campO, artO.id, artO.version)],
@@ -253,7 +253,7 @@ async function main() {
   const campP = `camp_p_${randomUUID()}`;
   insertCampaign(campP, wsA, '["FACEBOOK"]');
   seedPlanChain(campP, wsA, 'FACEBOOK');
-  const artP = approveCreative(campP, 'launch-static-01');
+  const artP = await approveCreative(campP, 'launch-static-01');
   const schedP = schedulingService.create(campP, wsA, {
     contentKey: 'launch-static-01', scheduledFor: new Date().toISOString(), publicationMode: 'DIRECT',
     destinationId: fbDest.id, mediaAssets: [registerMedia(wsA, campP, artP.id, artP.version)],
@@ -263,7 +263,7 @@ async function main() {
   const campQ = `camp_q_${randomUUID()}`;
   insertCampaign(campQ, wsA, '["INSTAGRAM"]');
   seedPlanChain(campQ, wsA, 'INSTAGRAM');
-  const artQ = approveCreative(campQ, 'launch-static-01');
+  const artQ = await approveCreative(campQ, 'launch-static-01');
   const schedQ = schedulingService.create(campQ, wsA, {
     contentKey: 'launch-static-01', scheduledFor: new Date().toISOString(), publicationMode: 'DIRECT',
     destinationId: igDest.id, mediaAssets: [registerMedia(wsA, campQ, artQ.id, artQ.version)],
@@ -310,12 +310,12 @@ async function main() {
   const campU = `camp_u_${randomUUID()}`;
   insertCampaign(campU, wsA, '["INSTAGRAM"]');
   seedPlanChain(campU, wsA, 'INSTAGRAM');
-  approveCreative(campU, 'launch-static-01');
+  await approveCreative(campU, 'launch-static-01');
   schedulingService.create(campU, wsA, {
     contentKey: 'launch-static-01', scheduledFor: new Date().toISOString(), publicationMode: 'DIRECT',
     destinationId: igDest.id, mediaAssets: [],
   });
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const mediaAttention = attentionSignalService.list(wsA).some((s) => s.summary?.toLowerCase().includes('media')
     || s.summary?.toLowerCase().includes('asset') || s.summary?.toLowerCase().includes('visual'));
   check('U dashboard media attention', mediaAttention || attentionSignalService.list(wsA).some((s) => s.signalType === 'PUBLISHING_FAILED'));

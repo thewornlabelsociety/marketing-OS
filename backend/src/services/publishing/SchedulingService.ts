@@ -134,8 +134,8 @@ export class SchedulingService {
     );
   }
 
-  getSummary(campaignId: string): CampaignPublishingSummary | SchedulingServiceError {
-    const creativeSummary = creativeGeneratorService.getSummary(campaignId);
+  async getSummary(campaignId: string): Promise<CampaignPublishingSummary | SchedulingServiceError> {
+    const creativeSummary = await creativeGeneratorService.getSummary(campaignId);
     if ('error' in creativeSummary) return creativeSummary;
 
     const schedules = this.list(campaignId);
@@ -143,7 +143,7 @@ export class SchedulingService {
     const scheduledKeys = new Set(schedules.filter((s) => s.status !== 'CANCELLED').map((s) => s.contentKey));
 
     const unscheduledItems: UnscheduledDeliverable[] = [];
-    const plan = contentPlannerService.getApprovedContentPlan(campaignId);
+    const plan = await contentPlannerService.getApprovedContentPlan(campaignId);
     for (const d of approvedDeliverables) {
       if (scheduledKeys.has(d.contentKey)) continue;
       const deliverable = plan?.deliverables.find((x) => x.contentKey === d.contentKey);

@@ -10,6 +10,7 @@ import { SqliteWorkspaceRepository } from '../repositories/sqlite/SqliteWorkspac
 import { SqliteObjectiveRepository } from '../repositories/sqlite/SqliteObjectiveRepository';
 import { SqliteCampaignRepository } from '../repositories/sqlite/SqliteCampaignRepository';
 import { createSqlitePlanningRepositories } from '../repositories/sqlite/SqlitePlanningRepositories';
+import { createSqliteContentPlanningRepositories } from '../repositories/sqlite/SqliteContentPlanningRepositories';
 import {
   PostgresTenantRepository,
   PostgresWorkspaceRepository,
@@ -17,6 +18,7 @@ import {
   PostgresCampaignRepository,
 } from '../repositories/postgres/PostgresCoreRepositories';
 import { createPostgresPlanningRepositories } from '../repositories/postgres/PostgresPlanningRepositories';
+import { createPostgresContentPlanningRepositories } from '../repositories/postgres/PostgresContentPlanningRepositories';
 
 let cached: CoreDomainRepositories | null = null;
 let cachedDriver: CoreDbDriver | null = null;
@@ -45,6 +47,7 @@ function buildRepositories(driver: CoreDbDriver, postgresClient?: PoolClient): C
       objective: new PostgresObjectiveRepository(),
       campaign: new PostgresCampaignRepository(postgresClient),
       planning: createPostgresPlanningRepositories(postgresClient),
+      contentPlanning: createPostgresContentPlanningRepositories(postgresClient),
     };
   }
   return {
@@ -54,6 +57,7 @@ function buildRepositories(driver: CoreDbDriver, postgresClient?: PoolClient): C
     objective: new SqliteObjectiveRepository(),
     campaign: new SqliteCampaignRepository(),
     planning: createSqlitePlanningRepositories(),
+    contentPlanning: createSqliteContentPlanningRepositories(),
   };
 }
 

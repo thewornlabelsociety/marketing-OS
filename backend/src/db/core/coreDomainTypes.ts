@@ -74,6 +74,7 @@ export interface CampaignPatchInput {
 }
 
 import type { PlanningRepositories } from './planningDomainTypes';
+import type { ContentPlanningRepositories } from './contentPlanningDomainTypes';
 
 export interface CampaignListFilters {
   workspaceId?: string;
@@ -132,6 +133,7 @@ export interface CoreDomainRepositories {
   objective: ObjectiveRepository;
   campaign: CampaignRepository;
   planning: PlanningRepositories;
+  contentPlanning: ContentPlanningRepositories;
 }
 
 /** Verification-only: delete owned fixture rows by exact ID in FK-safe order. */

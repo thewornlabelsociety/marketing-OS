@@ -42,11 +42,11 @@ function statusFor(code?: string): number {
 
 export const campaignCreativeRouter = Router({ mergeParams: true });
 
-campaignCreativeRouter.get('/', (req: CreativeReq, res: Response) => {
+campaignCreativeRouter.get('/', async (req: CreativeReq, res: Response) => {
   const { campaignId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
-  const summary = creativeGeneratorService.getSummary(campaignId);
+  const summary = await creativeGeneratorService.getSummary(campaignId);
   if ('error' in summary) {
     res.status(statusFor(summary.code)).json({ error: summary.error, code: summary.code });
     return;
@@ -54,18 +54,17 @@ campaignCreativeRouter.get('/', (req: CreativeReq, res: Response) => {
   res.json(summary);
 });
 
-campaignCreativeRouter.get('/status', (req: CreativeReq, res: Response) => {
+campaignCreativeRouter.get('/status', async (req: CreativeReq, res: Response) => {
   const { campaignId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
-  const approval = contentPlannerService.getApproval(campaignId);
+  const approval = await contentPlannerService.getApproval(campaignId);
+  const summary = await creativeGeneratorService.getSummary(campaignId);
   res.json({
     aiConfigured: aiEnv.isConfigured,
     aiProvider: aiEnv.provider,
     contentPlanApproved: approval !== null,
-    summary: 'error' in (creativeGeneratorService.getSummary(campaignId) ?? {})
-      ? null
-      : creativeGeneratorService.getSummary(campaignId),
+    summary: 'error' in summary ? null : summary,
   });
 });
 

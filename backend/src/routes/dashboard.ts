@@ -17,35 +17,35 @@ function statusFor(code?: string): number {
 
 export const dashboardRouter = Router();
 
-dashboardRouter.get('/', (req: Request, res: Response) => {
+dashboardRouter.get('/', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  res.json(dashboardService.getDashboard(workspaceId));
+  res.json(await dashboardService.getDashboard(workspaceId));
 });
 
 export const attentionRouter = Router();
 
-attentionRouter.get('/', (req: Request, res: Response) => {
+attentionRouter.get('/', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
   const status = (req.query.status as 'OPEN' | 'ALL') ?? 'OPEN';
-  attentionSignalService.reconcile(workspaceId);
+  await attentionSignalService.reconcile(workspaceId);
   res.json(attentionSignalService.list(workspaceId, status));
 });
 
-attentionRouter.post('/reconcile', (req: Request, res: Response) => {
+attentionRouter.post('/reconcile', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  res.json(attentionSignalService.reconcile(workspaceId));
+  res.json(await attentionSignalService.reconcile(workspaceId));
 });
 
 attentionRouter.post('/:signalId/dismiss', (req: Request, res: Response) => {

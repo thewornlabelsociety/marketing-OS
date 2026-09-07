@@ -185,9 +185,9 @@ async function main() {
   const campA = `camp_a_${randomUUID()}`;
   insertCampaign(campA, wsA, 'obj_sys_sales', 'READY_FOR_APPROVAL');
   seedPlanChain(campA, wsA);
-  let openA = attentionSignalService.reconcile(wsA).filter((s) => s.signalType === 'CAMPAIGN_READY_FOR_APPROVAL' && s.campaignId === campA);
+  let openA = (await attentionSignalService.reconcile(wsA)).filter((s) => s.signalType === 'CAMPAIGN_READY_FOR_APPROVAL' && s.campaignId === campA);
   check('A one approval signal', openA.length === 1);
-  for (let i = 0; i < 3; i++) attentionSignalService.reconcile(wsA);
+  for (let i = 0; i < 3; i++) await attentionSignalService.reconcile(wsA);
   openA = attentionSignalService.list(wsA).filter((s) => s.signalType === 'CAMPAIGN_READY_FOR_APPROVAL' && s.campaignId === campA);
   check('A reconcile 3x still one', openA.length === 1);
 
@@ -196,11 +196,11 @@ async function main() {
   insertCampaign(campB, wsA, 'obj_sys_sales', 'APPROVED');
   seedPlanChain(campB, wsA);
   const artB = await persistCreative(campB, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const beforeB = openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.sourceId === 'launch-carousel-01' && s.campaignId === campB);
   check('B unapproved signal', beforeB.length === 1);
   creativeGeneratorService.approve(campB, 'launch-carousel-01', artB.id);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const afterB = openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.sourceId === 'launch-carousel-01' && s.campaignId === campB);
   check('B approve resolves signal', afterB.length === 0);
 
@@ -212,14 +212,14 @@ async function main() {
   const v2 = await creativeGeneratorService.reviseFromStructured(campC, 'launch-carousel-01', 'V2 hook', CAROUSEL_CREATIVE_FIXTURE);
   if ('error' in v2) throw new Error(v2.error);
   creativeGeneratorService.approve(campC, 'launch-carousel-01', v2.artifact.id);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('C V2 approved no signal', openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.campaignId === campC).length === 0);
   const v3 = await creativeGeneratorService.reviseFromStructured(campC, 'launch-carousel-01', 'V3 hook', {
     ...CAROUSEL_CREATIVE_FIXTURE,
     caption: 'Version 3 unapproved caption',
   });
   if ('error' in v3) throw new Error(v3.error);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const v3Signals = openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.campaignId === campC);
   check('C V3 creates signal', v3Signals.length === 1);
   check('C V3 version in signal', v3Signals[0]?.sourceVersion === String(v3.artifact.version));
@@ -228,10 +228,10 @@ async function main() {
   const campD = `camp_d_${randomUUID()}`;
   insertCampaign(campD, wsA, 'obj_sys_sales', 'CHANGES_REQUESTED');
   seedPlanChain(campD, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('D changes requested signal', openOfType(wsA, 'CAMPAIGN_CHANGES_REQUESTED').some((s) => s.campaignId === campD));
   db.prepare(`UPDATE campaigns SET status = 'REVISING' WHERE id = ?`).run(campD);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('D revising resolves', openOfType(wsA, 'CAMPAIGN_CHANGES_REQUESTED').filter((s) => s.campaignId === campD).length === 0);
 
   // --- Test E: 4 approved unscheduled = one READY_TO_SCHEDULE ---
@@ -239,7 +239,7 @@ async function main() {
   insertCampaign(campE, wsA, 'obj_sys_sales', 'APPROVED');
   seedPlanChain(campE, wsA);
   await approveAllFour(campE);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const schedSignalsE = openOfType(wsA, 'READY_TO_SCHEDULE').filter((s) => s.campaignId === campE);
   check('E one grouped schedule signal', schedSignalsE.length === 1);
   check('E not four rows', schedSignalsE.length !== 4);
@@ -252,7 +252,7 @@ async function main() {
       publicationMode: 'MANUAL',
     });
   }
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('F schedule all resolves', openOfType(wsA, 'READY_TO_SCHEDULE').filter((s) => s.campaignId === campE).length === 0);
 
   // --- Test G: FAILED schedule creates HIGH/CRITICAL signal ---
@@ -267,7 +267,7 @@ async function main() {
   });
   if ('error' in schedG) throw new Error(schedG.error);
   markScheduleFailed(schedG.item.id, campG, wsA, artG.id, artG.version, true);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const failSignalsG = attentionSignalService.list(wsA).filter(
     (s) => s.campaignId === campG && (s.signalType === 'PUBLISHING_FAILED' || s.signalType === 'PUBLISHING_RETRY_REQUIRED'),
   );
@@ -276,7 +276,7 @@ async function main() {
 
   // --- Test H: mark published resolves failure signal ---
   publishingService.markPublished(schedG.item.id, campG, { evidence: 'Verified externally', externalUrl: 'https://example.com/fixed' });
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const openAfterH = attentionSignalService.list(wsA).filter(
     (s) => s.campaignId === campG && (s.signalType === 'PUBLISHING_FAILED' || s.signalType === 'PUBLISHING_RETRY_REQUIRED'),
   );
@@ -295,7 +295,7 @@ async function main() {
     metrics: { impressions: 50000, views: 100000, purchases: 0 }, source: 'MANUAL',
   });
   campaignPerformanceService.evaluate(campI, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const underI = openOfType(wsA, 'PERFORMANCE_UNDERPERFORMING').filter((s) => s.campaignId === campI);
   check('I underperforming signal', underI.length === 1);
   check('I has reasons', Boolean(underI[0]?.summary && underI[0].summary.length > 0));
@@ -311,7 +311,7 @@ async function main() {
   }
   db.prepare(`UPDATE objectives SET success_criteria = '10 purchases', primary_kpi = 'purchases' WHERE id = 'obj_sys_sales'`).run();
   campaignPerformanceService.evaluate(campI, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('J recovery resolves underperformance', openOfType(wsA, 'PERFORMANCE_UNDERPERFORMING').filter((s) => s.campaignId === campI).length === 0);
 
   // --- Test K: INFO PERFORMANCE_HIGH_PERFORMING ---
@@ -327,7 +327,7 @@ async function main() {
     metrics: { reach: 80000, impressions: 80000 }, source: 'MANUAL',
   });
   campaignPerformanceService.evaluate(campK, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const highK = openOfType(wsA, 'PERFORMANCE_HIGH_PERFORMING').filter((s) => s.campaignId === campK);
   check('K high performing signal', highK.length === 1);
   check('K INFO severity', highK[0]?.severity === 'INFO');
@@ -345,7 +345,7 @@ async function main() {
     metrics: { impressions: 100000, views: 100000, purchases: 0 }, source: 'MANUAL',
   });
   campaignPerformanceService.evaluate(campL, wsA);
-  const dashL = dashboardService.getDashboard(wsA);
+  const dashL = await dashboardService.getDashboard(wsA);
   check('L not in highPerforming', !dashL.performance.highPerforming.some((p) => p.campaignId === campL));
   check('L vanity in underperforming or signal', dashL.performance.underperforming.some((p) => p.campaignId === campL)
     || openOfType(wsA, 'PERFORMANCE_UNDERPERFORMING').some((s) => s.campaignId === campL));
@@ -389,7 +389,7 @@ async function main() {
     }
     const analysisM = experimentService.analyze(expM.id, campM, wsA, '7_DAYS');
     check('M B wins analysis', !('error' in analysisM) && (analysisM.outcome === 'VARIANT_B_WINS' || analysisM.outcome === 'VARIANT_WINNER'));
-    attentionSignalService.reconcile(wsA);
+    await attentionSignalService.reconcile(wsA);
     check('M decision signal', openOfType(wsA, 'EXPERIMENT_DECISION_AVAILABLE').some((s) => s.entityId === expM.id));
   } else {
     check('M B wins analysis', false);
@@ -426,7 +426,7 @@ async function main() {
       channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000 }, source: 'MANUAL',
     });
     experimentService.analyze(expN.id, campN, wsA, '7_DAYS');
-    attentionSignalService.reconcile(wsA);
+    await attentionSignalService.reconcile(wsA);
     check('N inconclusive signal', openOfType(wsA, 'EXPERIMENT_INCONCLUSIVE').some((s) => s.entityId === expN.id)
       || openOfType(wsA, 'EXPERIMENT_INSUFFICIENT_DATA').some((s) => s.entityId === expN.id));
     check('N not decision winner', !openOfType(wsA, 'EXPERIMENT_DECISION_AVAILABLE').some((s) => s.entityId === expN.id));
@@ -465,7 +465,7 @@ async function main() {
       channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000 }, source: 'MANUAL',
     });
     experimentService.analyze(expO.id, campO, wsA, '7_DAYS');
-    const dashO = dashboardService.getDashboard(wsA);
+    const dashO = await dashboardService.getDashboard(wsA);
     const expItemO = dashO.experiments.find((e) => e.experimentId === expO.id);
     check('O observational in dashboard', expItemO?.mode === 'OBSERVATIONAL_COMPARISON');
     check('O has warning', Boolean(expItemO?.warnings?.length || expItemO?.signalType.includes('EXPERIMENT')));
@@ -496,12 +496,12 @@ async function main() {
   db.prepare(`UPDATE objectives SET success_criteria = '20 purchases', primary_kpi = 'purchases' WHERE id = 'obj_sys_sales'`).run();
   campaignPerformanceService.evaluate(campP, wsA);
   campaignLibraryService.syncClassifications(campP, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const bpSignalsP = openOfType(wsA, 'BLUEPRINT_CANDIDATE').filter((s) => s.campaignId === campP);
   check('P blueprint candidate signal', bpSignalsP.length >= 1);
   const bpP = blueprintService.createFromCampaign(campP, wsA);
   check('P blueprint created', !('error' in bpP));
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('P blueprint resolves signal', openOfType(wsA, 'BLUEPRINT_CANDIDATE').filter((s) => s.campaignId === campP).length === 0);
 
   // --- Test Q: CANDIDATE learning signal, dismiss resolves ---
@@ -518,12 +518,12 @@ async function main() {
       { sourceType: 'experiment', sourceId: 'ev3' },
     ],
   });
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const learnSignalsQ = openOfType(wsA, 'LEARNING_CANDIDATE').filter((s) => s.entityId === learningQ?.id);
   check('Q learning candidate signal', learnSignalsQ.length === 1);
   if (learningQ && learnSignalsQ[0]) {
     attentionSignalService.dismiss(learnSignalsQ[0].id, wsA);
-    attentionSignalService.reconcile(wsA);
+    await attentionSignalService.reconcile(wsA);
     check('Q dismiss resolves', openOfType(wsA, 'LEARNING_CANDIDATE').filter((s) => s.entityId === learningQ.id).length === 0);
   } else {
     check('Q dismiss resolves', false);
@@ -549,7 +549,7 @@ async function main() {
   });
   campaignPerformanceService.evaluate(campR, wsA);
   const recBeforeR = campaignLibraryService.syncClassifications(campR, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const bpSignalR = openOfType(wsA, 'BLUEPRINT_CANDIDATE').find((s) => s.campaignId === campR);
   if (bpSignalR) {
     attentionSignalService.dismiss(bpSignalR.id, wsA);
@@ -573,7 +573,7 @@ async function main() {
     channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { reach: 60000, impressions: 60000 }, source: 'MANUAL',
   });
   campaignPerformanceService.evaluate(campS, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const highS = openOfType(wsA, 'PERFORMANCE_HIGH_PERFORMING').find((s) => s.campaignId === campS);
   const evalV1 = objectiveEvaluationService.getLatestEvaluation(campS)?.id;
   if (highS) {
@@ -585,7 +585,7 @@ async function main() {
     });
     campaignPerformanceService.evaluate(campS, wsA);
     const evalV2 = objectiveEvaluationService.getLatestEvaluation(campS)?.id;
-    attentionSignalService.reconcile(wsA);
+    await attentionSignalService.reconcile(wsA);
     check('S new eval id', evalV1 !== evalV2);
     check('S new signal after dismiss', openOfType(wsA, 'PERFORMANCE_HIGH_PERFORMING').some((s) => s.campaignId === campS && s.sourceVersion === evalV2));
   } else {
@@ -606,7 +606,7 @@ async function main() {
   if ('error' in schedT) throw new Error(schedT.error);
   markScheduleFailed(schedT.item.id, campT, wsA, artT.id, artT.version, true);
   campaignLibraryService.syncClassifications(campP, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const rankedT = attentionSignalService.rank(attentionSignalService.list(wsA));
   const failIdxT = rankedT.findIndex((s) => s.signalType === 'PUBLISHING_FAILED' || s.signalType === 'PUBLISHING_RETRY_REQUIRED');
   const bpIdxT = rankedT.findIndex((s) => s.signalType === 'BLUEPRINT_CANDIDATE');
@@ -634,7 +634,7 @@ async function main() {
     scheduledFor: new Date(Date.now() + 10 * 86400000).toISOString(),
     publicationMode: 'MANUAL',
   });
-  const dashU = dashboardService.getDashboard(wsA);
+  const dashU = await dashboardService.getDashboard(wsA);
   const upcomingIds = new Set(dashU.upcoming.map((u) => u.scheduleId));
   check('U includes near schedules', !('error' in todaySched) && !('error' in weekSched)
     && upcomingIds.has(todaySched.item.id) && upcomingIds.has(weekSched.item.id));
@@ -674,7 +674,7 @@ async function main() {
       { sourceType: 'test', sourceId: 'w3' },
     ],
   });
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const signalW = attentionSignalService.list(wsA).find((s) => s.entityId === learningW?.id);
   check('W dismiss wrong workspace blocked', signalW ? (await hit('POST', `/api/attention/${signalW.id}/dismiss`, { workspaceId: wsB })) === 403 : false);
   check('W dismiss correct workspace ok', signalW ? (await hit('POST', `/api/attention/${signalW.id}/dismiss`, { workspaceId: wsA })) === 200 : false);
@@ -685,9 +685,9 @@ async function main() {
   const campX = `camp_x_${randomUUID()}`;
   insertCampaign(campX, wsA, 'obj_sys_sales', 'READY_FOR_REVIEW');
   seedPlanChain(campX, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   const countX0 = attentionSignalService.list(wsA).filter((s) => s.campaignId === campX && s.status === 'OPEN').length;
-  for (let i = 0; i < 5; i++) attentionSignalService.reconcile(wsA);
+  for (let i = 0; i < 5; i++) await attentionSignalService.reconcile(wsA);
   const countX5 = attentionSignalService.list(wsA).filter((s) => s.campaignId === campX && s.status === 'OPEN').length;
   check('X no duplicates after 5 reconciles', countX0 === countX5 && countX0 >= 1);
 
@@ -695,14 +695,14 @@ async function main() {
   const campY = `camp_y_${randomUUID()}`;
   insertCampaign(campY, wsA, 'obj_sys_sales', 'READY_FOR_APPROVAL');
   seedPlanChain(campY, wsA);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('Y signal before resolve', openOfType(wsA, 'CAMPAIGN_READY_FOR_APPROVAL').some((s) => s.campaignId === campY));
   db.prepare(`UPDATE campaigns SET status = 'APPROVED' WHERE id = ?`).run(campY);
-  attentionSignalService.reconcile(wsA);
+  await attentionSignalService.reconcile(wsA);
   check('Y stale source resolved', openOfType(wsA, 'CAMPAIGN_READY_FOR_APPROVAL').filter((s) => s.campaignId === campY).length === 0);
 
   // --- Test Z: Empty dashboard ---
-  const dashZ = dashboardService.getDashboard(wsEmpty);
+  const dashZ = await dashboardService.getDashboard(wsEmpty);
   check('Z empty flag', dashZ.empty === true);
   check('Z no fake needsAttention', dashZ.needsAttention.length === 0);
   check('Z zero counts', dashZ.counts.needsAttention === 0 && dashZ.counts.readyForReview === 0);

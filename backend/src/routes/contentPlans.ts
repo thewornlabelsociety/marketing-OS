@@ -1,12 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db/database';
 import { aiEnv } from '../config/aiEnvironment';
+import { getCoreRepositories } from '../db/core/createCoreRepositories';
 import { contentPlannerService } from '../services/campaigns/ContentPlannerService';
 import { listChannelCapabilities } from '../services/channels/ChannelCapabilityRegistry';
 
 type PlanReq = Request<{ campaignId: string }>;
-
-interface CampaignRecord { id: string; workspace_id: string }
 
 function resolveWorkspaceId(req: PlanReq): string | undefined {
   const query = req.query as Record<string, string | undefined>;
@@ -14,22 +12,23 @@ function resolveWorkspaceId(req: PlanReq): string | undefined {
   return query.workspaceId || body?.workspaceId;
 }
 
-function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): CampaignRecord | null {
+async function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): Promise<boolean> {
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
-    return null;
+    return false;
   }
 
-  const campaign = db.prepare('SELECT id, workspace_id FROM campaigns WHERE id = ?').get(campaignId) as CampaignRecord | undefined;
+  const repos = getCoreRepositories();
+  const campaign = await repos.campaign.findById(campaignId);
   if (!campaign) {
     res.status(404).json({ error: 'Campaign not found' });
-    return null;
+    return false;
   }
   if (campaign.workspace_id !== workspaceId) {
     res.status(403).json({ error: 'Campaign does not belong to the specified workspace' });
-    return null;
+    return false;
   }
-  return campaign;
+  return true;
 }
 
 function statusFor(code?: string): number {
@@ -42,11 +41,11 @@ function statusFor(code?: string): number {
 
 export const contentPlansRouter = Router({ mergeParams: true });
 
-contentPlansRouter.get('/', (req: PlanReq, res: Response) => {
+contentPlansRouter.get('/', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!(await resolveCampaign(campaignId, resolveWorkspaceId(req), res))) return;
 
-  const plan = contentPlannerService.getCurrent(campaignId);
+  const plan = await contentPlannerService.getCurrent(campaignId);
   if (!plan) {
     res.status(404).json({ error: 'No content plan exists for this campaign' });
     return;
@@ -54,18 +53,18 @@ contentPlansRouter.get('/', (req: PlanReq, res: Response) => {
   res.json(plan);
 });
 
-contentPlansRouter.get('/versions', (req: PlanReq, res: Response) => {
+contentPlansRouter.get('/versions', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  res.json(contentPlannerService.getAllVersions(campaignId));
+  if (!(await resolveCampaign(campaignId, resolveWorkspaceId(req), res))) return;
+  res.json(await contentPlannerService.getAllVersions(campaignId));
 });
 
 contentPlansRouter.get('/status', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!(await resolveCampaign(campaignId, resolveWorkspaceId(req), res))) return;
 
-  const current = contentPlannerService.getCurrent(campaignId);
-  const approval = contentPlannerService.getApproval(campaignId);
+  const current = await contentPlannerService.getCurrent(campaignId);
+  const approval = await contentPlannerService.getApproval(campaignId);
   const strategy = await contentPlannerService.resolveApprovedStrategy(campaignId);
 
   res.json({
@@ -81,7 +80,7 @@ contentPlansRouter.get('/status', async (req: PlanReq, res: Response) => {
 
 contentPlansRouter.post('/', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!(await resolveCampaign(campaignId, resolveWorkspaceId(req), res))) return;
 
   const result = await contentPlannerService.generate(campaignId);
   if ('error' in result) {
@@ -99,7 +98,7 @@ contentPlansRouter.post('/revisions', async (req: PlanReq, res: Response) => {
     res.status(400).json({ error: 'requestText is required' });
     return;
   }
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
   const result = await contentPlannerService.revise(campaignId, requestText.trim());
   if ('error' in result) {
@@ -109,7 +108,7 @@ contentPlansRouter.post('/revisions', async (req: PlanReq, res: Response) => {
   res.status(201).json(result.plan);
 });
 
-contentPlansRouter.post('/approval', (req: PlanReq, res: Response) => {
+contentPlansRouter.post('/approval', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
   const { contentPlanId, workspaceId } = req.body as { contentPlanId?: string; workspaceId?: string };
 
@@ -117,9 +116,9 @@ contentPlansRouter.post('/approval', (req: PlanReq, res: Response) => {
     res.status(400).json({ error: 'contentPlanId is required' });
     return;
   }
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!(await resolveCampaign(campaignId, workspaceId, res))) return;
 
-  const result = contentPlannerService.approve(campaignId, contentPlanId);
+  const result = await contentPlannerService.approve(campaignId, contentPlanId);
   if (result.error) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
     return;
@@ -127,11 +126,11 @@ contentPlansRouter.post('/approval', (req: PlanReq, res: Response) => {
   res.json({ approved: true });
 });
 
-contentPlansRouter.get('/approval', (req: PlanReq, res: Response) => {
+contentPlansRouter.get('/approval', async (req: PlanReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!(await resolveCampaign(campaignId, resolveWorkspaceId(req), res))) return;
 
-  const approval = contentPlannerService.getApproval(campaignId);
+  const approval = await contentPlannerService.getApproval(campaignId);
   if (!approval) {
     res.status(404).json({ error: 'No content plan approval record found' });
     return;
