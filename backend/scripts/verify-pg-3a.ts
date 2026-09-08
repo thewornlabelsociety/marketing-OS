@@ -136,10 +136,11 @@ async function main() {
     check('002 skipped on rerun', firstRun.skipped.includes('002_system_objectives_seed.sql'));
     check('003 skipped on rerun', firstRun.skipped.includes('003_pg3_unique_constraints.sql'));
     check('004 skipped on rerun', firstRun.skipped.includes('004_pg4_content_plan_unique_constraints.sql'));
+    check('005 skipped on rerun', firstRun.skipped.includes('005_pg5_creative_approval_unique_constraints.sql'));
     check('no migrations applied on acceptance rerun', firstRun.applied.length === 0);
 
     const tracking = await pool.query('SELECT filename, checksum FROM postgres_migrations ORDER BY filename');
-    check('live migration rows = 4', tracking.rowCount === 4, `got ${tracking.rowCount}`);
+    check('live migration rows = 5', tracking.rowCount === 5, `got ${tracking.rowCount}`);
     const trackingIssues = validateLiveMigrationTracking(tracking.rows);
     check('live tracking matches accepted registry', trackingIssues.length === 0);
 

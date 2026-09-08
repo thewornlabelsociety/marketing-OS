@@ -12,8 +12,10 @@ export interface AdditiveIndexExpectation {
   migration: string;
   name: string;
   table: string;
-  column: string;
+  /** Ordered index columns. */
+  columns: readonly string[];
   unique: boolean;
+  method: 'btree';
   /** Canonical CREATE INDEX SQL (used for definition semantics). */
   sql: string;
 }
@@ -24,25 +26,37 @@ export const FORWARD_MIGRATION_INDEX_EXPECTATIONS: readonly AdditiveIndexExpecta
     migration: '003_pg3_unique_constraints.sql',
     name: 'uq_campaign_briefs_campaign_id',
     table: 'campaign_briefs',
-    column: 'campaign_id',
+    columns: ['campaign_id'],
     unique: true,
+    method: 'btree',
     sql: 'CREATE UNIQUE INDEX uq_campaign_briefs_campaign_id ON campaign_briefs (campaign_id)',
   },
   {
     migration: '003_pg3_unique_constraints.sql',
     name: 'uq_plan_approvals_campaign_id',
     table: 'plan_approvals',
-    column: 'campaign_id',
+    columns: ['campaign_id'],
     unique: true,
+    method: 'btree',
     sql: 'CREATE UNIQUE INDEX uq_plan_approvals_campaign_id ON plan_approvals (campaign_id)',
   },
   {
     migration: '004_pg4_content_plan_unique_constraints.sql',
     name: 'uq_content_plan_approvals_campaign_id',
     table: 'content_plan_approvals',
-    column: 'campaign_id',
+    columns: ['campaign_id'],
     unique: true,
+    method: 'btree',
     sql: 'CREATE UNIQUE INDEX uq_content_plan_approvals_campaign_id ON content_plan_approvals (campaign_id)',
+  },
+  {
+    migration: '005_pg5_creative_approval_unique_constraints.sql',
+    name: 'uq_creative_approvals_campaign_content_key',
+    table: 'creative_approvals',
+    columns: ['campaign_id', 'content_key'],
+    unique: true,
+    method: 'btree',
+    sql: 'CREATE UNIQUE INDEX uq_creative_approvals_campaign_content_key ON creative_approvals (campaign_id, content_key)',
   },
 ];
 
@@ -97,8 +111,13 @@ export function validateAdditiveIndexExpectation(
   }
 
   const def = normalizeIndexDef(live.indexdef);
-  if (!def.includes(expectation.column.toLowerCase())) {
-    return `${expectation.name}: index definition missing column ${expectation.column}`;
+  if (!def.includes(`using ${expectation.method}`)) {
+    return `${expectation.name}: expected method ${expectation.method}`;
+  }
+  for (const column of expectation.columns) {
+    if (!def.includes(column.toLowerCase())) {
+      return `${expectation.name}: index definition missing column ${column}`;
+    }
   }
 
   if (!def.includes('unique index') && expectation.unique) {
@@ -110,11 +129,12 @@ export function validateAdditiveIndexExpectation(
   }
 
   const expNorm = normalizeIndexDef(expectation.sql);
-  if (!def.includes(expectation.table.toLowerCase()) || !def.includes(`(${expectation.column.toLowerCase()})`)) {
+  const expectedColumns = `(${expectation.columns.map((column) => column.toLowerCase()).join(', ')})`;
+  if (!def.includes(expectation.table.toLowerCase()) || !def.includes(expectedColumns)) {
     return `${expectation.name}: index definition semantics mismatch`;
   }
 
-  if (expNorm && !def.includes(expectation.column.toLowerCase())) {
+  if (expNorm && expectation.columns.some((column) => !def.includes(column.toLowerCase()))) {
     return `${expectation.name}: column not reflected in live definition`;
   }
 

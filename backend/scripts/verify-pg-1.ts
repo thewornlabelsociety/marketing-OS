@@ -68,16 +68,18 @@ const MIGRATION_003_INDEX_EXPECTATIONS: AdditiveIndexExpectation[] = [
     migration: '003_pg3_unique_constraints.sql',
     name: 'uq_campaign_briefs_campaign_id',
     table: 'campaign_briefs',
-    column: 'campaign_id',
+    columns: ['campaign_id'],
     unique: true,
+    method: 'btree',
     sql: 'CREATE UNIQUE INDEX uq_campaign_briefs_campaign_id ON campaign_briefs (campaign_id)',
   },
   {
     migration: '003_pg3_unique_constraints.sql',
     name: 'uq_plan_approvals_campaign_id',
     table: 'plan_approvals',
-    column: 'campaign_id',
+    columns: ['campaign_id'],
     unique: true,
+    method: 'btree',
     sql: 'CREATE UNIQUE INDEX uq_plan_approvals_campaign_id ON plan_approvals (campaign_id)',
   },
 ];
@@ -86,8 +88,9 @@ const MIGRATION_004_INDEX_EXPECTATION: AdditiveIndexExpectation = {
   migration: '004_pg4_content_plan_unique_constraints.sql',
   name: 'uq_content_plan_approvals_campaign_id',
   table: 'content_plan_approvals',
-  column: 'campaign_id',
+  columns: ['campaign_id'],
   unique: true,
+  method: 'btree',
   sql: 'CREATE UNIQUE INDEX uq_content_plan_approvals_campaign_id ON content_plan_approvals (campaign_id)',
 };
 
@@ -141,6 +144,10 @@ function runStaticChecks(
     'Forward migration 004 registered in accepted set',
     '004_pg4_content_plan_unique_constraints.sql' in ACCEPTED_MIGRATION_CHECKSUMS,
   );
+  check(
+    'Forward migration 005 registered in accepted set',
+    '005_pg5_creative_approval_unique_constraints.sql' in ACCEPTED_MIGRATION_CHECKSUMS,
+  );
 
   console.log('\n[1b/9] Static — migration inventory tamper simulations');
 
@@ -177,6 +184,13 @@ function runStaticChecks(
       (f) => (f === '004_pg4_content_plan_unique_constraints.sql' ? 'tampered' : mockChecksum(f)),
     ).some((i) => i.code === 'checksum_mismatch' && i.detail.includes('004_pg4_content_plan_unique_constraints.sql')),
   );
+  check(
+    'Tamper simulation: changed 005 checksum fails validation',
+    validateDiscoveredMigrationInventory(
+      migrationFiles,
+      (f) => (f === '005_pg5_creative_approval_unique_constraints.sql' ? 'tampered' : mockChecksum(f)),
+    ).some((i) => i.code === 'checksum_mismatch' && i.detail.includes('005_pg5_creative_approval_unique_constraints.sql')),
+  );
 
   check(
     'Tamper simulation: missing 003 fails validation',
@@ -193,13 +207,20 @@ function runStaticChecks(
       mockChecksum,
     ).some((i) => i.code === 'missing_accepted_migration'),
   );
+  check(
+    'Tamper simulation: missing 005 fails validation',
+    validateDiscoveredMigrationInventory(
+      migrationFiles.filter((f) => f !== '005_pg5_creative_approval_unique_constraints.sql'),
+      mockChecksum,
+    ).some((i) => i.code === 'missing_accepted_migration'),
+  );
 
   check(
     'Tamper simulation: unaccepted migration file fails validation',
     validateDiscoveredMigrationInventory(
-      [...migrationFiles, '005_bad.sql'],
+      [...migrationFiles, '006_bad.sql'],
       mockChecksum,
-    ).some((i) => i.code === 'unaccepted_migration' && i.detail === '005_bad.sql'),
+    ).some((i) => i.code === 'unaccepted_migration' && i.detail === '006_bad.sql'),
   );
 
   check(
@@ -354,12 +375,12 @@ function runStaticChecks(
   );
   check(
     'Additive accepted migration non-PK index count',
-    additiveNonPkIndexCount() === 3,
+    additiveNonPkIndexCount() === 4,
     `got ${additiveNonPkIndexCount()}`,
   );
   check(
     'Effective expected non-PK index count',
-    effectiveNonPkIndexCount() === 32,
+    effectiveNonPkIndexCount() === 33,
     `got ${effectiveNonPkIndexCount()}`,
   );
   check(

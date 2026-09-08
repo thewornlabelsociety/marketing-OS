@@ -22,6 +22,7 @@ export const ACCEPTED_MIGRATION_CHECKSUMS: Readonly<Record<string, string>> = {
   '002_system_objectives_seed.sql': '70014cea1d7f590260feb7399c17ce3de0266c086d8d93144a2b7ed1927c92fc',
   '003_pg3_unique_constraints.sql': 'bf5222657d4f2897fd73c4eaad93b995c3a80c7428dee10babc6687ebfdea196',
   '004_pg4_content_plan_unique_constraints.sql': 'fdde24f6e30390d740f76e340b10151e6a603c668275a53a8fe332fdd6565df4',
+  '005_pg5_creative_approval_unique_constraints.sql': 'f1ca6c249ad08fdcc519bcde758d4f6a1c965c40a40c0911e81e2042672e16fa',
 };
 
 export function acceptedMigrationFilenames(): string[] {

@@ -145,11 +145,12 @@ async function main() {
     console.log('\n[A — Starting / migration integrity]');
     const migrationFiles = listMigrationFiles();
     check('accepted migrations on disk include 004', migrationFiles.includes('004_pg4_content_plan_unique_constraints.sql'));
-    check('migration inventory ordered 001-004', migrationFiles.join(',') === [
+    check('migration inventory ordered 001-005', migrationFiles.join(',') === [
       '001_mos_baseline.sql',
       '002_system_objectives_seed.sql',
       '003_pg3_unique_constraints.sql',
       '004_pg4_content_plan_unique_constraints.sql',
+      '005_pg5_creative_approval_unique_constraints.sql',
     ].join(','));
     for (const [filename, expected] of Object.entries(ACCEPTED_MIGRATION_CHECKSUMS)) {
       const actual = computeMigrationFileChecksum(filename);
@@ -174,9 +175,9 @@ async function main() {
       ).some((i) => i.code === 'checksum_mismatch'),
     );
     check(
-      'tamper: unaccepted 005 fails validation',
+      'tamper: unaccepted 006 fails validation',
       validateDiscoveredMigrationInventory(
-        [...migrationFiles, '005_bad.sql'],
+        [...migrationFiles, '006_bad.sql'],
         mockChecksum,
       ).some((i) => i.code === 'unaccepted_migration'),
     );
@@ -185,8 +186,8 @@ async function main() {
     check('migration 004 contains no destructive SQL', destructiveHits.length === 0);
 
     check('baseline non-PK index count remains 29', baselineNonPkIndexCount() === 29);
-    check('additive non-PK index count is 3', additiveNonPkIndexCount() === 3);
-    check('effective non-PK index count is 32', effectiveNonPkIndexCount() === 32);
+    check('additive non-PK index count is 4', additiveNonPkIndexCount() === 4);
+    check('effective non-PK index count is 33', effectiveNonPkIndexCount() === 33);
 
     console.log('\n[B — Duplicate preflight]');
     const totals = await pool.query('SELECT COUNT(*)::int AS total FROM content_plan_approvals');
@@ -213,9 +214,12 @@ async function main() {
     } else {
       check('004 skipped (already applied)', firstRun.skipped.includes('004_pg4_content_plan_unique_constraints.sql'));
     }
+    check('005 skipped or applied by current accepted inventory',
+      firstRun.skipped.includes('005_pg5_creative_approval_unique_constraints.sql')
+      || firstRun.applied.includes('005_pg5_creative_approval_unique_constraints.sql'));
 
     const tracking = await pool.query('SELECT filename, checksum FROM postgres_migrations ORDER BY filename');
-    check('live migration rows = 4', tracking.rowCount === 4, `got ${tracking.rowCount}`);
+    check('live migration rows = 5', tracking.rowCount === 5, `got ${tracking.rowCount}`);
     const trackingIssues = validateLiveMigrationTracking(tracking.rows);
     check('live tracking matches accepted registry', trackingIssues.length === 0);
 
@@ -340,10 +344,11 @@ async function main() {
     check('002 skipped on second run', secondRun.skipped.includes('002_system_objectives_seed.sql'));
     check('003 skipped on second run', secondRun.skipped.includes('003_pg3_unique_constraints.sql'));
     check('004 skipped on second run', secondRun.skipped.includes('004_pg4_content_plan_unique_constraints.sql'));
+    check('005 skipped on second run', secondRun.skipped.includes('005_pg5_creative_approval_unique_constraints.sql'));
     check('second run applied=[]', secondRun.applied.length === 0);
 
     const trackingAfter = await pool.query('SELECT filename, checksum FROM postgres_migrations ORDER BY filename');
-    check('no duplicate tracking rows after rerun', trackingAfter.rowCount === 4);
+    check('no duplicate tracking rows after rerun', trackingAfter.rowCount === 5);
 
     console.log('\n[H — Exact fixture cleanup]');
     const cleanupReport = await cleanup(pool);

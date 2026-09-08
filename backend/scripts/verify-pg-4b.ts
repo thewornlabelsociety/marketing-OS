@@ -211,8 +211,14 @@ async function runStaticChecks(check: CheckFn) {
   check('A6 19/19 direct SQLite calls removed from PG-4B scope', true);
 
   const migrationFiles = listMigrationFiles();
-  check('A7 migration inventory 001-004 only', migrationFiles.length === 4);
-  check('A8 no migration 005 on disk', !migrationFiles.some((f) => f.startsWith('005_')));
+  check('A7 migration inventory 001-005 only', migrationFiles.join(',') === [
+    '001_mos_baseline.sql',
+    '002_system_objectives_seed.sql',
+    '003_pg3_unique_constraints.sql',
+    '004_pg4_content_plan_unique_constraints.sql',
+    '005_pg5_creative_approval_unique_constraints.sql',
+  ].join(','));
+  check('A8 no migration 006 on disk', !migrationFiles.some((f) => f.startsWith('006_')));
   for (const [filename, expected] of Object.entries(ACCEPTED_MIGRATION_CHECKSUMS)) {
     const filePath = path.join(migrationsDirectory(), filename);
     const actual = computeMigrationChecksum(fs.readFileSync(filePath, 'utf8'));
@@ -751,9 +757,9 @@ async function main() {
     if (getDatabaseUrl()) {
       const pool = getPostgresPool();
       const tracking = await pool.query('SELECT filename, checksum FROM postgres_migrations ORDER BY filename');
-      check('H1 live migration rows = 4', tracking.rowCount === 4);
+      check('H1 live migration rows = 5', tracking.rowCount === 5);
       check('H2 live tracking valid', validateLiveMigrationTracking(tracking.rows).length === 0);
-      check('H3 Schema migration required: NO', !listMigrationFiles().some((f) => f.startsWith('005_')));
+      check('H3 no unexpected migration 006', !listMigrationFiles().some((f) => f.startsWith('006_')));
     }
 
     console.log(`\nPG-4B verification: ${passed} passed, ${failed} failed`);
