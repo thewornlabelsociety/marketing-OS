@@ -42,10 +42,10 @@ function statusFor(code?: string): number {
 
 export const campaignScheduleRouter = Router({ mergeParams: true });
 
-campaignScheduleRouter.get('/', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.get('/', async (req: ScheduleReq, res: Response) => {
   const { campaignId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  res.json(schedulingService.list(campaignId));
+  res.json(await schedulingService.list(campaignId));
 });
 
 campaignScheduleRouter.get('/summary', async (req: ScheduleReq, res: Response) => {
@@ -59,7 +59,7 @@ campaignScheduleRouter.get('/summary', async (req: ScheduleReq, res: Response) =
   res.json(summary);
 });
 
-campaignScheduleRouter.post('/', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.post('/', async (req: ScheduleReq, res: Response) => {
   const { campaignId } = req.params;
   const workspaceId = resolveWorkspaceId(req);
   const campaign = resolveCampaign(campaignId, workspaceId, res);
@@ -80,7 +80,7 @@ campaignScheduleRouter.post('/', (req: ScheduleReq, res: Response) => {
     return;
   }
 
-  const result = schedulingService.create(campaignId, campaign.workspace_id, {
+  const result = await schedulingService.create(campaignId, campaign.workspace_id, {
     contentKey: body.contentKey,
     scheduledFor: body.scheduledFor,
     timezone: body.timezone,
@@ -97,10 +97,10 @@ campaignScheduleRouter.post('/', (req: ScheduleReq, res: Response) => {
   res.status(201).json(result.item);
 });
 
-campaignScheduleRouter.get('/:scheduleId', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.get('/:scheduleId', async (req: ScheduleReq, res: Response) => {
   const { campaignId, scheduleId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  const item = schedulingService.getById(scheduleId!, campaignId);
+  const item = await schedulingService.getById(scheduleId!, campaignId);
   if (!item) {
     res.status(404).json({ error: 'Schedule not found' });
     return;
@@ -108,7 +108,7 @@ campaignScheduleRouter.get('/:scheduleId', (req: ScheduleReq, res: Response) => 
   res.json(item);
 });
 
-campaignScheduleRouter.patch('/:scheduleId', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.patch('/:scheduleId', async (req: ScheduleReq, res: Response) => {
   const { campaignId, scheduleId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
   const body = req.body as {
@@ -121,14 +121,14 @@ campaignScheduleRouter.patch('/:scheduleId', (req: ScheduleReq, res: Response) =
   };
 
   if (body.creativeArtifactId) {
-    const versionUpdate = schedulingService.updateScheduledVersion(scheduleId!, campaignId, body.creativeArtifactId);
+    const versionUpdate = await schedulingService.updateScheduledVersion(scheduleId!, campaignId, body.creativeArtifactId);
     if ('error' in versionUpdate) {
       res.status(statusFor(versionUpdate.code)).json({ error: versionUpdate.error, code: versionUpdate.code });
       return;
     }
   }
 
-  const result = schedulingService.update(scheduleId!, campaignId, {
+  const result = await schedulingService.update(scheduleId!, campaignId, {
     scheduledFor: body.scheduledFor,
     timezone: body.timezone,
     destinationId: body.destinationId,
@@ -142,10 +142,10 @@ campaignScheduleRouter.patch('/:scheduleId', (req: ScheduleReq, res: Response) =
   res.json(result.item);
 });
 
-campaignScheduleRouter.post('/:scheduleId/cancel', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.post('/:scheduleId/cancel', async (req: ScheduleReq, res: Response) => {
   const { campaignId, scheduleId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  const result = schedulingService.cancel(scheduleId!, campaignId);
+  const result = await schedulingService.cancel(scheduleId!, campaignId);
   if ('error' in result) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
     return;
@@ -153,10 +153,10 @@ campaignScheduleRouter.post('/:scheduleId/cancel', (req: ScheduleReq, res: Respo
   res.json(result.item);
 });
 
-campaignScheduleRouter.get('/:scheduleId/preflight', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.get('/:scheduleId/preflight', async (req: ScheduleReq, res: Response) => {
   const { campaignId, scheduleId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  const result = schedulingService.preflight(scheduleId!, campaignId, { manualPublish: req.query.manual === 'true' });
+  const result = await schedulingService.preflight(scheduleId!, campaignId, { manualPublish: req.query.manual === 'true' });
   if ('error' in result) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
     return;
@@ -164,10 +164,10 @@ campaignScheduleRouter.get('/:scheduleId/preflight', (req: ScheduleReq, res: Res
   res.json(result);
 });
 
-campaignScheduleRouter.get('/:scheduleId/export', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.get('/:scheduleId/export', async (req: ScheduleReq, res: Response) => {
   const { campaignId, scheduleId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  const bundle = schedulingService.buildExportBundle(scheduleId!, campaignId);
+  const bundle = await schedulingService.buildExportBundle(scheduleId!, campaignId);
   if ('error' in bundle) {
     res.status(statusFor(bundle.code)).json({ error: bundle.error, code: bundle.code });
     return;
@@ -203,7 +203,7 @@ campaignScheduleRouter.post('/:scheduleId/retry', async (req: ScheduleReq, res: 
   res.json(result);
 });
 
-campaignScheduleRouter.post('/:scheduleId/mark-published', (req: ScheduleReq, res: Response) => {
+campaignScheduleRouter.post('/:scheduleId/mark-published', async (req: ScheduleReq, res: Response) => {
   const { campaignId, scheduleId } = req.params;
   if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
   const body = req.body as {
@@ -212,7 +212,7 @@ campaignScheduleRouter.post('/:scheduleId/mark-published', (req: ScheduleReq, re
     externalPublishId?: string;
     externalUrl?: string;
   };
-  const result = publishingService.markPublished(scheduleId!, campaignId, body);
+  const result = await publishingService.markPublished(scheduleId!, campaignId, body);
   if ('error' in result) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
     return;

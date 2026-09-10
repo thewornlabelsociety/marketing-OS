@@ -240,7 +240,7 @@ export class ExperimentService {
     return this.get(experimentId, campaignId, workspaceId) as Experiment;
   }
 
-  addVariant(
+  async addVariant(
     experimentId: string,
     campaignId: string,
     workspaceId: string,
@@ -255,14 +255,14 @@ export class ExperimentService {
       destinationId?: string;
       description?: string;
     },
-  ): Experiment | { error: string; code: string } {
+  ): Promise<Experiment | { error: string; code: string }> {
     const exp = this.get(experimentId, campaignId, workspaceId);
     if ('error' in exp) return exp;
     if (['RUNNING', 'COMPLETED', 'CANCELLED'].includes(exp.status)) {
       return { error: 'Cannot modify variants after experiment has started', code: 'INVALID_STATE' };
     }
 
-    const artifact = creativeGeneratorService.getById(input.creativeArtifactId, campaignId);
+    const artifact = await creativeGeneratorService.getById(input.creativeArtifactId, campaignId);
     if (!artifact) return { error: 'Creative artifact not found', code: 'NOT_FOUND' };
     if (artifact.version !== input.creativeVersion) {
       return { error: 'Creative version mismatch', code: 'VERSION_MISMATCH' };
@@ -284,13 +284,13 @@ export class ExperimentService {
     return this.get(experimentId, campaignId, workspaceId) as Experiment;
   }
 
-  validate(experimentId: string, campaignId: string, workspaceId: string): ExperimentQualityResult | { error: string; code: string } {
+  async validate(experimentId: string, campaignId: string, workspaceId: string): Promise<ExperimentQualityResult | { error: string; code: string }> {
     const exp = this.get(experimentId, campaignId, workspaceId);
     if ('error' in exp) return exp;
 
     const approvalErrors: string[] = [];
     for (const v of exp.variants) {
-      const artifact = creativeGeneratorService.getById(v.creativeArtifactId, campaignId);
+      const artifact = await creativeGeneratorService.getById(v.creativeArtifactId, campaignId);
       if (!artifact || artifact.version !== v.creativeVersion) {
         approvalErrors.push(`Variant ${v.label} creative artifact not found.`);
         continue;
@@ -331,8 +331,8 @@ export class ExperimentService {
     return gate;
   }
 
-  start(experimentId: string, campaignId: string, workspaceId: string): Experiment | { error: string; code: string } {
-    const validation = this.validate(experimentId, campaignId, workspaceId);
+  async start(experimentId: string, campaignId: string, workspaceId: string): Promise<Experiment | { error: string; code: string }> {
+    const validation = await this.validate(experimentId, campaignId, workspaceId);
     if ('error' in validation) return validation;
     if (!validation.valid) {
       return { error: validation.findings.filter((f) => f.severity === 'ERROR').map((f) => f.message).join('; '), code: 'QUALITY_GATE_FAILED' };
@@ -344,7 +344,7 @@ export class ExperimentService {
     const now = new Date().toISOString();
 
     for (const variant of exp.variants) {
-      const artifact = creativeGeneratorService.getById(variant.creativeArtifactId, campaignId);
+      const artifact = await creativeGeneratorService.getById(variant.creativeArtifactId, campaignId);
       if (!artifact || artifact.status !== 'APPROVED' || artifact.version !== variant.creativeVersion) {
         return { error: `Variant ${variant.label} is not eligible to run`, code: 'CREATIVE_NOT_APPROVED' };
       }

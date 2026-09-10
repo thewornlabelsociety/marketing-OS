@@ -50,26 +50,26 @@ campaignExperimentsRouter.patch('/:experimentId', (req: Request, res: Response) 
   res.json(result);
 });
 
-campaignExperimentsRouter.post('/:experimentId/variants', (req: Request, res: Response) => {
+campaignExperimentsRouter.post('/:experimentId/variants', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  const result = experimentService.addVariant(req.params.experimentId, req.params.campaignId, workspaceId, req.body);
+  const result = await experimentService.addVariant(req.params.experimentId, req.params.campaignId, workspaceId, req.body);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-campaignExperimentsRouter.post('/:experimentId/validate', (req: Request, res: Response) => {
+campaignExperimentsRouter.post('/:experimentId/validate', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  const result = experimentService.validate(req.params.experimentId, req.params.campaignId, workspaceId);
+  const result = await experimentService.validate(req.params.experimentId, req.params.campaignId, workspaceId);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-campaignExperimentsRouter.post('/:experimentId/start', (req: Request, res: Response) => {
+campaignExperimentsRouter.post('/:experimentId/start', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  const result = experimentService.start(req.params.experimentId, req.params.campaignId, workspaceId);
+  const result = await experimentService.start(req.params.experimentId, req.params.campaignId, workspaceId);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });

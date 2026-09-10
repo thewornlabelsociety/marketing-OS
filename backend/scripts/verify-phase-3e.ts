@@ -113,7 +113,7 @@ async function main() {
   }
 
   async function approveCreative(campaignId: string, contentKey: string) {
-    const current = creativeGeneratorService.getCurrent(campaignId, contentKey);
+    const current = await creativeGeneratorService.getCurrent(campaignId, contentKey);
     if (!current) throw new Error(`No creative for ${contentKey}`);
     return creativeGeneratorService.approve(campaignId, contentKey, current.id);
   }
@@ -137,7 +137,7 @@ async function main() {
   await seedCreative(campA, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
 
   // --- Test A ---
-  const unapprovedSchedule = schedulingService.create(campA, wsA, {
+  const unapprovedSchedule = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 86400000).toISOString(),
     publicationMode: 'MANUAL',
@@ -145,8 +145,8 @@ async function main() {
   check('A schedule without approved creative rejected', 'error' in unapprovedSchedule && unapprovedSchedule.code === 'CREATIVE_NOT_APPROVED');
 
   await approveCreative(campA, 'launch-reel-01');
-  const reelV1 = creativeGeneratorService.getCurrent(campA, 'launch-reel-01')!;
-  const scheduled = schedulingService.create(campA, wsA, {
+  const reelV1 = (await creativeGeneratorService.getCurrent(campA, 'launch-reel-01'))!;
+  const scheduled = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() + 86400000).toISOString(),
     timezone: 'Pacific/Auckland',
@@ -166,16 +166,16 @@ async function main() {
   }
 
   // --- Test C ---
-  check('C schedule remains V1 after V2 generated', !('error' in scheduled) && schedulingService.getById(scheduled.item.id, campA)?.sourceCreativeVersion === 1);
+  check('C schedule remains V1 after V2 generated', !('error' in scheduled) && (await schedulingService.getById(scheduled.item.id, campA))?.sourceCreativeVersion === 1);
   await approveCreative(campA, 'launch-reel-01');
-  const stillV1 = schedulingService.getById(scheduled.item.id, campA);
+  const stillV1 = await schedulingService.getById(scheduled.item.id, campA);
   check('C schedule remains V1 after V2 approved', stillV1?.sourceCreativeArtifactId === reelV1.id);
-  const v2Artifact = creativeGeneratorService.getCurrent(campA, 'launch-reel-01')!;
-  const explicitUpdate = schedulingService.updateScheduledVersion(scheduled.item.id, campA, v2Artifact.id);
+  const v2Artifact = (await creativeGeneratorService.getCurrent(campA, 'launch-reel-01'))!;
+  const explicitUpdate = await schedulingService.updateScheduledVersion(scheduled.item.id, campA, v2Artifact.id);
   check('C explicit update to V2 allowed', !('error' in explicitUpdate));
 
   // --- Test D ---
-  const persisted = schedulingService.getById(scheduled.item.id, campA);
+  const persisted = await schedulingService.getById(scheduled.item.id, campA);
   check('D schedule persisted', persisted !== null);
   check('D timezone persisted', persisted?.timezone === 'Pacific/Auckland');
 
@@ -183,7 +183,7 @@ async function main() {
   resetMockPublishingState();
   await approveCreative(campA, 'launch-carousel-01');
   const igDest = seedConnectionAndDestination(wsA, 'INSTAGRAM');
-  const dueSchedule = schedulingService.create(campA, wsA, {
+  const dueSchedule = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() - 60000).toISOString(),
     publicationMode: 'DIRECT',
@@ -196,7 +196,7 @@ async function main() {
     const exec = await publishingSchedulerService.executeDueScheduledItems(new Date());
     check('E due job processed', exec.processed >= 1);
     check('E provider called once', mockPublishCallLog.length === 1);
-    const published = schedulingService.getById(dueSchedule.item.id, campA);
+    const published = await schedulingService.getById(dueSchedule.item.id, campA);
     check('E status published', published?.status === 'PUBLISHED');
     check('E publishedAt set', Boolean(published?.publishedAt));
     check('E external id persisted', Boolean(published?.externalPublishId));
@@ -213,7 +213,7 @@ async function main() {
   mockPublishShouldFail = true;
   const failDest = seedConnectionAndDestination(wsA, 'EMAIL');
   await approveCreative(campA, 'launch-newsletter-01');
-  let failSchedule = schedulingService.create(campA, wsA, {
+  let failSchedule = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-newsletter-01',
     scheduledFor: new Date(Date.now() - 60000).toISOString(),
     publicationMode: 'DIRECT',
@@ -222,10 +222,10 @@ async function main() {
   if (!('error' in failSchedule)) {
     const failExec = await publishingService.publishSchedule(failSchedule.item.id, campA, { manualPublish: true });
     check('G publish failed', 'error' in failExec || failExec.item.status === 'FAILED');
-    const failedItem = schedulingService.getById(failSchedule.item.id, campA);
+    const failedItem = await schedulingService.getById(failSchedule.item.id, campA);
     check('G not marked published', failedItem?.status !== 'PUBLISHED');
     check('G attempt persisted', publishingService.getAttempts(failSchedule.item.id, campA).length >= 1);
-    check('G creative untouched', creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01') !== null);
+    check('G creative untouched', (await creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01')) !== null);
   }
   mockPublishShouldFail = false;
 
@@ -244,14 +244,14 @@ async function main() {
   await approveCreative(campA, 'launch-carousel-01');
   const destA = seedConnectionAndDestination(wsA, 'INSTAGRAM');
   const destB = seedConnectionAndDestination(wsA, 'INSTAGRAM');
-  const schedA = schedulingService.create(campA, wsA, {
+  const schedA = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() - 120000).toISOString(),
     publicationMode: 'DIRECT',
     destinationId: destA,
     mediaAssets: [{ id: 'img_a', type: 'IMAGE', mimeType: 'image/jpeg' }],
   });
-  const schedB = schedulingService.create(campA, wsA, {
+  const schedB = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() - 120000).toISOString(),
     publicationMode: 'DIRECT',
@@ -259,7 +259,7 @@ async function main() {
     mediaAssets: [{ id: 'vid_b', type: 'VIDEO', mimeType: 'video/mp4' }],
   });
   await approveCreative(campA, 'launch-newsletter-01');
-  const schedC = schedulingService.create(campA, wsA, {
+  const schedC = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-newsletter-01',
     scheduledFor: new Date(Date.now() - 120000).toISOString(),
     publicationMode: 'DIRECT',
@@ -271,29 +271,29 @@ async function main() {
     await publishingService.publishSchedule(schedB.item.id, campA, { manualPublish: true });
     mockPublishShouldFail = false;
     await publishingService.publishSchedule(schedC.item.id, campA, { manualPublish: true });
-    check('I A published', schedulingService.getById(schedA.item.id, campA)?.status === 'PUBLISHED');
-    check('I B failed', schedulingService.getById(schedB.item.id, campA)?.status === 'FAILED');
-    check('I C published', schedulingService.getById(schedC.item.id, campA)?.status === 'PUBLISHED');
+    check('I A published', (await schedulingService.getById(schedA.item.id, campA))?.status === 'PUBLISHED');
+    check('I B failed', (await schedulingService.getById(schedB.item.id, campA))?.status === 'FAILED');
+    check('I C published', (await schedulingService.getById(schedC.item.id, campA))?.status === 'PUBLISHED');
   }
 
   // --- Test J ---
   await approveCreative(campA, 'launch-carousel-01');
-  const future = schedulingService.create(campA, wsA, {
+  const future = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 86400000).toISOString(),
     publicationMode: 'MANUAL',
   });
   if (!('error' in future)) {
-    schedulingService.cancel(future.item.id, campA);
+    await schedulingService.cancel(future.item.id, campA);
     resetMockPublishingState();
     await publishingSchedulerService.executeDueScheduledItems(new Date(Date.now() + 90000000));
-    check('J cancelled item not published', schedulingService.getById(future.item.id, campA)?.status === 'CANCELLED');
+    check('J cancelled item not published', (await schedulingService.getById(future.item.id, campA))?.status === 'CANCELLED');
     check('J provider not called for cancelled', mockPublishCallLog.length === 0);
   }
 
   // --- Test K ---
   await approveCreative(campA, 'launch-reel-01');
-  const manual = schedulingService.create(campA, wsA, {
+  const manual = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() - 60000).toISOString(),
     publicationMode: 'MANUAL',
@@ -302,7 +302,7 @@ async function main() {
     resetMockPublishingState();
     await publishingSchedulerService.executeDueScheduledItems(new Date());
     check('K manual due item provider not called', mockPublishCallLog.length === 0);
-    const marked = publishingService.markPublished(manual.item.id, campA, {
+    const marked = await publishingService.markPublished(manual.item.id, campA, {
       evidence: 'Operator verified the manual publication externally',
       externalUrl: 'https://manual.example/post',
     });
@@ -312,13 +312,13 @@ async function main() {
 
   // --- Test L ---
   await approveCreative(campA, 'launch-newsletter-01');
-  const exportSched = schedulingService.create(campA, wsA, {
+  const exportSched = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-newsletter-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
     publicationMode: 'EXPORT',
   });
   if (!('error' in exportSched)) {
-    const bundle = schedulingService.buildExportBundle(exportSched.item.id, campA);
+    const bundle = await schedulingService.buildExportBundle(exportSched.item.id, campA);
     check('L export bundle created', !('error' in bundle));
     if (!('error' in bundle)) {
       check('L bundle has campaign', Boolean(bundle.campaign.id));
@@ -331,7 +331,7 @@ async function main() {
 
   // --- Test M ---
   await approveCreative(campA, 'launch-reel-01');
-  const blocked = schedulingService.create(campA, wsA, {
+  const blocked = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
     publicationMode: 'DIRECT',
@@ -339,7 +339,7 @@ async function main() {
     mediaAssets: [],
   });
   check('M direct video without asset blocked', !('error' in blocked) && blocked.item.status === 'BLOCKED');
-  const manualStill = schedulingService.create(campA, wsA, {
+  const manualStill = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() + 7200000).toISOString(),
     publicationMode: 'MANUAL',
@@ -349,7 +349,7 @@ async function main() {
   // --- Test N ---
   const emailDest = seedConnectionAndDestination(wsA, 'EMAIL');
   await approveCreative(campA, 'launch-carousel-01');
-  const badDest = schedulingService.create(campA, wsA, {
+  const badDest = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
     publicationMode: 'DIRECT',
@@ -357,7 +357,7 @@ async function main() {
   });
   check('N incompatible destination rejected', 'error' in badDest);
   const goodDest = seedConnectionAndDestination(wsA, 'INSTAGRAM');
-  const good = schedulingService.create(campA, wsA, {
+  const good = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
     publicationMode: 'DIRECT',
@@ -390,7 +390,7 @@ async function main() {
   check('O cancel rejected', (await hit('POST', `/api/campaigns/${campA}/schedule/${scheduleId}/cancel`, wsB, { workspaceId: wsB })) === 403);
   check('O publish rejected', (await hit('POST', `/api/campaigns/${campA}/schedule/${scheduleId}/publish`, wsB, { workspaceId: wsB })) === 403);
   const wsADest = seedConnectionAndDestination(wsA, 'INSTAGRAM');
-  const crossDest = schedulingService.create(campB, wsB, {
+  const crossDest = await schedulingService.create(campB, wsB, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
     publicationMode: 'DIRECT',
@@ -412,7 +412,7 @@ async function main() {
     INSERT INTO publishing_destinations (id, workspace_id, connection_id, provider_key, channel, external_destination_id, display_name, status, created_at)
     VALUES (?, ?, ?, 'nonexistent', 'INSTAGRAM', 'ext_bad', 'Bad Destination', 'ACTIVE', ?)
   `).run(badProviderDest, wsA, connId, now);
-  const badProviderSchedule = schedulingService.create(campA, wsA, {
+  const badProviderSchedule = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 10800000).toISOString(),
     publicationMode: 'DIRECT',
@@ -426,11 +426,11 @@ async function main() {
 
   // --- Test Q ---
   if (!('error' in good)) {
-    const pre = schedulingService.preflight(good.item.id, campA, { manualPublish: true });
+    const pre = await schedulingService.preflight(good.item.id, campA, { manualPublish: true });
     check('Q valid direct preflight', !('error' in pre) && pre.ready === true);
   }
   if (!('error' in manualStill)) {
-    const manualPre = schedulingService.preflight(manualStill.item.id, campA, { manualPublish: true });
+    const manualPre = await schedulingService.preflight(manualStill.item.id, campA, { manualPublish: true });
     check('Q manual preflight ready', !('error' in manualPre) && manualPre.ready === true);
   }
 

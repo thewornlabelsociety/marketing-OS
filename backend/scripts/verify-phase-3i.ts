@@ -84,7 +84,7 @@ async function main() {
 
   async function persistAndApprove(campaignId: string, contentKey: string, fixture: object) {
     const artifact = await persistCreative(campaignId, contentKey, fixture);
-    creativeGeneratorService.approve(campaignId, contentKey, artifact.id);
+    await creativeGeneratorService.approve(campaignId, contentKey, artifact.id);
     return artifact;
   }
 
@@ -123,20 +123,20 @@ async function main() {
     `).run(attemptId, workspaceId, campaignId, scheduleId, artifactId, version, `idem_${scheduleId}`, now, now);
   }
 
-  function publishManual(campaignId: string, workspaceId: string, contentKey: string) {
-    const creative = creativeGeneratorService.getCurrent(campaignId, contentKey);
+  async function publishManual(campaignId: string, workspaceId: string, contentKey: string) {
+    const creative = await creativeGeneratorService.getCurrent(campaignId, contentKey);
     if (!creative) throw new Error(`No creative for ${contentKey}`);
-    const sched = schedulingService.create(campaignId, workspaceId, {
+    const sched = await schedulingService.create(campaignId, workspaceId, {
       contentKey,
       scheduledFor: new Date(Date.now() - 3600000).toISOString(),
       publicationMode: 'MANUAL',
     });
     if ('error' in sched) throw new Error(sched.error);
-    publishingService.markPublished(sched.item.id, campaignId, { evidence: 'Verified externally', externalUrl: `https://example.com/${contentKey}` });
+    await publishingService.markPublished(sched.item.id, campaignId, { evidence: 'Verified externally', externalUrl: `https://example.com/${contentKey}` });
     return { schedule: sched.item, creative };
   }
 
-  function publishVariant(
+  async function publishVariant(
     campaignId: string,
     workspaceId: string,
     contentKey: string,
@@ -144,7 +144,7 @@ async function main() {
     version: number,
     channel: string,
   ) {
-    const sched = schedulingService.create(campaignId, workspaceId, {
+    const sched = await schedulingService.create(campaignId, workspaceId, {
       contentKey,
       scheduledFor: new Date(Date.now() - 7200000).toISOString(),
       publicationMode: 'MANUAL',
@@ -154,7 +154,7 @@ async function main() {
       db.prepare(`UPDATE scheduled_content_items SET source_creative_artifact_id = ?, source_creative_version = ?, channel = ? WHERE id = ?`)
         .run(artifactId, version, channel, sched.item.id);
     }
-    publishingService.markPublished(sched.item.id, campaignId, { evidence: 'Verified externally', externalUrl: `https://example.com/${contentKey}` });
+    await publishingService.markPublished(sched.item.id, campaignId, { evidence: 'Verified externally', externalUrl: `https://example.com/${contentKey}` });
     return sched.item.id;
   }
 
@@ -166,11 +166,11 @@ async function main() {
     contentKey = 'launch-carousel-01',
   ) {
     const control = await persistAndApprove(campaignId, contentKey, controlFixture);
-    const scheduleA = publishVariant(campaignId, workspaceId, contentKey, control.id, control.version, 'INSTAGRAM');
+    const scheduleA = await publishVariant(campaignId, workspaceId, contentKey, control.id, control.version, 'INSTAGRAM');
     const variantResult = await creativeGeneratorService.reviseFromStructured(campaignId, contentKey, 'Variant', variantFixture as never);
     if ('error' in variantResult) throw new Error(variantResult.error);
-    creativeGeneratorService.approve(campaignId, contentKey, variantResult.artifact.id);
-    const scheduleB = publishVariant(campaignId, workspaceId, contentKey, variantResult.artifact.id, variantResult.artifact.version, 'INSTAGRAM');
+    await creativeGeneratorService.approve(campaignId, contentKey, variantResult.artifact.id);
+    const scheduleB = await publishVariant(campaignId, workspaceId, contentKey, variantResult.artifact.id, variantResult.artifact.version, 'INSTAGRAM');
     return { control, variant: variantResult.artifact, contentKey, scheduleA, scheduleB };
   }
 
@@ -199,7 +199,7 @@ async function main() {
   await attentionSignalService.reconcile(wsA);
   const beforeB = openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.sourceId === 'launch-carousel-01' && s.campaignId === campB);
   check('B unapproved signal', beforeB.length === 1);
-  creativeGeneratorService.approve(campB, 'launch-carousel-01', artB.id);
+  await creativeGeneratorService.approve(campB, 'launch-carousel-01', artB.id);
   await attentionSignalService.reconcile(wsA);
   const afterB = openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.sourceId === 'launch-carousel-01' && s.campaignId === campB);
   check('B approve resolves signal', afterB.length === 0);
@@ -211,7 +211,7 @@ async function main() {
   await persistAndApprove(campC, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
   const v2 = await creativeGeneratorService.reviseFromStructured(campC, 'launch-carousel-01', 'V2 hook', CAROUSEL_CREATIVE_FIXTURE);
   if ('error' in v2) throw new Error(v2.error);
-  creativeGeneratorService.approve(campC, 'launch-carousel-01', v2.artifact.id);
+  await creativeGeneratorService.approve(campC, 'launch-carousel-01', v2.artifact.id);
   await attentionSignalService.reconcile(wsA);
   check('C V2 approved no signal', openOfType(wsA, 'CONTENT_READY_FOR_APPROVAL').filter((s) => s.campaignId === campC).length === 0);
   const v3 = await creativeGeneratorService.reviseFromStructured(campC, 'launch-carousel-01', 'V3 hook', {
@@ -246,7 +246,7 @@ async function main() {
 
   // --- Test F: Schedule all resolves READY_TO_SCHEDULE ---
   for (const key of ['launch-carousel-01', 'launch-reel-01', 'launch-newsletter-01', 'launch-tiktok-01']) {
-    schedulingService.create(campE, wsA, {
+    await schedulingService.create(campE, wsA, {
       contentKey: key,
       scheduledFor: new Date(Date.now() + 86400000).toISOString(),
       publicationMode: 'MANUAL',
@@ -260,7 +260,7 @@ async function main() {
   insertCampaign(campG, wsA, 'obj_sys_sales', 'SCHEDULED');
   seedPlanChain(campG, wsA);
   const artG = await persistAndApprove(campG, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  const schedG = schedulingService.create(campG, wsA, {
+  const schedG = await schedulingService.create(campG, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() - 7200000).toISOString(),
     publicationMode: 'MANUAL',
@@ -275,7 +275,7 @@ async function main() {
   check('G overdue is CRITICAL', failSignalsG.some((s) => s.severity === 'CRITICAL'));
 
   // --- Test H: mark published resolves failure signal ---
-  publishingService.markPublished(schedG.item.id, campG, { evidence: 'Verified externally', externalUrl: 'https://example.com/fixed' });
+  await publishingService.markPublished(schedG.item.id, campG, { evidence: 'Verified externally', externalUrl: 'https://example.com/fixed' });
   await attentionSignalService.reconcile(wsA);
   const openAfterH = attentionSignalService.list(wsA).filter(
     (s) => s.campaignId === campG && (s.signalType === 'PUBLISHING_FAILED' || s.signalType === 'PUBLISHING_RETRY_REQUIRED'),
@@ -287,7 +287,7 @@ async function main() {
   insertCampaign(campI, wsA, 'obj_sys_sales', 'PUBLISHED');
   seedPlanChain(campI, wsA);
   await persistAndApprove(campI, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  const pubI = publishManual(campI, wsA, 'launch-carousel-01');
+  const pubI = await publishManual(campI, wsA, 'launch-carousel-01');
   performanceIngestionService.createObservation({
     workspaceId: wsA, campaignId: campI, scheduleId: pubI.schedule.id, contentKey: 'launch-carousel-01',
     sourceCreativeArtifactId: pubI.creative.id, sourceCreativeVersion: pubI.creative.version,
@@ -319,7 +319,7 @@ async function main() {
   insertCampaign(campK, wsA, 'obj_sys_awareness', 'PUBLISHED');
   seedPlanChain(campK, wsA);
   await persistAndApprove(campK, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  const pubK = publishManual(campK, wsA, 'launch-carousel-01');
+  const pubK = await publishManual(campK, wsA, 'launch-carousel-01');
   performanceIngestionService.createObservation({
     workspaceId: wsA, campaignId: campK, scheduleId: pubK.schedule.id, contentKey: 'launch-carousel-01',
     sourceCreativeArtifactId: pubK.creative.id, sourceCreativeVersion: pubK.creative.version,
@@ -337,7 +337,7 @@ async function main() {
   insertCampaign(campL, wsA, 'obj_sys_sales', 'PUBLISHED');
   seedPlanChain(campL, wsA);
   await persistAndApprove(campL, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  const pubL = publishManual(campL, wsA, 'launch-carousel-01');
+  const pubL = await publishManual(campL, wsA, 'launch-carousel-01');
   performanceIngestionService.createObservation({
     workspaceId: wsA, campaignId: campL, scheduleId: pubL.schedule.id, contentKey: 'launch-carousel-01',
     sourceCreativeArtifactId: pubL.creative.id, sourceCreativeVersion: pubL.creative.version,
@@ -360,15 +360,15 @@ async function main() {
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
   });
   if (!('error' in expM)) {
-    experimentService.addVariant(expM.id, campM, wsA, {
+    await experimentService.addVariant(expM.id, campM, wsA, {
       label: 'A', role: 'CONTROL', contentKey: abM.contentKey,
       creativeArtifactId: abM.control.id, creativeVersion: abM.control.version, channel: 'INSTAGRAM', scheduleId: abM.scheduleA,
     });
-    experimentService.addVariant(expM.id, campM, wsA, {
+    await experimentService.addVariant(expM.id, campM, wsA, {
       label: 'B', role: 'VARIANT', contentKey: abM.contentKey,
       creativeArtifactId: abM.variant.id, creativeVersion: abM.variant.version, channel: 'INSTAGRAM', scheduleId: abM.scheduleB,
     });
-    experimentService.start(expM.id, campM, wsA);
+    await experimentService.start(expM.id, campM, wsA);
     performanceIngestionService.createObservation({
       workspaceId: wsA, campaignId: campM, scheduleId: abM.scheduleA, contentKey: abM.contentKey,
       sourceCreativeArtifactId: abM.control.id, sourceCreativeVersion: abM.control.version,
@@ -406,15 +406,15 @@ async function main() {
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
   });
   if (!('error' in expN)) {
-    experimentService.addVariant(expN.id, campN, wsA, {
+    await experimentService.addVariant(expN.id, campN, wsA, {
       label: 'A', role: 'CONTROL', contentKey: abN.contentKey,
       creativeArtifactId: abN.control.id, creativeVersion: abN.control.version, channel: 'INSTAGRAM', scheduleId: abN.scheduleA,
     });
-    experimentService.addVariant(expN.id, campN, wsA, {
+    await experimentService.addVariant(expN.id, campN, wsA, {
       label: 'B', role: 'VARIANT', contentKey: abN.contentKey,
       creativeArtifactId: abN.variant.id, creativeVersion: abN.variant.version, channel: 'INSTAGRAM', scheduleId: abN.scheduleB,
     });
-    experimentService.start(expN.id, campN, wsA);
+    await experimentService.start(expN.id, campN, wsA);
     performanceIngestionService.createObservation({
       workspaceId: wsA, campaignId: campN, scheduleId: abN.scheduleA, contentKey: abN.contentKey,
       sourceCreativeArtifactId: abN.control.id, sourceCreativeVersion: abN.control.version,
@@ -445,15 +445,15 @@ async function main() {
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
   });
   if (!('error' in expO)) {
-    experimentService.addVariant(expO.id, campO, wsA, {
+    await experimentService.addVariant(expO.id, campO, wsA, {
       label: 'A', role: 'CONTROL', contentKey: abO.contentKey,
       creativeArtifactId: abO.control.id, creativeVersion: abO.control.version, channel: 'INSTAGRAM', scheduleId: abO.scheduleA,
     });
-    experimentService.addVariant(expO.id, campO, wsA, {
+    await experimentService.addVariant(expO.id, campO, wsA, {
       label: 'B', role: 'VARIANT', contentKey: abO.contentKey,
       creativeArtifactId: abO.variant.id, creativeVersion: abO.variant.version, channel: 'INSTAGRAM', scheduleId: abO.scheduleB,
     });
-    experimentService.start(expO.id, campO, wsA);
+    await experimentService.start(expO.id, campO, wsA);
     performanceIngestionService.createObservation({
       workspaceId: wsA, campaignId: campO, scheduleId: abO.scheduleA, contentKey: abO.contentKey,
       sourceCreativeArtifactId: abO.control.id, sourceCreativeVersion: abO.control.version,
@@ -479,8 +479,8 @@ async function main() {
   insertCampaign(campP, wsA, 'obj_sys_sales', 'COMPLETE');
   seedPlanChain(campP, wsA);
   await creativeGeneratorService.persistFromStructured(campP, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  creativeGeneratorService.approve(campP, 'launch-carousel-01', creativeGeneratorService.getCurrent(campP, 'launch-carousel-01')!.id);
-  const pubP = publishManual(campP, wsA, 'launch-carousel-01');
+  await creativeGeneratorService.approve(campP, 'launch-carousel-01', (await creativeGeneratorService.getCurrent(campP, 'launch-carousel-01'))!.id);
+  const pubP = await publishManual(campP, wsA, 'launch-carousel-01');
   for (let i = 0; i < 25; i++) {
     performanceIngestionService.createConversion({
       workspaceId: wsA, campaignId: campP, contentKey: 'launch-carousel-01', scheduleId: pubP.schedule.id,
@@ -534,7 +534,7 @@ async function main() {
   insertCampaign(campR, wsA, 'obj_sys_sales', 'COMPLETE');
   seedPlanChain(campR, wsA);
   await persistAndApprove(campR, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
-  const pubR = publishManual(campR, wsA, 'launch-newsletter-01');
+  const pubR = await publishManual(campR, wsA, 'launch-newsletter-01');
   for (let i = 0; i < 25; i++) {
     performanceIngestionService.createConversion({
       workspaceId: wsA, campaignId: campR, contentKey: 'launch-newsletter-01', scheduleId: pubR.schedule.id,
@@ -566,7 +566,7 @@ async function main() {
   insertCampaign(campS, wsA, 'obj_sys_awareness', 'PUBLISHED');
   seedPlanChain(campS, wsA);
   await persistAndApprove(campS, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  const pubS = publishManual(campS, wsA, 'launch-carousel-01');
+  const pubS = await publishManual(campS, wsA, 'launch-carousel-01');
   performanceIngestionService.createObservation({
     workspaceId: wsA, campaignId: campS, scheduleId: pubS.schedule.id, contentKey: 'launch-carousel-01',
     sourceCreativeArtifactId: pubS.creative.id, sourceCreativeVersion: pubS.creative.version,
@@ -598,7 +598,7 @@ async function main() {
   insertCampaign(campT, wsA, 'obj_sys_sales', 'SCHEDULED');
   seedPlanChain(campT, wsA);
   const artT = await persistAndApprove(campT, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  const schedT = schedulingService.create(campT, wsA, {
+  const schedT = await schedulingService.create(campT, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() - 3600000).toISOString(),
     publicationMode: 'MANUAL',
@@ -617,19 +617,19 @@ async function main() {
   insertCampaign(campU, wsA, 'obj_sys_sales', 'SCHEDULED');
   seedPlanChain(campU, wsA);
   await persistAndApprove(campU, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-  const todaySched = schedulingService.create(campU, wsA, {
+  const todaySched = await schedulingService.create(campU, wsA, {
     contentKey: 'launch-carousel-01',
     scheduledFor: new Date(Date.now() + 3600000).toISOString(),
     publicationMode: 'MANUAL',
   });
   await persistAndApprove(campU, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
-  const weekSched = schedulingService.create(campU, wsA, {
+  const weekSched = await schedulingService.create(campU, wsA, {
     contentKey: 'launch-reel-01',
     scheduledFor: new Date(Date.now() + 6 * 86400000).toISOString(),
     publicationMode: 'MANUAL',
   });
   await persistAndApprove(campU, 'launch-newsletter-01', NEWSLETTER_CREATIVE_FIXTURE);
-  const farSched = schedulingService.create(campU, wsA, {
+  const farSched = await schedulingService.create(campU, wsA, {
     contentKey: 'launch-newsletter-01',
     scheduledFor: new Date(Date.now() + 10 * 86400000).toISOString(),
     publicationMode: 'MANUAL',

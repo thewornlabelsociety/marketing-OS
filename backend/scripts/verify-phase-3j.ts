@@ -104,7 +104,7 @@ async function main() {
   async function approveCreative(campaignId: string, contentKey: string, fixture: object) {
     const result = await creativeGeneratorService.persistFromStructured(campaignId, contentKey, fixture as never);
     if ('error' in result) throw new Error(result.error);
-    creativeGeneratorService.approve(campaignId, contentKey, result.artifact.id);
+    await creativeGeneratorService.approve(campaignId, contentKey, result.artifact.id);
     return result.artifact;
   }
 
@@ -130,7 +130,7 @@ async function main() {
   insertCampaign(campA, wsA);
   seedPlanChain(campA, wsA);
   await approveCreative(campA, 'launch-static-01', STATIC_POST_FIXTURE);
-  const manual = schedulingService.create(campA, wsA, {
+  const manual = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date(Date.now() + 86400000).toISOString(),
     publicationMode: 'MANUAL',
@@ -162,7 +162,7 @@ async function main() {
     INSERT INTO publishing_destinations (id, workspace_id, connection_id, provider_key, channel, external_destination_id, display_name, status, capabilities, created_at, updated_at)
     VALUES (?, ?, ?, 'meta', 'INSTAGRAM', 'ig_limited', 'Limited IG', 'ACTIVE', '["read_performance"]', ?, ?)
   `).run(limitedDestId, wsA, connectionId, now, now);
-  const schedD = schedulingService.create(campD, wsA, {
+  const schedD = await schedulingService.create(campD, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',
@@ -180,9 +180,9 @@ async function main() {
   const campE = `camp_e_${randomUUID()}`;
   insertCampaign(campE, wsA);
   seedPlanChain(campE, wsA);
-  creativeGeneratorService.persistFromStructured(campE, 'launch-static-01', STATIC_POST_FIXTURE as never);
+  await creativeGeneratorService.persistFromStructured(campE, 'launch-static-01', STATIC_POST_FIXTURE as never);
   const igDest = mockDests.find((d) => d.channel === 'INSTAGRAM')!;
-  const schedE = schedulingService.create(campE, wsA, {
+  const schedE = await schedulingService.create(campE, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',
@@ -196,7 +196,7 @@ async function main() {
   insertCampaign(campF, wsA);
   seedPlanChain(campF, wsA);
   const artF = await approveCreative(campF, 'launch-static-01', STATIC_POST_FIXTURE);
-  const schedF = schedulingService.create(campF, wsA, {
+  const schedF = await schedulingService.create(campF, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',
@@ -225,7 +225,7 @@ async function main() {
   insertCampaign(campG, wsA);
   seedPlanChain(campG, wsA);
   await approveCreative(campG, 'launch-static-01', STATIC_POST_FIXTURE);
-  const schedG = schedulingService.create(campG, wsA, {
+  const schedG = await schedulingService.create(campG, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',
@@ -244,7 +244,7 @@ async function main() {
   insertCampaign(campH, wsA);
   seedPlanChain(campH, wsA);
   await approveCreative(campH, 'launch-static-01', STATIC_POST_FIXTURE);
-  const schedH = schedulingService.create(campH, wsA, {
+  const schedH = await schedulingService.create(campH, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',
@@ -265,7 +265,7 @@ async function main() {
   seedPlanChain(campI, wsA);
   await approveCreative(campI, 'launch-static-01', STATIC_POST_FIXTURE);
   const expiredDest = integrationConnectionService.listDestinations(wsA).find((d) => d.connectionId === expiredConn && d.channel === 'INSTAGRAM')!;
-  const schedI = schedulingService.create(campI, wsA, {
+  const schedI = await schedulingService.create(campI, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',
@@ -286,7 +286,7 @@ async function main() {
   insertCampaign(campJ, wsA);
   seedPlanChain(campJ, wsA);
   await approveCreative(campJ, 'launch-static-01', STATIC_POST_FIXTURE);
-  const schedJ = schedulingService.create(campJ, wsA, {
+  const schedJ = await schedulingService.create(campJ, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',
@@ -313,7 +313,7 @@ async function main() {
   insertCampaign(campL, wsA);
   seedPlanChain(campL, wsA);
   await approveCreative(campL, 'launch-static-01', STATIC_POST_FIXTURE);
-  const schedL = schedulingService.create(campL, wsA, {
+  const schedL = await schedulingService.create(campL, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',
@@ -392,7 +392,7 @@ async function main() {
   // --- Test U: Disconnect ---
   const disconnected = integrationConnectionService.disconnect(connectionId, wsA);
   check('U disconnect status', !('error' in disconnected) && disconnected.status === 'DISCONNECTED');
-  const manualStill = schedulingService.create(campA, wsA, {
+  const manualStill = await schedulingService.create(campA, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date(Date.now() + 86400000).toISOString(),
     publicationMode: 'MANUAL',
@@ -425,7 +425,7 @@ async function main() {
   await approveCreative(campW, 'launch-static-01', STATIC_POST_FIXTURE);
   const { destinations: destsW } = integrationConnectionService.createMockMetaConnection(wsA);
   const igW = destsW.find((d) => d.channel === 'INSTAGRAM')!;
-  const schedW = schedulingService.create(campW, wsA, {
+  const schedW = await schedulingService.create(campW, wsA, {
     contentKey: 'launch-static-01',
     scheduledFor: new Date().toISOString(),
     publicationMode: 'DIRECT',

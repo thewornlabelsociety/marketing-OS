@@ -39,7 +39,7 @@ export class PublishingSchedulerService {
 
     for (const row of dueRows) {
       processed += 1;
-      const schedule = schedulingService.getById(row.id, row.campaign_id);
+      const schedule = await schedulingService.getById(row.id, row.campaign_id);
       if (!schedule || schedule.status === 'BLOCKED' || schedule.status === 'CANCELLED' || schedule.status === 'PUBLISHED') {
         skipped += 1;
         continue;

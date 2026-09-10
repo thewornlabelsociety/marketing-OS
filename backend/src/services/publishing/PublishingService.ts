@@ -126,17 +126,17 @@ export class PublishingService {
     if (this.hasUnknownAttempt(scheduleId)) {
       return { error: 'Previous publish outcome is unknown. Reconcile before retrying.', code: 'RECONCILIATION_REQUIRED' };
     }
-    const schedule = schedulingService.getById(scheduleId, campaignId);
+    const schedule = await schedulingService.getById(scheduleId, campaignId);
     if (!schedule) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
     if (schedule.status === 'CANCELLED') return { error: 'Schedule is cancelled.', code: 'SCHEDULE_CANCELLED' };
     if (schedule.status === 'PUBLISHED' || this.hasSuccessfulPublish(scheduleId)) {
       return { error: 'Item already published.', code: 'ALREADY_PUBLISHED' };
     }
 
-    const artifact = creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
+    const artifact = await creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
     if (!artifact) return { error: 'Source creative not found.', code: 'NOT_FOUND' };
 
-    const preflight = prePublishCheckService.run(schedule, artifact, { manualPublish: options?.manualPublish ?? true });
+    const preflight = await prePublishCheckService.run(schedule, artifact, { manualPublish: options?.manualPublish ?? true });
     if (!preflight.ready) {
       const code = preflight.blockers[0] ?? 'PUBLISH_VALIDATION_FAILED';
       if (code === 'ASSET_MISSING' || code === 'MEDIA_INVALID' || code === 'MEDIA_NOT_PUBLICLY_ACCESSIBLE') {
@@ -279,7 +279,7 @@ export class PublishingService {
     }
 
     return {
-      item: schedulingService.getById(scheduleId, campaignId)!,
+      item: (await schedulingService.getById(scheduleId, campaignId))!,
       attempt: mapAttempt(db.prepare('SELECT * FROM publish_attempts WHERE id = ?').get(attemptId) as AttemptRow),
     };
   }
@@ -292,12 +292,12 @@ export class PublishingService {
     return this.publishSchedule(scheduleId, campaignId, { manualPublish: true });
   }
 
-  markPublished(
+  async markPublished(
     scheduleId: string,
     campaignId: string,
     input: PublicationReconciliationInput,
-  ): { item: ScheduledContentItem } | PublishingServiceError {
-    const schedule = schedulingService.getById(scheduleId, campaignId);
+  ): Promise<{ item: ScheduledContentItem } | PublishingServiceError> {
+    const schedule = await schedulingService.getById(scheduleId, campaignId);
     if (!schedule) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
     if (schedule.status === 'CANCELLED') return { error: 'Schedule is cancelled.', code: 'SCHEDULE_CANCELLED' };
     if (this.hasSuccessfulPublish(scheduleId) || schedule.status === 'PUBLISHED') {
@@ -314,9 +314,9 @@ export class PublishingService {
       return { error: 'Reconciliation evidence is required.', code: 'PUBLISH_VALIDATION_FAILED' };
     }
 
-    const artifact = creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
+    const artifact = await creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
     if (!artifact) return { error: 'Source creative not found.', code: 'NOT_FOUND' };
-    const preflight = prePublishCheckService.run(schedule, artifact, { manualPublish: true });
+    const preflight = await prePublishCheckService.run(schedule, artifact, { manualPublish: true });
     if (preflight.blockers.includes('CREATIVE_NOT_APPROVED') || preflight.blockers.includes('APPROVED_VERSION_MISMATCH')) {
       return { error: preflight.blockers.join('; '), code: preflight.blockers[0] ?? 'PUBLISH_VALIDATION_FAILED' };
     }
@@ -397,7 +397,7 @@ export class PublishingService {
     });
     resolve();
 
-    return { item: schedulingService.getById(scheduleId, campaignId)! };
+    return { item: (await schedulingService.getById(scheduleId, campaignId))! };
   }
 }
 

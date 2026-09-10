@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import { randomUUID } from 'crypto';
 import { initDatabase, db } from '../src/db/database';
 import { LOCAL_TENANT_ID } from '../src/config/constants';
@@ -24,7 +24,7 @@ async function main() {
 
   function check(name: string, condition: boolean, detail = '') {
     if (condition) { passed += 1; console.log(`PASS  ${name}`); }
-    else { failed += 1; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ''}`); }
+    else { failed += 1; console.log(`FAIL  ${name}${detail ? ` â€” ${detail}` : ''}`); }
   }
 
   function insertWorkspace(id: string, name: string) {
@@ -144,11 +144,11 @@ async function main() {
       caption: 'The trousers everyone asked for are back',
     });
     const scheduleB = publishVariant(camp, wsA, 'launch-carousel-01', variantArt.id, variantArt.version, 'INSTAGRAM');
-    experimentService.addVariant(exp.id, camp, wsA, {
+    await experimentService.addVariant(exp.id, camp, wsA, {
       label: 'A', role: 'CONTROL', contentKey: 'launch-carousel-01',
       creativeArtifactId: controlArt.id, creativeVersion: controlArt.version, channel: 'INSTAGRAM', scheduleId: scheduleA,
     });
-    experimentService.addVariant(exp.id, camp, wsA, {
+    await experimentService.addVariant(exp.id, camp, wsA, {
       label: 'B', role: 'VARIANT', contentKey: 'launch-carousel-01',
       creativeArtifactId: variantArt.id, creativeVersion: variantArt.version, channel: 'INSTAGRAM', scheduleId: scheduleB,
     });
@@ -157,7 +157,7 @@ async function main() {
 
   // --- Test C version pinning ---
   if (exp) {
-    const started = experimentService.start(exp.id, camp, wsA);
+    const started = await experimentService.start(exp.id, camp, wsA);
     check('C experiment started', !('error' in started));
     const v3Result = creativeGeneratorService.persistFromStructured(camp, 'launch-carousel-01', {
       ...CAROUSEL_CREATIVE_FIXTURE,
@@ -184,18 +184,18 @@ async function main() {
     controlDescription: 'A', variantDescription: 'B',
   });
   if (!('error' in expD) && unapproved) {
-    experimentService.addVariant(expD.id, campD, wsA, {
+    await experimentService.addVariant(expD.id, campD, wsA, {
       label: 'A', role: 'CONTROL', contentKey: 'launch-carousel-01',
       creativeArtifactId: artD.id, creativeVersion: artD.version, channel: 'INSTAGRAM',
     });
-    experimentService.addVariant(expD.id, campD, wsA, {
+    await experimentService.addVariant(expD.id, campD, wsA, {
       label: 'B', role: 'VARIANT', contentKey: 'launch-carousel-01',
       creativeArtifactId: unapproved.id, creativeVersion: unapproved.version, channel: 'INSTAGRAM',
     });
-    const blocked = experimentService.start(expD.id, campD, wsA);
+    const blocked = await experimentService.start(expD.id, campD, wsA);
     check('D unapproved blocked', 'error' in blocked);
     creativeGeneratorService.approve(campD, 'launch-carousel-01', unapproved.id);
-    const startedD = experimentService.start(expD.id, campD, wsA);
+    const startedD = await experimentService.start(expD.id, campD, wsA);
     check('D approved eligible', !('error' in startedD));
   }
 
@@ -235,9 +235,9 @@ async function main() {
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
   });
   if (!('error' in expG)) {
-    experimentService.addVariant(expG.id, campG, wsA, { label: 'A', role: 'CONTROL', contentKey: abG.contentKey, creativeArtifactId: abG.control.id, creativeVersion: abG.control.version, channel: 'INSTAGRAM', scheduleId: abG.scheduleA });
-    experimentService.addVariant(expG.id, campG, wsA, { label: 'B', role: 'VARIANT', contentKey: abG.contentKey, creativeArtifactId: abG.variant.id, creativeVersion: abG.variant.version, channel: 'INSTAGRAM', scheduleId: abG.scheduleB });
-    experimentService.start(expG.id, campG, wsA);
+    await experimentService.addVariant(expG.id, campG, wsA, { label: 'A', role: 'CONTROL', contentKey: abG.contentKey, creativeArtifactId: abG.control.id, creativeVersion: abG.control.version, channel: 'INSTAGRAM', scheduleId: abG.scheduleA });
+    await experimentService.addVariant(expG.id, campG, wsA, { label: 'B', role: 'VARIANT', contentKey: abG.contentKey, creativeArtifactId: abG.variant.id, creativeVersion: abG.variant.version, channel: 'INSTAGRAM', scheduleId: abG.scheduleB });
+    await experimentService.start(expG.id, campG, wsA);
     const startG = experimentService.get(expG.id, campG, wsA);
     check('G experiment running', !('error' in startG) && startG.status === 'RUNNING');
     performanceIngestionService.createObservation({
@@ -272,9 +272,9 @@ async function main() {
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
   });
   if (!('error' in expH)) {
-    experimentService.addVariant(expH.id, campH, wsA, { label: 'A', role: 'CONTROL', contentKey: abH.contentKey, creativeArtifactId: abH.control.id, creativeVersion: abH.control.version, channel: 'INSTAGRAM', scheduleId: abH.scheduleA });
-    experimentService.addVariant(expH.id, campH, wsA, { label: 'B', role: 'VARIANT', contentKey: abH.contentKey, creativeArtifactId: abH.variant.id, creativeVersion: abH.variant.version, channel: 'INSTAGRAM', scheduleId: abH.scheduleB });
-    experimentService.start(expH.id, campH, wsA);
+    await experimentService.addVariant(expH.id, campH, wsA, { label: 'A', role: 'CONTROL', contentKey: abH.contentKey, creativeArtifactId: abH.control.id, creativeVersion: abH.control.version, channel: 'INSTAGRAM', scheduleId: abH.scheduleA });
+    await experimentService.addVariant(expH.id, campH, wsA, { label: 'B', role: 'VARIANT', contentKey: abH.contentKey, creativeArtifactId: abH.variant.id, creativeVersion: abH.variant.version, channel: 'INSTAGRAM', scheduleId: abH.scheduleB });
+    await experimentService.start(expH.id, campH, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campH, scheduleId: abH.scheduleA, contentKey: abH.contentKey, sourceCreativeArtifactId: abH.control.id, sourceCreativeVersion: abH.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { reach: 120000, impressions: 120000 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campH, scheduleId: abH.scheduleB, contentKey: abH.contentKey, sourceCreativeArtifactId: abH.variant.id, sourceCreativeVersion: abH.variant.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { reach: 80000, impressions: 80000 }, source: 'MANUAL' });
     const analysisH = experimentService.analyze(expH.id, campH, wsA, '7_DAYS');
@@ -291,9 +291,9 @@ async function main() {
     controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
   });
   if (!('error' in expI)) {
-    experimentService.addVariant(expI.id, campI, wsA, { label: 'A', role: 'CONTROL', contentKey: abI.contentKey, creativeArtifactId: abI.control.id, creativeVersion: abI.control.version, channel: 'EMAIL', scheduleId: abI.scheduleA });
-    experimentService.addVariant(expI.id, campI, wsA, { label: 'B', role: 'VARIANT', contentKey: abI.contentKey, creativeArtifactId: abI.variant.id, creativeVersion: abI.variant.version, channel: 'EMAIL', scheduleId: abI.scheduleB });
-    experimentService.start(expI.id, campI, wsA);
+    await experimentService.addVariant(expI.id, campI, wsA, { label: 'A', role: 'CONTROL', contentKey: abI.contentKey, creativeArtifactId: abI.control.id, creativeVersion: abI.control.version, channel: 'EMAIL', scheduleId: abI.scheduleA });
+    await experimentService.addVariant(expI.id, campI, wsA, { label: 'B', role: 'VARIANT', contentKey: abI.contentKey, creativeArtifactId: abI.variant.id, creativeVersion: abI.variant.version, channel: 'EMAIL', scheduleId: abI.scheduleB });
+    await experimentService.start(expI.id, campI, wsA);
     for (let i = 0; i < 60; i++) {
       performanceIngestionService.createConversion({
         workspaceId: wsA, campaignId: campI, contentKey: abI.contentKey, scheduleId: abI.scheduleA, conversionType: 'QUALIFIED_LEAD',
@@ -324,9 +324,9 @@ async function main() {
     minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
   });
   if (!('error' in expJ)) {
-    experimentService.addVariant(expJ.id, campJ, wsA, { label: 'A', role: 'CONTROL', contentKey: abJ.contentKey, creativeArtifactId: abJ.control.id, creativeVersion: abJ.control.version, channel: 'EMAIL', scheduleId: abJ.scheduleA });
-    experimentService.addVariant(expJ.id, campJ, wsA, { label: 'B', role: 'VARIANT', contentKey: abJ.contentKey, creativeArtifactId: abJ.variant.id, creativeVersion: abJ.variant.version, channel: 'EMAIL', scheduleId: abJ.scheduleB });
-    experimentService.start(expJ.id, campJ, wsA);
+    await experimentService.addVariant(expJ.id, campJ, wsA, { label: 'A', role: 'CONTROL', contentKey: abJ.contentKey, creativeArtifactId: abJ.control.id, creativeVersion: abJ.control.version, channel: 'EMAIL', scheduleId: abJ.scheduleA });
+    await experimentService.addVariant(expJ.id, campJ, wsA, { label: 'B', role: 'VARIANT', contentKey: abJ.contentKey, creativeArtifactId: abJ.variant.id, creativeVersion: abJ.variant.version, channel: 'EMAIL', scheduleId: abJ.scheduleB });
+    await experimentService.start(expJ.id, campJ, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campJ, scheduleId: abJ.scheduleA, contentKey: abJ.contentKey, sourceCreativeArtifactId: abJ.control.id, sourceCreativeVersion: abJ.control.version, channel: 'EMAIL', measurementWindow: '7_DAYS', metrics: { emailDelivered: 1000, emailOpens: 400 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campJ, scheduleId: abJ.scheduleB, contentKey: abJ.contentKey, sourceCreativeArtifactId: abJ.variant.id, sourceCreativeVersion: abJ.variant.version, channel: 'EMAIL', measurementWindow: '7_DAYS', metrics: { emailDelivered: 1000, emailOpens: 300 }, source: 'MANUAL' });
     const analysisJ = experimentService.analyze(expJ.id, campJ, wsA, '7_DAYS');
@@ -341,9 +341,9 @@ async function main() {
   const abK = setupInstagramAb(campK, wsA, CAROUSEL_CREATIVE_FIXTURE, CAROUSEL_CREATIVE_FIXTURE);
   const expK = experimentService.create(campK, wsA, { name: 'Null test', hypothesis: 'Null vs zero', variableType: 'HOOK', controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 } });
   if (!('error' in expK)) {
-    experimentService.addVariant(expK.id, campK, wsA, { label: 'A', role: 'CONTROL', contentKey: abK.contentKey, creativeArtifactId: abK.control.id, creativeVersion: abK.control.version, channel: 'INSTAGRAM', scheduleId: abK.scheduleA });
-    experimentService.addVariant(expK.id, campK, wsA, { label: 'B', role: 'VARIANT', contentKey: abK.contentKey, creativeArtifactId: abK.variant.id, creativeVersion: abK.variant.version, channel: 'INSTAGRAM', scheduleId: abK.scheduleB });
-    experimentService.start(expK.id, campK, wsA);
+    await experimentService.addVariant(expK.id, campK, wsA, { label: 'A', role: 'CONTROL', contentKey: abK.contentKey, creativeArtifactId: abK.control.id, creativeVersion: abK.control.version, channel: 'INSTAGRAM', scheduleId: abK.scheduleA });
+    await experimentService.addVariant(expK.id, campK, wsA, { label: 'B', role: 'VARIANT', contentKey: abK.contentKey, creativeArtifactId: abK.variant.id, creativeVersion: abK.variant.version, channel: 'INSTAGRAM', scheduleId: abK.scheduleB });
+    await experimentService.start(expK.id, campK, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campK, scheduleId: abK.scheduleA, contentKey: abK.contentKey, sourceCreativeArtifactId: abK.control.id, sourceCreativeVersion: abK.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000, purchases: 0 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campK, scheduleId: abK.scheduleB, contentKey: abK.contentKey, sourceCreativeArtifactId: abK.variant.id, sourceCreativeVersion: abK.variant.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000 }, source: 'MANUAL' });
     const analysisK = experimentService.analyze(expK.id, campK, wsA, '7_DAYS');
@@ -357,9 +357,9 @@ async function main() {
   const abL = setupInstagramAb(campL, wsA, CAROUSEL_CREATIVE_FIXTURE, CAROUSEL_CREATIVE_FIXTURE);
   const expL = experimentService.create(campL, wsA, { name: 'Tiny sample', hypothesis: 'Tiny', variableType: 'HOOK', controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 } });
   if (!('error' in expL)) {
-    experimentService.addVariant(expL.id, campL, wsA, { label: 'A', role: 'CONTROL', contentKey: abL.contentKey, creativeArtifactId: abL.control.id, creativeVersion: abL.control.version, channel: 'INSTAGRAM', scheduleId: abL.scheduleA });
-    experimentService.addVariant(expL.id, campL, wsA, { label: 'B', role: 'VARIANT', contentKey: abL.contentKey, creativeArtifactId: abL.variant.id, creativeVersion: abL.variant.version, channel: 'INSTAGRAM', scheduleId: abL.scheduleB });
-    experimentService.start(expL.id, campL, wsA);
+    await experimentService.addVariant(expL.id, campL, wsA, { label: 'A', role: 'CONTROL', contentKey: abL.contentKey, creativeArtifactId: abL.control.id, creativeVersion: abL.control.version, channel: 'INSTAGRAM', scheduleId: abL.scheduleA });
+    await experimentService.addVariant(expL.id, campL, wsA, { label: 'B', role: 'VARIANT', contentKey: abL.contentKey, creativeArtifactId: abL.variant.id, creativeVersion: abL.variant.version, channel: 'INSTAGRAM', scheduleId: abL.scheduleB });
+    await experimentService.start(expL.id, campL, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campL, scheduleId: abL.scheduleA, contentKey: abL.contentKey, sourceCreativeArtifactId: abL.control.id, sourceCreativeVersion: abL.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 17 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campL, scheduleId: abL.scheduleB, contentKey: abL.contentKey, sourceCreativeArtifactId: abL.variant.id, sourceCreativeVersion: abL.variant.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 17 }, source: 'MANUAL' });
     const analysisL = experimentService.analyze(expL.id, campL, wsA, '7_DAYS');
@@ -373,9 +373,9 @@ async function main() {
   const abM = setupInstagramAb(campM, wsA, CAROUSEL_CREATIVE_FIXTURE, CAROUSEL_CREATIVE_FIXTURE);
   const expM = experimentService.create(campM, wsA, { name: 'Window mismatch', hypothesis: 'Windows', variableType: 'HOOK', controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 } });
   if (!('error' in expM)) {
-    experimentService.addVariant(expM.id, campM, wsA, { label: 'A', role: 'CONTROL', contentKey: abM.contentKey, creativeArtifactId: abM.control.id, creativeVersion: abM.control.version, channel: 'INSTAGRAM', scheduleId: abM.scheduleA });
-    experimentService.addVariant(expM.id, campM, wsA, { label: 'B', role: 'VARIANT', contentKey: abM.contentKey, creativeArtifactId: abM.variant.id, creativeVersion: abM.variant.version, channel: 'INSTAGRAM', scheduleId: abM.scheduleB });
-    experimentService.start(expM.id, campM, wsA);
+    await experimentService.addVariant(expM.id, campM, wsA, { label: 'A', role: 'CONTROL', contentKey: abM.contentKey, creativeArtifactId: abM.control.id, creativeVersion: abM.control.version, channel: 'INSTAGRAM', scheduleId: abM.scheduleA });
+    await experimentService.addVariant(expM.id, campM, wsA, { label: 'B', role: 'VARIANT', contentKey: abM.contentKey, creativeArtifactId: abM.variant.id, creativeVersion: abM.variant.version, channel: 'INSTAGRAM', scheduleId: abM.scheduleB });
+    await experimentService.start(expM.id, campM, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campM, scheduleId: abM.scheduleA, contentKey: abM.contentKey, sourceCreativeArtifactId: abM.control.id, sourceCreativeVersion: abM.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000, purchases: 5 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campM, scheduleId: abM.scheduleB, contentKey: abM.contentKey, sourceCreativeArtifactId: abM.variant.id, sourceCreativeVersion: abM.variant.version, channel: 'INSTAGRAM', measurementWindow: '24_HOURS', metrics: { impressions: 5000, purchases: 10 }, source: 'MANUAL' });
     const analysisM = experimentService.analyze(expM.id, campM, wsA, '7_DAYS');
@@ -390,10 +390,10 @@ async function main() {
   const sNA = publishVariant(campN, wsA, 'launch-carousel-01', controlN.id, controlN.version, 'INSTAGRAM');
   const expN = experimentService.create(campN, wsA, { name: 'Cumulative', hypothesis: 'Cumulative', variableType: 'HOOK', controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 } });
   if (!('error' in expN)) {
-    experimentService.addVariant(expN.id, campN, wsA, { label: 'A', role: 'CONTROL', contentKey: 'launch-carousel-01', creativeArtifactId: controlN.id, creativeVersion: controlN.version, channel: 'INSTAGRAM', scheduleId: sNA });
+    await experimentService.addVariant(expN.id, campN, wsA, { label: 'A', role: 'CONTROL', contentKey: 'launch-carousel-01', creativeArtifactId: controlN.id, creativeVersion: controlN.version, channel: 'INSTAGRAM', scheduleId: sNA });
     const variantN = createVariantRevision(campN, 'launch-carousel-01', CAROUSEL_CREATIVE_FIXTURE);
-    experimentService.addVariant(expN.id, campN, wsA, { label: 'B', role: 'VARIANT', contentKey: 'launch-carousel-01', creativeArtifactId: variantN.id, creativeVersion: variantN.version, channel: 'INSTAGRAM' });
-    experimentService.start(expN.id, campN, wsA);
+    await experimentService.addVariant(expN.id, campN, wsA, { label: 'B', role: 'VARIANT', contentKey: 'launch-carousel-01', creativeArtifactId: variantN.id, creativeVersion: variantN.version, channel: 'INSTAGRAM' });
+    await experimentService.start(expN.id, campN, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campN, scheduleId: sNA, contentKey: 'launch-carousel-01', sourceCreativeArtifactId: controlN.id, sourceCreativeVersion: controlN.version, channel: 'INSTAGRAM', measurementWindow: '24_HOURS', metrics: { impressions: 1000 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campN, scheduleId: sNA, contentKey: 'launch-carousel-01', sourceCreativeArtifactId: controlN.id, sourceCreativeVersion: controlN.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 4000 }, source: 'MANUAL' });
     const loaded = experimentService.get(expN.id, campN, wsA);
@@ -413,9 +413,9 @@ async function main() {
   const abO = setupInstagramAb(campO, wsA, CAROUSEL_CREATIVE_FIXTURE, CAROUSEL_CREATIVE_FIXTURE);
   const expO = experimentService.create(campO, wsA, { name: 'Attribution', hypothesis: 'Attr', variableType: 'HOOK', controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 } });
   if (!('error' in expO)) {
-    experimentService.addVariant(expO.id, campO, wsA, { label: 'A', role: 'CONTROL', contentKey: abO.contentKey, creativeArtifactId: abO.control.id, creativeVersion: abO.control.version, channel: 'INSTAGRAM', scheduleId: abO.scheduleA });
-    experimentService.addVariant(expO.id, campO, wsA, { label: 'B', role: 'VARIANT', contentKey: abO.contentKey, creativeArtifactId: abO.variant.id, creativeVersion: abO.variant.version, channel: 'INSTAGRAM', scheduleId: abO.scheduleB });
-    experimentService.start(expO.id, campO, wsA);
+    await experimentService.addVariant(expO.id, campO, wsA, { label: 'A', role: 'CONTROL', contentKey: abO.contentKey, creativeArtifactId: abO.control.id, creativeVersion: abO.control.version, channel: 'INSTAGRAM', scheduleId: abO.scheduleA });
+    await experimentService.addVariant(expO.id, campO, wsA, { label: 'B', role: 'VARIANT', contentKey: abO.contentKey, creativeArtifactId: abO.variant.id, creativeVersion: abO.variant.version, channel: 'INSTAGRAM', scheduleId: abO.scheduleB });
+    await experimentService.start(expO.id, campO, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campO, scheduleId: abO.scheduleA, contentKey: abO.contentKey, sourceCreativeArtifactId: abO.control.id, sourceCreativeVersion: abO.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campO, scheduleId: abO.scheduleB, contentKey: abO.contentKey, sourceCreativeArtifactId: abO.variant.id, sourceCreativeVersion: abO.variant.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000 }, source: 'MANUAL' });
     performanceIngestionService.createConversion({
@@ -433,9 +433,9 @@ async function main() {
   const abP = setupInstagramAb(campP, wsA, CAROUSEL_CREATIVE_FIXTURE, CAROUSEL_CREATIVE_FIXTURE);
   const expP = experimentService.create(campP, wsA, { name: 'Dedup', hypothesis: 'Dedup', variableType: 'HOOK', controlDescription: 'A', variantDescription: 'B', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 } });
   if (!('error' in expP)) {
-    experimentService.addVariant(expP.id, campP, wsA, { label: 'A', role: 'CONTROL', contentKey: abP.contentKey, creativeArtifactId: abP.control.id, creativeVersion: abP.control.version, channel: 'INSTAGRAM', scheduleId: abP.scheduleA });
-    experimentService.addVariant(expP.id, campP, wsA, { label: 'B', role: 'VARIANT', contentKey: abP.contentKey, creativeArtifactId: abP.variant.id, creativeVersion: abP.variant.version, channel: 'INSTAGRAM', scheduleId: abP.scheduleB });
-    experimentService.start(expP.id, campP, wsA);
+    await experimentService.addVariant(expP.id, campP, wsA, { label: 'A', role: 'CONTROL', contentKey: abP.contentKey, creativeArtifactId: abP.control.id, creativeVersion: abP.control.version, channel: 'INSTAGRAM', scheduleId: abP.scheduleA });
+    await experimentService.addVariant(expP.id, campP, wsA, { label: 'B', role: 'VARIANT', contentKey: abP.contentKey, creativeArtifactId: abP.variant.id, creativeVersion: abP.variant.version, channel: 'INSTAGRAM', scheduleId: abP.scheduleB });
+    await experimentService.start(expP.id, campP, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campP, scheduleId: abP.scheduleB, contentKey: abP.contentKey, sourceCreativeArtifactId: abP.variant.id, sourceCreativeVersion: abP.variant.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campP, scheduleId: abP.scheduleA, contentKey: abP.contentKey, sourceCreativeArtifactId: abP.control.id, sourceCreativeVersion: abP.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000 }, source: 'MANUAL' });
     for (let i = 0; i < 2; i++) {
@@ -461,9 +461,9 @@ async function main() {
     experimentKpi: 'ctr', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 }, minimumMeaningfulLift: 5,
   });
   if (!('error' in expQ)) {
-    experimentService.addVariant(expQ.id, campQ, wsA, { label: 'A', role: 'CONTROL', contentKey: abQ.contentKey, creativeArtifactId: abQ.control.id, creativeVersion: abQ.control.version, channel: 'INSTAGRAM', scheduleId: abQ.scheduleA });
-    experimentService.addVariant(expQ.id, campQ, wsA, { label: 'B', role: 'VARIANT', contentKey: abQ.contentKey, creativeArtifactId: abQ.variant.id, creativeVersion: abQ.variant.version, channel: 'INSTAGRAM', scheduleId: abQ.scheduleB });
-    experimentService.start(expQ.id, campQ, wsA);
+    await experimentService.addVariant(expQ.id, campQ, wsA, { label: 'A', role: 'CONTROL', contentKey: abQ.contentKey, creativeArtifactId: abQ.control.id, creativeVersion: abQ.control.version, channel: 'INSTAGRAM', scheduleId: abQ.scheduleA });
+    await experimentService.addVariant(expQ.id, campQ, wsA, { label: 'B', role: 'VARIANT', contentKey: abQ.contentKey, creativeArtifactId: abQ.variant.id, creativeVersion: abQ.variant.version, channel: 'INSTAGRAM', scheduleId: abQ.scheduleB });
+    await experimentService.start(expQ.id, campQ, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campQ, scheduleId: abQ.scheduleA, contentKey: abQ.contentKey, sourceCreativeArtifactId: abQ.control.id, sourceCreativeVersion: abQ.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 10000, clicks: 400 }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campQ, scheduleId: abQ.scheduleB, contentKey: abQ.contentKey, sourceCreativeArtifactId: abQ.variant.id, sourceCreativeVersion: abQ.variant.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 10000, clicks: 403 }, source: 'MANUAL' });
     const analysisQ = experimentService.analyze(expQ.id, campQ, wsA, '7_DAYS');
@@ -474,7 +474,7 @@ async function main() {
   if (exp) {
     const obsExp = experimentService.get(exp.id, camp, wsA);
     check('R observational mode', !('error' in obsExp) && obsExp.mode === 'OBSERVATIONAL_COMPARISON');
-    const validation = experimentService.validate(exp.id, camp, wsA);
+    const validation = await experimentService.validate(exp.id, camp, wsA);
     if (!('error' in validation)) {
       check('R observational warning', validation.findings.some((f) => f.code === 'OBSERVATIONAL_WARNING'));
     }
@@ -526,9 +526,9 @@ async function main() {
       [expW1, campW1, abW1, 15],
       [expW2, campW2, abW2, 15],
     ] as const) {
-      experimentService.addVariant(expW.id, campW, wsA, { label: 'A', role: 'CONTROL', contentKey: abW.contentKey, creativeArtifactId: abW.control.id, creativeVersion: abW.control.version, channel: 'INSTAGRAM', scheduleId: abW.scheduleA });
-      experimentService.addVariant(expW.id, campW, wsA, { label: 'B', role: 'VARIANT', contentKey: abW.contentKey, creativeArtifactId: abW.variant.id, creativeVersion: abW.variant.version, channel: 'INSTAGRAM', scheduleId: abW.scheduleB });
-      experimentService.start(expW.id, campW, wsA);
+      await experimentService.addVariant(expW.id, campW, wsA, { label: 'A', role: 'CONTROL', contentKey: abW.contentKey, creativeArtifactId: abW.control.id, creativeVersion: abW.control.version, channel: 'INSTAGRAM', scheduleId: abW.scheduleA });
+      await experimentService.addVariant(expW.id, campW, wsA, { label: 'B', role: 'VARIANT', contentKey: abW.contentKey, creativeArtifactId: abW.variant.id, creativeVersion: abW.variant.version, channel: 'INSTAGRAM', scheduleId: abW.scheduleB });
+      await experimentService.start(expW.id, campW, wsA);
       performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campW, scheduleId: abW.scheduleA, contentKey: abW.contentKey, sourceCreativeArtifactId: abW.control.id, sourceCreativeVersion: abW.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000, purchases: 0 }, source: 'MANUAL' });
       performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campW, scheduleId: abW.scheduleB, contentKey: abW.contentKey, sourceCreativeArtifactId: abW.variant.id, sourceCreativeVersion: abW.variant.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000 }, source: 'MANUAL' });
       for (let i = 0; i < bPurchases; i++) {
@@ -590,9 +590,9 @@ async function main() {
     experimentKpi: 'roas', minimumEvidencePolicy: { minimumImpressionsPerVariant: 100 },
   });
   if (!('error' in expCur)) {
-    experimentService.addVariant(expCur.id, campCur, wsA, { label: 'A', role: 'CONTROL', contentKey: abCur.contentKey, creativeArtifactId: abCur.control.id, creativeVersion: abCur.control.version, channel: 'INSTAGRAM', scheduleId: abCur.scheduleA });
-    experimentService.addVariant(expCur.id, campCur, wsA, { label: 'B', role: 'VARIANT', contentKey: abCur.contentKey, creativeArtifactId: abCur.variant.id, creativeVersion: abCur.variant.version, channel: 'INSTAGRAM', scheduleId: abCur.scheduleB });
-    experimentService.start(expCur.id, campCur, wsA);
+    await experimentService.addVariant(expCur.id, campCur, wsA, { label: 'A', role: 'CONTROL', contentKey: abCur.contentKey, creativeArtifactId: abCur.control.id, creativeVersion: abCur.control.version, channel: 'INSTAGRAM', scheduleId: abCur.scheduleA });
+    await experimentService.addVariant(expCur.id, campCur, wsA, { label: 'B', role: 'VARIANT', contentKey: abCur.contentKey, creativeArtifactId: abCur.variant.id, creativeVersion: abCur.variant.version, channel: 'INSTAGRAM', scheduleId: abCur.scheduleB });
+    await experimentService.start(expCur.id, campCur, wsA);
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campCur, scheduleId: abCur.scheduleA, contentKey: abCur.contentKey, sourceCreativeArtifactId: abCur.control.id, sourceCreativeVersion: abCur.control.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000, spend: 100, revenue: 500, currency: 'NZD' }, source: 'MANUAL' });
     performanceIngestionService.createObservation({ workspaceId: wsA, campaignId: campCur, scheduleId: abCur.scheduleB, contentKey: abCur.contentKey, sourceCreativeArtifactId: abCur.variant.id, sourceCreativeVersion: abCur.variant.version, channel: 'INSTAGRAM', measurementWindow: '7_DAYS', metrics: { impressions: 5000, spend: 100, revenue: 600, currency: 'USD' }, source: 'MANUAL' });
     const analysisCur = experimentService.analyze(expCur.id, campCur, wsA, '7_DAYS');
@@ -606,9 +606,9 @@ async function main() {
   const abPC = setupInstagramAb(campPC, wsA, CAROUSEL_CREATIVE_FIXTURE, CAROUSEL_CREATIVE_FIXTURE);
   const expPC = experimentService.create(campPC, wsA, { name: 'Pause cancel', hypothesis: 'PC', variableType: 'HOOK', controlDescription: 'A', variantDescription: 'B' });
   if (!('error' in expPC)) {
-    experimentService.addVariant(expPC.id, campPC, wsA, { label: 'A', role: 'CONTROL', contentKey: abPC.contentKey, creativeArtifactId: abPC.control.id, creativeVersion: abPC.control.version, channel: 'INSTAGRAM' });
-    experimentService.addVariant(expPC.id, campPC, wsA, { label: 'B', role: 'VARIANT', contentKey: abPC.contentKey, creativeArtifactId: abPC.variant.id, creativeVersion: abPC.variant.version, channel: 'INSTAGRAM' });
-    experimentService.start(expPC.id, campPC, wsA);
+    await experimentService.addVariant(expPC.id, campPC, wsA, { label: 'A', role: 'CONTROL', contentKey: abPC.contentKey, creativeArtifactId: abPC.control.id, creativeVersion: abPC.control.version, channel: 'INSTAGRAM' });
+    await experimentService.addVariant(expPC.id, campPC, wsA, { label: 'B', role: 'VARIANT', contentKey: abPC.contentKey, creativeArtifactId: abPC.variant.id, creativeVersion: abPC.variant.version, channel: 'INSTAGRAM' });
+    await experimentService.start(expPC.id, campPC, wsA);
     const paused = experimentService.pause(expPC.id, campPC, wsA);
     check('Pause retained', !('error' in paused) && paused.status === 'PAUSED');
     const cancelled = experimentService.cancel(expPC.id, campPC, wsA, 'Strategy changed');

@@ -24,7 +24,7 @@ export class DashboardService {
     const needsAttention = ranked.filter((s) => attentionSignalService.isNeedsAttention(s));
     const readyForYou = ranked.filter((s) => attentionSignalService.isReadyForYou(s) && !attentionSignalService.isNeedsAttention(s));
 
-    const upcoming = this.buildUpcoming(workspaceId);
+    const upcoming = await this.buildUpcoming(workspaceId);
     const performance = this.buildPerformance(workspaceId);
     const experiments = this.buildExperiments(workspaceId, openSignals);
     const opportunities = this.buildOpportunities(openSignals);
@@ -55,10 +55,10 @@ export class DashboardService {
     };
   }
 
-  private buildUpcoming(workspaceId: string): DashboardUpcomingItem[] {
+  private async buildUpcoming(workspaceId: string): Promise<DashboardUpcomingItem[]> {
     const now = Date.now();
     const end = now + UPCOMING_DAYS * 24 * 60 * 60 * 1000;
-    const schedules = schedulingService.listForWorkspace(workspaceId)
+    const schedules = (await schedulingService.listForWorkspace(workspaceId))
       .filter((s) => ['SCHEDULED', 'READY', 'PUBLISHING', 'FAILED'].includes(s.status))
       .filter((s) => {
         const t = new Date(s.scheduledFor).getTime();

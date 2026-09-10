@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { aiEnv } from '../config/aiEnvironment';
 import { db } from '../db/database';
+import { getCoreRepositories, createCoreRepositoriesWithClient } from '../db/core/createCoreRepositories';
+import { withPostgresTransaction } from '../db/core/withPostgresTransaction';
 import { creativeGeneratorService } from '../services/creative/CreativeGeneratorService';
 import { contentPlannerService } from '../services/campaigns/ContentPlannerService';
 
@@ -14,12 +16,17 @@ function resolveWorkspaceId(req: CreativeReq): string | undefined {
   return query.workspaceId || body?.workspaceId;
 }
 
-function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): CampaignRecord | null {
+async function resolveCampaign(
+  campaignId: string,
+  workspaceId: string | undefined,
+  res: Response,
+): Promise<CampaignRecord | null> {
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return null;
   }
-  const campaign = db.prepare('SELECT id, workspace_id FROM campaigns WHERE id = ?').get(campaignId) as CampaignRecord | undefined;
+  const repos = getCoreRepositories();
+  const campaign = await repos.campaign.findById(campaignId);
   if (!campaign) {
     res.status(404).json({ error: 'Campaign not found' });
     return null;
@@ -28,7 +35,7 @@ function resolveCampaign(campaignId: string, workspaceId: string | undefined, re
     res.status(403).json({ error: 'Campaign does not belong to the specified workspace' });
     return null;
   }
-  return campaign;
+  return { id: campaign.id, workspace_id: campaign.workspace_id };
 }
 
 function statusFor(code?: string): number {
@@ -44,7 +51,7 @@ export const campaignCreativeRouter = Router({ mergeParams: true });
 
 campaignCreativeRouter.get('/', async (req: CreativeReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
   const summary = await creativeGeneratorService.getSummary(campaignId);
   if ('error' in summary) {
@@ -56,7 +63,7 @@ campaignCreativeRouter.get('/', async (req: CreativeReq, res: Response) => {
 
 campaignCreativeRouter.get('/status', async (req: CreativeReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
   const approval = await contentPlannerService.getApproval(campaignId);
   const summary = await creativeGeneratorService.getSummary(campaignId);
@@ -70,7 +77,7 @@ campaignCreativeRouter.get('/status', async (req: CreativeReq, res: Response) =>
 
 campaignCreativeRouter.post('/generate', async (req: CreativeReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
   const result = await creativeGeneratorService.generateAllMissing(campaignId);
   if ('error' in result) {
@@ -80,18 +87,18 @@ campaignCreativeRouter.post('/generate', async (req: CreativeReq, res: Response)
   res.status(201).json(result);
 });
 
-campaignCreativeRouter.get('/:contentKey', (req: CreativeReq, res: Response) => {
+campaignCreativeRouter.get('/:contentKey', async (req: CreativeReq, res: Response) => {
   const { campaignId, contentKey } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
-  const artifact = creativeGeneratorService.getCurrent(campaignId, contentKey!);
+  const artifact = await creativeGeneratorService.getCurrent(campaignId, contentKey!);
   if (!artifact) {
     res.status(404).json({ error: 'No creative exists for this deliverable' });
     return;
   }
 
   // For carousel artifacts, return ordered per-slide images from source record associations.
-  // This covers both original carousels and repurposed derivatives (source links are copied).
+  // creative_source_links is out of PG-5B scope — stays SQLite-direct.
   let carouselSlideImages: string[] | undefined;
   if (artifact.content && (artifact.content as { kind?: string }).kind === 'CAROUSEL') {
     const links = db.prepare(`
@@ -113,15 +120,15 @@ campaignCreativeRouter.get('/:contentKey', (req: CreativeReq, res: Response) => 
   res.json({ ...artifact, ...(carouselSlideImages?.length ? { carouselSlideImages } : {}) });
 });
 
-campaignCreativeRouter.get('/:contentKey/versions', (req: CreativeReq, res: Response) => {
+campaignCreativeRouter.get('/:contentKey/versions', async (req: CreativeReq, res: Response) => {
   const { campaignId, contentKey } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
-  res.json(creativeGeneratorService.getAllVersions(campaignId, contentKey!));
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  res.json(await creativeGeneratorService.getAllVersions(campaignId, contentKey!));
 });
 
 campaignCreativeRouter.post('/:contentKey/generate', async (req: CreativeReq, res: Response) => {
   const { campaignId, contentKey } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
   const result = await creativeGeneratorService.generateOne(campaignId, contentKey!);
   if ('error' in result) {
@@ -143,7 +150,7 @@ campaignCreativeRouter.post('/:contentKey/revisions', async (req: CreativeReq, r
     res.status(400).json({ error: 'requestText is required' });
     return;
   }
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
   const result = await creativeGeneratorService.revise(campaignId, contentKey!, requestText.trim(), targetHint);
   if ('error' in result) {
@@ -153,7 +160,7 @@ campaignCreativeRouter.post('/:contentKey/revisions', async (req: CreativeReq, r
   res.status(201).json(result.artifact);
 });
 
-campaignCreativeRouter.post('/:contentKey/approval', (req: CreativeReq, res: Response) => {
+campaignCreativeRouter.post('/:contentKey/approval', async (req: CreativeReq, res: Response) => {
   const { campaignId, contentKey } = req.params;
   const { creativeArtifactId, workspaceId } = req.body as { creativeArtifactId?: string; workspaceId?: string };
 
@@ -161,9 +168,9 @@ campaignCreativeRouter.post('/:contentKey/approval', (req: CreativeReq, res: Res
     res.status(400).json({ error: 'creativeArtifactId is required' });
     return;
   }
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
-  const result = creativeGeneratorService.approve(campaignId, contentKey!, creativeArtifactId);
+  const result = await creativeGeneratorService.approve(campaignId, contentKey!, creativeArtifactId);
   if (result.error) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
     return;
@@ -171,11 +178,11 @@ campaignCreativeRouter.post('/:contentKey/approval', (req: CreativeReq, res: Res
   res.json({ approved: true });
 });
 
-campaignCreativeRouter.get('/:contentKey/approval', (req: CreativeReq, res: Response) => {
+campaignCreativeRouter.get('/:contentKey/approval', async (req: CreativeReq, res: Response) => {
   const { campaignId, contentKey } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
 
-  const approval = creativeGeneratorService.getApproval(campaignId, contentKey!);
+  const approval = await creativeGeneratorService.getApproval(campaignId, contentKey!);
   if (!approval) {
     res.status(404).json({ error: 'No creative approval record found' });
     return;
@@ -184,7 +191,7 @@ campaignCreativeRouter.get('/:contentKey/approval', (req: CreativeReq, res: Resp
 });
 
 // Manual content edit — updates content in place; resets APPROVED → READY_FOR_REVIEW and clears stale approval
-campaignCreativeRouter.patch('/:contentKey', (req: CreativeReq, res: Response) => {
+campaignCreativeRouter.patch('/:contentKey', async (req: CreativeReq, res: Response) => {
   const { campaignId, contentKey } = req.params;
   const { content, workspaceId } = req.body as { content?: unknown; workspaceId?: string };
 
@@ -192,33 +199,36 @@ campaignCreativeRouter.patch('/:contentKey', (req: CreativeReq, res: Response) =
     res.status(400).json({ error: 'content is required and must be an object' });
     return;
   }
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
-  interface ArtifactStatusRow { id: string; status: string }
-  const row = db.prepare(
-    'SELECT id, status FROM creative_artifacts WHERE campaign_id = ? AND content_key = ? AND is_current = 1',
-  ).get(campaignId, contentKey!) as ArtifactStatusRow | undefined;
+  const repos = getCoreRepositories();
+  const current = await repos.creative.artifact.findCurrentByCampaignAndKey(campaignId, contentKey!);
 
-  if (!row) {
+  if (!current) {
     res.status(404).json({ error: 'No current creative artifact found for this deliverable' });
     return;
   }
 
-  const wasApproved = row.status === 'APPROVED';
-  const newStatus = wasApproved ? 'READY_FOR_REVIEW' : row.status;
+  const wasApproved = current.status === 'APPROVED';
+  const newStatus = wasApproved ? 'READY_FOR_REVIEW' : current.status;
   const now = new Date().toISOString();
 
-  db.prepare(
-    'UPDATE creative_artifacts SET content = ?, status = ?, updated_at = ? WHERE id = ?',
-  ).run(JSON.stringify(content), newStatus, now, row.id);
-
-  if (wasApproved) {
-    db.prepare(
-      'DELETE FROM creative_approvals WHERE campaign_id = ? AND content_key = ?',
-    ).run(campaignId, contentKey!);
+  if (repos.driver === 'postgres') {
+    await withPostgresTransaction(async (client) => {
+      const txRepos = createCoreRepositoriesWithClient(client);
+      await txRepos.creative.artifact.patchContent(current.id, JSON.stringify(content), newStatus, now);
+      if (wasApproved) {
+        await txRepos.creative.approval.deleteByCampaignAndKey(campaignId, contentKey!);
+      }
+    });
+  } else {
+    await repos.creative.artifact.patchContent(current.id, JSON.stringify(content), newStatus, now);
+    if (wasApproved) {
+      await repos.creative.approval.deleteByCampaignAndKey(campaignId, contentKey!);
+    }
   }
 
-  const updated = creativeGeneratorService.getCurrent(campaignId, contentKey!);
+  const updated = await creativeGeneratorService.getCurrent(campaignId, contentKey!);
   if (!updated) {
     res.status(500).json({ error: 'Failed to retrieve updated artifact' });
     return;
@@ -227,39 +237,42 @@ campaignCreativeRouter.patch('/:contentKey', (req: CreativeReq, res: Response) =
 });
 
 // POST /:contentKey/select-media — attach a media asset to the current creative artifact
-campaignCreativeRouter.post('/:contentKey/select-media', (req: CreativeReq, res: Response) => {
+// media_assets lookup is out of PG-5B scope — stays SQLite-direct
+campaignCreativeRouter.post('/:contentKey/select-media', async (req: CreativeReq, res: Response) => {
   const { campaignId, contentKey } = req.params;
   const { workspaceId, mediaAssetId } = req.body as { workspaceId?: string; mediaAssetId?: string };
   if (!mediaAssetId || typeof mediaAssetId !== 'string') {
     res.status(400).json({ error: 'mediaAssetId is required' });
     return;
   }
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
-  // Verify media asset belongs to this workspace
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
+
+  // media_assets is out of PG-5B scope — SQLite-direct
   const asset = db.prepare('SELECT id FROM media_assets WHERE id = ? AND workspace_id = ? AND status = ?')
     .get(mediaAssetId, workspaceId!, 'ACTIVE');
   if (!asset) {
     res.status(404).json({ error: 'Media asset not found or not accessible' });
     return;
   }
-  interface ArtifactSelectRow { id: string; status: string }
-  const artifact = db.prepare(
-    'SELECT id, status FROM creative_artifacts WHERE campaign_id = ? AND content_key = ? AND is_current = 1'
-  ).get(campaignId, contentKey!) as ArtifactSelectRow | undefined;
+
+  const repos = getCoreRepositories();
+  const artifact = await repos.creative.artifact.findCurrentByCampaignAndKey(campaignId, contentKey!);
   if (!artifact) {
     res.status(404).json({ error: 'No current creative artifact found' });
     return;
   }
+
   const wasApproved = artifact.status === 'APPROVED';
   const newStatus = wasApproved ? 'READY_FOR_REVIEW' : artifact.status;
   const now = new Date().toISOString();
-  db.prepare('UPDATE creative_artifacts SET media_asset_id = ?, status = ?, updated_at = ? WHERE id = ?')
-    .run(mediaAssetId, newStatus, now, artifact.id);
+
+  await repos.creative.artifact.patchMediaAsset(artifact.id, mediaAssetId, newStatus, now);
+
   if (wasApproved) {
-    db.prepare('DELETE FROM creative_approvals WHERE campaign_id = ? AND content_key = ?')
-      .run(campaignId, contentKey!);
+    await repos.creative.approval.deleteByCampaignAndKey(campaignId, contentKey!);
   }
-  const result = creativeGeneratorService.getCurrent(campaignId, contentKey!);
+
+  const result = await creativeGeneratorService.getCurrent(campaignId, contentKey!);
   if (!result) {
     res.status(500).json({ error: 'Failed to retrieve updated artifact' });
     return;

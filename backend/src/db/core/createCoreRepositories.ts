@@ -19,6 +19,8 @@ import {
 } from '../repositories/postgres/PostgresCoreRepositories';
 import { createPostgresPlanningRepositories } from '../repositories/postgres/PostgresPlanningRepositories';
 import { createPostgresContentPlanningRepositories } from '../repositories/postgres/PostgresContentPlanningRepositories';
+import { createSqliteCreativeRepositories } from '../repositories/sqlite/SqliteCreativeRepositories';
+import { createPostgresCreativeRepositories } from '../repositories/postgres/PostgresCreativeRepositories';
 
 let cached: CoreDomainRepositories | null = null;
 let cachedDriver: CoreDbDriver | null = null;
@@ -48,6 +50,7 @@ function buildRepositories(driver: CoreDbDriver, postgresClient?: PoolClient): C
       campaign: new PostgresCampaignRepository(postgresClient),
       planning: createPostgresPlanningRepositories(postgresClient),
       contentPlanning: createPostgresContentPlanningRepositories(postgresClient),
+      creative: createPostgresCreativeRepositories(postgresClient),
     };
   }
   return {
@@ -58,6 +61,7 @@ function buildRepositories(driver: CoreDbDriver, postgresClient?: PoolClient): C
     campaign: new SqliteCampaignRepository(),
     planning: createSqlitePlanningRepositories(),
     contentPlanning: createSqliteContentPlanningRepositories(),
+    creative: createSqliteCreativeRepositories(),
   };
 }
 

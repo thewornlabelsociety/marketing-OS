@@ -23,11 +23,11 @@ interface ConnectionRow {
 }
 
 export class PrePublishCheckService {
-  run(
+  async run(
     schedule: ScheduledContentItem,
     artifact: CreativeArtifact,
     options?: { manualPublish?: boolean },
-  ): PrePublishCheckResult {
+  ): Promise<PrePublishCheckResult> {
     const checks: PrePublishCheckResult['checks'] = [];
     const blockers: string[] = [];
     const warnings: string[] = [];
@@ -39,7 +39,7 @@ export class PrePublishCheckService {
       checks.push({ key: 'schedule_cancelled', status: 'PASS' });
     }
 
-    const approval = creativeGeneratorService.getApproval(schedule.campaignId, schedule.contentKey);
+    const approval = await creativeGeneratorService.getApproval(schedule.campaignId, schedule.contentKey);
     if (!approval) {
       checks.push({ key: 'creative_approved', status: 'FAIL', message: 'Creative is not approved' });
       blockers.push('CREATIVE_NOT_APPROVED');

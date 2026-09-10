@@ -75,15 +75,15 @@ const HAS_UNKNOWN_ATTEMPT_CASE = `CASE WHEN EXISTS (
   SELECT 1 FROM publish_attempts pa WHERE pa.schedule_id = sci.id AND pa.status = 'UNKNOWN'
 ) THEN 1 ELSE 0 END AS has_unknown_attempt`;
 
-function resolveApprovedCreative(
+async function resolveApprovedCreative(
   campaignId: string,
   contentKey: string,
-): { artifactId: string; version: number; channel: MarketingChannel; contentType: string } | SchedulingServiceError {
-  const approval = creativeGeneratorService.getApproval(campaignId, contentKey);
+): Promise<{ artifactId: string; version: number; channel: MarketingChannel; contentType: string } | SchedulingServiceError> {
+  const approval = await creativeGeneratorService.getApproval(campaignId, contentKey);
   if (!approval) {
     return { error: 'Approve creative before scheduling.', code: 'CREATIVE_NOT_APPROVED' };
   }
-  const artifact = creativeGeneratorService.getById(approval.creativeArtifactId, campaignId);
+  const artifact = await creativeGeneratorService.getById(approval.creativeArtifactId, campaignId);
   if (!artifact) {
     return { error: 'Approved creative artifact not found.', code: 'NOT_FOUND' };
   }
@@ -98,29 +98,29 @@ function resolveApprovedCreative(
   };
 }
 
-function hasNewerUnapprovedRevision(campaignId: string, contentKey: string, scheduledArtifactId: string): boolean {
-  const current = creativeGeneratorService.getCurrent(campaignId, contentKey);
+async function hasNewerUnapprovedRevision(campaignId: string, contentKey: string, scheduledArtifactId: string): Promise<boolean> {
+  const current = await creativeGeneratorService.getCurrent(campaignId, contentKey);
   if (!current) return false;
   if (current.id === scheduledArtifactId) return false;
-  return !creativeGeneratorService.isDeliverableApproved(campaignId, contentKey);
+  return !(await creativeGeneratorService.isDeliverableApproved(campaignId, contentKey));
 }
 
 export class SchedulingService {
-  list(campaignId: string): ScheduledContentItem[] {
+  async list(campaignId: string): Promise<ScheduledContentItem[]> {
     const rows = db.prepare(`
       SELECT sci.*, ${HAS_UNKNOWN_ATTEMPT_CASE}
       FROM scheduled_content_items sci
       WHERE sci.campaign_id = ? AND sci.cancelled_at IS NULL
       ORDER BY sci.scheduled_for ASC
     `).all(campaignId) as (ScheduleRow & { has_unknown_attempt: number })[];
-    return rows.map((row) => mapRow(
+    return Promise.all(rows.map(async (row) => mapRow(
       row,
-      hasNewerUnapprovedRevision(campaignId, row.content_key, row.source_creative_artifact_id),
+      await hasNewerUnapprovedRevision(campaignId, row.content_key, row.source_creative_artifact_id),
       row.has_unknown_attempt === 1,
-    ));
+    )));
   }
 
-  getById(scheduleId: string, campaignId: string): ScheduledContentItem | null {
+  async getById(scheduleId: string, campaignId: string): Promise<ScheduledContentItem | null> {
     const row = db.prepare(`
       SELECT sci.*, ${HAS_UNKNOWN_ATTEMPT_CASE}
       FROM scheduled_content_items sci
@@ -129,7 +129,7 @@ export class SchedulingService {
     if (!row) return null;
     return mapRow(
       row,
-      hasNewerUnapprovedRevision(campaignId, row.content_key, row.source_creative_artifact_id),
+      await hasNewerUnapprovedRevision(campaignId, row.content_key, row.source_creative_artifact_id),
       row.has_unknown_attempt === 1,
     );
   }
@@ -138,7 +138,7 @@ export class SchedulingService {
     const creativeSummary = await creativeGeneratorService.getSummary(campaignId);
     if ('error' in creativeSummary) return creativeSummary;
 
-    const schedules = this.list(campaignId);
+    const schedules = await this.list(campaignId);
     const approvedDeliverables = creativeSummary.deliverables.filter((d) => d.isApproved);
     const scheduledKeys = new Set(schedules.filter((s) => s.status !== 'CANCELLED').map((s) => s.contentKey));
 
@@ -178,7 +178,7 @@ export class SchedulingService {
     };
   }
 
-  create(
+  async create(
     campaignId: string,
     workspaceId: string,
     input: {
@@ -190,8 +190,8 @@ export class SchedulingService {
       notes?: string;
       mediaAssets?: PublishableAsset[];
     },
-  ): { item: ScheduledContentItem } | SchedulingServiceError {
-    const approved = resolveApprovedCreative(campaignId, input.contentKey);
+  ): Promise<{ item: ScheduledContentItem } | SchedulingServiceError> {
+    const approved = await resolveApprovedCreative(campaignId, input.contentKey);
     if ('error' in approved) return approved;
 
     const scheduledDate = new Date(input.scheduledFor);
@@ -264,15 +264,15 @@ export class SchedulingService {
       now,
     );
 
-    return { item: this.getById(id, campaignId)! };
+    return { item: (await this.getById(id, campaignId))! };
   }
 
-  update(
+  async update(
     scheduleId: string,
     campaignId: string,
     input: { scheduledFor?: string; timezone?: string; destinationId?: string | null; notes?: string; mediaAssets?: PublishableAsset[] },
-  ): { item: ScheduledContentItem } | SchedulingServiceError {
-    const existing = this.getById(scheduleId, campaignId);
+  ): Promise<{ item: ScheduledContentItem } | SchedulingServiceError> {
+    const existing = await this.getById(scheduleId, campaignId);
     if (!existing) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
     if (existing.status === 'PUBLISHED') return { error: 'Published items cannot be rescheduled.', code: 'ALREADY_PUBLISHED' };
     if (existing.status === 'CANCELLED') return { error: 'Cancelled items cannot be updated.', code: 'SCHEDULE_CANCELLED' };
@@ -299,7 +299,7 @@ export class SchedulingService {
 
     let status = existing.status === 'FAILED' ? 'SCHEDULED' : existing.status;
     let blockReason = existing.blockReason;
-    const artifact = creativeGeneratorService.getById(existing.sourceCreativeArtifactId, campaignId);
+    const artifact = await creativeGeneratorService.getById(existing.sourceCreativeArtifactId, campaignId);
     if (existing.publicationMode === 'DIRECT' && artifact && !hasRequiredPublishableMedia(artifact.contentType, mediaAssets)) {
       status = 'BLOCKED';
       blockReason = 'Visual asset required before direct publishing.';
@@ -325,24 +325,24 @@ export class SchedulingService {
       campaignId,
     );
 
-    return { item: this.getById(scheduleId, campaignId)! };
+    return { item: (await this.getById(scheduleId, campaignId))! };
   }
 
-  updateScheduledVersion(
+  async updateScheduledVersion(
     scheduleId: string,
     campaignId: string,
     creativeArtifactId: string,
-  ): { item: ScheduledContentItem } | SchedulingServiceError {
-    const existing = this.getById(scheduleId, campaignId);
+  ): Promise<{ item: ScheduledContentItem } | SchedulingServiceError> {
+    const existing = await this.getById(scheduleId, campaignId);
     if (!existing) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
     if (existing.status === 'PUBLISHED') return { error: 'Published items cannot change source version.', code: 'ALREADY_PUBLISHED' };
 
-    const artifact = creativeGeneratorService.getById(creativeArtifactId, campaignId);
+    const artifact = await creativeGeneratorService.getById(creativeArtifactId, campaignId);
     if (!artifact || artifact.contentKey !== existing.contentKey) {
       return { error: 'Creative artifact not found for this deliverable.', code: 'NOT_FOUND' };
     }
 
-    const approval = creativeGeneratorService.getApproval(campaignId, existing.contentKey);
+    const approval = await creativeGeneratorService.getApproval(campaignId, existing.contentKey);
     if (!approval || approval.creativeArtifactId !== artifact.id || approval.approvedVersion !== artifact.version) {
       return { error: 'Target creative version is not explicitly approved.', code: 'CREATIVE_NOT_APPROVED' };
     }
@@ -354,11 +354,11 @@ export class SchedulingService {
       WHERE id = ? AND campaign_id = ?
     `).run(artifact.id, artifact.version, now, scheduleId, campaignId);
 
-    return { item: this.getById(scheduleId, campaignId)! };
+    return { item: (await this.getById(scheduleId, campaignId))! };
   }
 
-  cancel(scheduleId: string, campaignId: string): { item: ScheduledContentItem } | SchedulingServiceError {
-    const existing = this.getById(scheduleId, campaignId);
+  async cancel(scheduleId: string, campaignId: string): Promise<{ item: ScheduledContentItem } | SchedulingServiceError> {
+    const existing = await this.getById(scheduleId, campaignId);
     if (!existing) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
     if (existing.status === 'PUBLISHED') return { error: 'Published items cannot be cancelled.', code: 'ALREADY_PUBLISHED' };
 
@@ -369,13 +369,13 @@ export class SchedulingService {
       WHERE id = ? AND campaign_id = ?
     `).run(now, now, scheduleId, campaignId);
 
-    return { item: this.getById(scheduleId, campaignId)! };
+    return { item: (await this.getById(scheduleId, campaignId))! };
   }
 
-  buildExportBundle(scheduleId: string, campaignId: string): PublicationExportBundle | SchedulingServiceError {
-    const schedule = this.getById(scheduleId, campaignId);
+  async buildExportBundle(scheduleId: string, campaignId: string): Promise<PublicationExportBundle | SchedulingServiceError> {
+    const schedule = await this.getById(scheduleId, campaignId);
     if (!schedule) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
-    const artifact = creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
+    const artifact = await creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
     if (!artifact) return { error: 'Source creative not found.', code: 'NOT_FOUND' };
     const campaign = db.prepare('SELECT id, name FROM campaigns WHERE id = ?').get(campaignId) as { id: string; name: string };
 
@@ -399,26 +399,26 @@ export class SchedulingService {
     };
   }
 
-  listForWorkspace(workspaceId: string): ScheduledContentItem[] {
+  async listForWorkspace(workspaceId: string): Promise<ScheduledContentItem[]> {
     const rows = db.prepare(`
       SELECT sci.*, ${HAS_UNKNOWN_ATTEMPT_CASE}
       FROM scheduled_content_items sci
       WHERE sci.workspace_id = ? AND sci.cancelled_at IS NULL
       ORDER BY sci.scheduled_for ASC
     `).all(workspaceId) as (ScheduleRow & { has_unknown_attempt: number })[];
-    return rows.map((row) => mapRow(
+    return Promise.all(rows.map(async (row) => mapRow(
       row,
-      hasNewerUnapprovedRevision(row.campaign_id, row.content_key, row.source_creative_artifact_id),
+      await hasNewerUnapprovedRevision(row.campaign_id, row.content_key, row.source_creative_artifact_id),
       row.has_unknown_attempt === 1,
-    ));
+    )));
   }
 
-  preflight(scheduleId: string, campaignId: string, options?: { manualPublish?: boolean }) {
-    const schedule = this.getById(scheduleId, campaignId);
+  async preflight(scheduleId: string, campaignId: string, options?: { manualPublish?: boolean }) {
+    const schedule = await this.getById(scheduleId, campaignId);
     if (!schedule) return { error: 'Schedule not found.', code: 'NOT_FOUND' } as SchedulingServiceError;
-    const artifact = creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
+    const artifact = await creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
     if (!artifact) return { error: 'Source creative not found.', code: 'NOT_FOUND' } as SchedulingServiceError;
-    return prePublishCheckService.run(schedule, artifact, options);
+    return await prePublishCheckService.run(schedule, artifact, options);
   }
 }
 

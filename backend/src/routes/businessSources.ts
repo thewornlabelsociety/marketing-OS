@@ -213,7 +213,7 @@ businessSourcesRouter.post('/studio/approve-all', async (req, res) => {
       continue;
     }
 
-    const outcome = creativeGeneratorService.approve(campaignId, contentKey, artifactId);
+    const outcome = await creativeGeneratorService.approve(campaignId, contentKey, artifactId);
     if (outcome.error) {
       results.push({ artifactId, contentKey, success: false, error: outcome.error });
     } else {

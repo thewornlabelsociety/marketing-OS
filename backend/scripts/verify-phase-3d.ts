@@ -117,7 +117,7 @@ async function main() {
   // --- Test A ---
   const genNoApproval = await creativeGeneratorService.generateOne(campA, 'launch-reel-01');
   check('A generate without approved content plan rejected', 'error' in genNoApproval && genNoApproval.code === 'CONTENT_PLAN_NOT_APPROVED');
-  check('A no creative persisted', creativeGeneratorService.getCurrent(campA, 'launch-reel-01') === null);
+  check('A no creative persisted', (await creativeGeneratorService.getCurrent(campA, 'launch-reel-01')) === null);
 
   approveContentPlan(campA, wsA, planV1, 1);
   const afterApproval = await creativeGeneratorService.persistFromStructured(campA, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
@@ -131,16 +131,16 @@ async function main() {
   }
 
   // --- Test C ---
-  const beforeCarousel = creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
+  const beforeCarousel = await creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
   const reelOnly = await creativeGeneratorService.persistFromStructured(campA, 'launch-reel-01', REEL_CREATIVE_FIXTURE);
   check('C reel generation path executes', !('error' in reelOnly));
-  check('C carousel untouched', creativeGeneratorService.getCurrent(campA, 'launch-carousel-01') === beforeCarousel);
-  check('C newsletter untouched', creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01') === null);
+  check('C carousel untouched', (await creativeGeneratorService.getCurrent(campA, 'launch-carousel-01'))?.id === beforeCarousel?.id);
+  check('C newsletter untouched', (await creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01')) === null);
 
   // --- Test D ---
   const invalidKey = await creativeGeneratorService.generateOne(campA, 'not-in-approved-plan');
   check('D invalid contentKey rejected', 'error' in invalidKey && invalidKey.code === 'INVALID_CONTENT_KEY');
-  check('D no artifact for invalid key', creativeGeneratorService.getCurrent(campA, 'not-in-approved-plan') === null);
+  check('D no artifact for invalid key', (await creativeGeneratorService.getCurrent(campA, 'not-in-approved-plan')) === null);
 
   // --- Test E ---
   const ctx = await creativeGenerationContextBuilder.build(campA, 'launch-carousel-01');
@@ -167,9 +167,9 @@ async function main() {
   }
 
   // --- Test F ---
-  const priorVersions = creativeGeneratorService.getAllVersions(campA, 'launch-reel-01');
+  const priorVersions = await creativeGeneratorService.getAllVersions(campA, 'launch-reel-01');
   const firstVersion = priorVersions.find((v) => v.version === 1);
-  const priorCurrent = creativeGeneratorService.getCurrent(campA, 'launch-reel-01');
+  const priorCurrent = await creativeGeneratorService.getCurrent(campA, 'launch-reel-01');
   const expectedNextVersion = (priorCurrent?.version ?? 0) + 1;
   const reelV2 = await creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'Stronger hook', {
     ...REEL_CREATIVE_FIXTURE,
@@ -178,50 +178,50 @@ async function main() {
   check('F revision creates next version', !('error' in reelV2));
   if (firstVersion && !('error' in reelV2)) {
     check('F same contentKey', reelV2.artifact.contentKey === 'launch-reel-01');
-    check('F V1 retrievable', creativeGeneratorService.getById(firstVersion.id, campA)?.version === 1);
+    check('F V1 retrievable', (await creativeGeneratorService.getById(firstVersion.id, campA))?.version === 1);
     check('F latest version current', reelV2.artifact.version === expectedNextVersion && reelV2.artifact.isCurrent);
   }
 
   // --- Test G ---
-  const carouselBefore = creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
-  const newsletterBefore = creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01');
+  const carouselBefore = await creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
+  const newsletterBefore = await creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01');
   const reelRevise = await creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'Adjust hook only', REEL_CREATIVE_FIXTURE);
   check('G reel revised', !('error' in reelRevise));
-  check('G carousel unchanged', JSON.stringify(creativeGeneratorService.getCurrent(campA, 'launch-carousel-01')) === JSON.stringify(carouselBefore));
-  check('G newsletter unchanged', creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01') === newsletterBefore);
+  check('G carousel unchanged', JSON.stringify(await creativeGeneratorService.getCurrent(campA, 'launch-carousel-01')) === JSON.stringify(carouselBefore));
+  check('G newsletter unchanged', (await creativeGeneratorService.getCurrent(campA, 'launch-newsletter-01'))?.id === newsletterBefore?.id);
 
   // --- Test H ---
   block('H structured subsection revision with live AI');
 
   // --- Test I ---
-  const carouselCurrent = creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
+  const carouselCurrent = await creativeGeneratorService.getCurrent(campA, 'launch-carousel-01');
   if (carouselCurrent) {
     const v2Carousel = await creativeGeneratorService.reviseFromStructured(campA, 'launch-carousel-01', 'Update slide 5', CAROUSEL_V2_FIXTURE, { targetHint: 'slide 5' });
     check('I V2 carousel created', !('error' in v2Carousel));
-    const v1 = creativeGeneratorService.getAllVersions(campA, 'launch-carousel-01').find((v) => v.version === 1);
+    const v1 = (await creativeGeneratorService.getAllVersions(campA, 'launch-carousel-01')).find((v) => v.version === 1);
     if (v1 && !('error' in v2Carousel)) {
-      const approval = creativeGeneratorService.approve(campA, 'launch-carousel-01', v1.id);
+      const approval = await creativeGeneratorService.approve(campA, 'launch-carousel-01', v1.id);
       check('I approve V1 succeeded', !approval.error);
-      const stored = creativeGeneratorService.getApproval(campA, 'launch-carousel-01');
+      const stored = await creativeGeneratorService.getApproval(campA, 'launch-carousel-01');
       check('I approval references V1', stored?.creativeArtifactId === v1.id && stored?.approvedVersion === 1);
     }
   }
 
   // --- Test J ---
-  const reelForJ = creativeGeneratorService.getCurrent(campA, 'launch-reel-01');
+  const reelForJ = await creativeGeneratorService.getCurrent(campA, 'launch-reel-01');
   if (reelForJ) {
-    creativeGeneratorService.approve(campA, 'launch-reel-01', reelForJ.id);
-    const v1Approval = creativeGeneratorService.getApproval(campA, 'launch-reel-01');
+    await creativeGeneratorService.approve(campA, 'launch-reel-01', reelForJ.id);
+    const v1Approval = await creativeGeneratorService.getApproval(campA, 'launch-reel-01');
     const vNext = await creativeGeneratorService.reviseFromStructured(campA, 'launch-reel-01', 'New hook', {
       ...REEL_CREATIVE_FIXTURE,
       hook: 'A revised hook for testing.',
     });
     check('J V3 revision created', !('error' in vNext));
-    const approvalAfter = creativeGeneratorService.getApproval(campA, 'launch-reel-01');
+    const approvalAfter = await creativeGeneratorService.getApproval(campA, 'launch-reel-01');
     check('J historical approval preserved on record', approvalAfter?.creativeArtifactId === v1Approval?.creativeArtifactId);
-    check('J V3 not auto approved', !creativeGeneratorService.isDeliverableApproved(campA, 'launch-reel-01'));
+    check('J V3 not auto approved', !(await creativeGeneratorService.isDeliverableApproved(campA, 'launch-reel-01')));
     if (!('error' in vNext)) {
-      check('J current version is latest', creativeGeneratorService.getCurrent(campA, 'launch-reel-01')?.version === vNext.artifact.version);
+      check('J current version is latest', (await creativeGeneratorService.getCurrent(campA, 'launch-reel-01'))?.version === vNext.artifact.version);
     }
   }
 
@@ -262,7 +262,7 @@ async function main() {
   approveContentPlan(campB, wsB, planB, 1);
   const genNoAi = await creativeGeneratorService.generateOne(campB, 'launch-reel-01');
   check('L generate without AI unavailable', 'error' in genNoAi && genNoAi.code === 'AI_UNAVAILABLE');
-  check('L no creative on B', creativeGeneratorService.getCurrent(campB, 'launch-reel-01') === null);
+  check('L no creative on B', (await creativeGeneratorService.getCurrent(campB, 'launch-reel-01')) === null);
 
   // --- Test M ---
   if (!('error' in ctx)) {
@@ -286,7 +286,7 @@ async function main() {
     check('N A persisted', !('error' in a));
     check('N B failed', 'error' in b);
     check('N C persisted', !('error' in c));
-    check('N B not falsely persisted', creativeGeneratorService.getCurrent(campA, keys[1]) !== null || 'error' in b);
+    check('N B not falsely persisted', (await creativeGeneratorService.getCurrent(campA, keys[1])) !== null || 'error' in b);
   }
 
   // --- Test O ---
