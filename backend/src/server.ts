@@ -2,6 +2,8 @@ import 'dotenv/config';
 import './integrations/bootstrap';
 import cors from 'cors';
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { initDatabase } from './db/database';
 import { campaignsRouter } from './routes/campaigns';
 import { campaignBriefRouter } from './routes/campaignBrief';
@@ -78,6 +80,15 @@ app.use('/api/repurpose', repurposeRouter);
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'marketing-os-backend' });
 });
+
+// Serve built frontend in production (single-port deployment)
+const FRONTEND_DIST = path.resolve(__dirname, '../../frontend/dist');
+if (fs.existsSync(FRONTEND_DIST)) {
+  app.use(express.static(FRONTEND_DIST));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 4100;
 app.listen(PORT, () => {
