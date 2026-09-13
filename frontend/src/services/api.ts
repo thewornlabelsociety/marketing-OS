@@ -103,9 +103,9 @@ export const api = {
       body: JSON.stringify({ workspaceId, recommendationId }),
     }),
   // Recommendations
-  getRecommendations: () =>
-    request<{ recommendations: Array<Record<string, unknown>> }>('/recommendations'),
-  generateRecommendations: () =>
+  getRecommendations: (workspaceId: string) =>
+    request<{ recommendations: Array<Record<string, unknown>> }>(`/recommendations?workspaceId=${encodeURIComponent(workspaceId)}`),
+  generateRecommendations: (workspaceId: string) =>
     request<{
       recommendations: Array<Record<string, unknown>>;
       generationSource: string;
@@ -114,9 +114,9 @@ export const api = {
       expiredCount: number;
       cached: boolean;
       nextAllowedAt?: string;
-    }>('/recommendations/generate', { method: 'POST' }),
-  dismissRecommendation: (id: string) =>
-    request<{ success: boolean; id: string }>(`/recommendations/${encodeURIComponent(id)}/dismiss`, { method: 'POST' }),
+    }>('/recommendations/generate', { method: 'POST', body: JSON.stringify({ workspaceId }) }),
+  dismissRecommendation: (id: string, workspaceId: string) =>
+    request<{ success: boolean; id: string }>(`/recommendations/${encodeURIComponent(id)}/dismiss`, { method: 'POST', body: JSON.stringify({ workspaceId }) }),
   approveWholeSet: (workspaceId: string, campaignId: string, artifacts: Array<{ artifactId: string; contentKey: string }>) =>
     request<{ results: Array<{ artifactId: string; contentKey: string; success: boolean; error?: string }> }>(
       '/business-sources/studio/approve-all',

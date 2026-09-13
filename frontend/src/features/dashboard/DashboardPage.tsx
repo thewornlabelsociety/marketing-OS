@@ -19,21 +19,21 @@ export default function DashboardPage() {
   // Mount: GET persisted recommendations only — zero AI calls, zero generation side effects
   useEffect(() => {
     if (!workspaceId) return;
-    void api.getRecommendations().then(r => { setRecommendations((r.recommendations ?? []) as unknown as RecommendationItem[]); }).catch(() => {});
+    void api.getRecommendations(workspaceId).then(r => { setRecommendations((r.recommendations ?? []) as unknown as RecommendationItem[]); }).catch(() => {});
   }, [workspaceId]);
   // Explicit operator action only — POST /generate triggers AI generation
   const generateRecs = useCallback(async () => {
     if (recsLoading) return;
     setRecsLoading(true);
     try {
-      const r = await api.generateRecommendations();
+      const r = await api.generateRecommendations(workspaceId);
       setRecommendations((r.recommendations ?? []) as unknown as RecommendationItem[]);
     } catch { /* generation failures are silent — operator can retry */ }
     finally { setRecsLoading(false); }
   }, [recsLoading]);
   const navigate = (target: string) => { const [kind,id,section] = target.split(':'); if (kind === 'campaign') { setActiveCampaignId(id); if (section) sessionStorage.setItem('campaignDetailTab',section); setActiveTab('campaign-detail'); } else if (kind === 'library') setActiveTab('learn'); };
   const dismiss = async (id:string) => { await api.dismissAttentionSignal(id,workspaceId); await load(); };
-  const dismissRec = async (id: string) => { await api.dismissRecommendation(id); setRecommendations(prev => prev.filter(r => r.id !== id)); };
+  const dismissRec = async (id: string) => { await api.dismissRecommendation(id, workspaceId); setRecommendations(prev => prev.filter(r => r.id !== id)); };
   const launchRec = (rec: RecommendationItem) => {
     const seed: RecommendationSeed = { recommendationId: rec.id, recommendationType: rec.recommendationType, sourceProductIds: rec.sourceProductIds, contentType: rec.contentType, title: rec.title, hook: rec.hook, angle: rec.angle, cta: rec.cta, talkingPoints: rec.talkingPoints };
     launchFromRecommendation(seed);
