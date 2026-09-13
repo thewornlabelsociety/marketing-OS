@@ -349,10 +349,10 @@ export default function InstagramGridPlannerPage() {
 
   const handleDismiss = useCallback(async (id: string) => {
     try {
-      await api.dismissRecommendation(id);
+      await api.dismissRecommendation(id, workspaceId);
       setPlan(prev => prev ? { ...prev, proposedNext: prev.proposedNext.filter(i => i.id !== id) } : prev);
     } catch { /* silent */ }
-  }, []);
+  }, [workspaceId]);
 
   const channelDisabled = plan && !plan.channelStrategy.enabled;
 
