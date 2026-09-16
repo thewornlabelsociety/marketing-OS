@@ -20,17 +20,17 @@ function statusFor(code?: string): number {
 
 export const libraryRouter = Router();
 
-libraryRouter.get('/summary', (req: Request, res: Response) => {
+libraryRouter.get('/summary', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  res.json(campaignLibraryService.getSummary(workspaceId));
+  res.json(await campaignLibraryService.getSummary(workspaceId));
 });
 
-libraryRouter.get('/campaigns', (req: Request, res: Response) => {
+libraryRouter.get('/campaigns', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const q = req.query as Record<string, string | undefined>;
-  res.json(campaignLibraryService.list(workspaceId, {
+  res.json(await campaignLibraryService.list(workspaceId, {
     classification: q.classification as CampaignLibraryClassification | undefined,
     search: q.search,
     includeArchived: q.includeArchived === 'true' || q.filter === 'ARCHIVED',
@@ -38,15 +38,15 @@ libraryRouter.get('/campaigns', (req: Request, res: Response) => {
   }));
 });
 
-libraryRouter.get('/campaigns/:campaignId', (req: Request, res: Response) => {
+libraryRouter.get('/campaigns/:campaignId', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  const result = campaignLibraryService.get(req.params.campaignId, workspaceId);
+  const result = await campaignLibraryService.get(req.params.campaignId, workspaceId);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-libraryRouter.patch('/campaigns/:campaignId', (req: Request, res: Response) => {
+libraryRouter.patch('/campaigns/:campaignId', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as { notes?: string };
@@ -55,59 +55,59 @@ libraryRouter.patch('/campaigns/:campaignId', (req: Request, res: Response) => {
     const now = new Date().toISOString();
     db.prepare('UPDATE campaign_library_records SET notes = ?, updated_at = ? WHERE id = ?').run(body.notes, now, record.id);
   }
-  const updated = campaignLibraryService.get(req.params.campaignId, workspaceId);
+  const updated = await campaignLibraryService.get(req.params.campaignId, workspaceId);
   if ('error' in updated) { res.status(statusFor(updated.code)).json(updated); return; }
   res.json(updated);
 });
 
-libraryRouter.post('/campaigns/:campaignId/archive', (req: Request, res: Response) => {
+libraryRouter.post('/campaigns/:campaignId/archive', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  const result = campaignLibraryService.archive(req.params.campaignId, workspaceId);
+  const result = await campaignLibraryService.archive(req.params.campaignId, workspaceId);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-libraryRouter.post('/campaigns/:campaignId/restore', (req: Request, res: Response) => {
+libraryRouter.post('/campaigns/:campaignId/restore', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  const result = campaignLibraryService.restore(req.params.campaignId, workspaceId);
+  const result = await campaignLibraryService.restore(req.params.campaignId, workspaceId);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-libraryRouter.post('/campaigns/:campaignId/evergreen', (req: Request, res: Response) => {
+libraryRouter.post('/campaigns/:campaignId/evergreen', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as { notes?: string };
-  const result = campaignLibraryService.markEvergreen(req.params.campaignId, workspaceId, body.notes);
+  const result = await campaignLibraryService.markEvergreen(req.params.campaignId, workspaceId, body.notes);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-libraryRouter.post('/campaigns/:campaignId/seasonal', (req: Request, res: Response) => {
+libraryRouter.post('/campaigns/:campaignId/seasonal', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as { season?: string; recurringWindow?: string; notes?: string };
-  const result = campaignLibraryService.markSeasonal(req.params.campaignId, workspaceId, body);
+  const result = await campaignLibraryService.markSeasonal(req.params.campaignId, workspaceId, body);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-libraryRouter.post('/campaigns/:campaignId/cancel-metadata', (req: Request, res: Response) => {
+libraryRouter.post('/campaigns/:campaignId/cancel-metadata', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as { reasonType: string; notes?: string };
-  const result = campaignLibraryService.setCancellationMetadata(req.params.campaignId, workspaceId, body);
+  const result = await campaignLibraryService.setCancellationMetadata(req.params.campaignId, workspaceId, body);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-libraryRouter.post('/campaigns/:campaignId/blueprint', (req: Request, res: Response) => {
+libraryRouter.post('/campaigns/:campaignId/blueprint', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as { name?: string };
-  const result = blueprintService.createFromCampaign(req.params.campaignId, workspaceId, body.name);
+  const result = await blueprintService.createFromCampaign(req.params.campaignId, workspaceId, body.name);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.status(201).json(result);
 });

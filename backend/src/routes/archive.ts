@@ -6,14 +6,14 @@ import type { CampaignLibraryClassification } from '../types/library';
 // Full library CRUD is at /api/library/*
 export const archiveRouter = Router();
 
-archiveRouter.get('/campaigns', (req: Request, res: Response) => {
+archiveRouter.get('/campaigns', async (req: Request, res: Response) => {
   const q = req.query as Record<string, string | undefined>;
   if (!q.workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
 
-  const entries = campaignLibraryService.list(q.workspaceId, {
+  const entries = await campaignLibraryService.list(q.workspaceId, {
     classification: q.classification as CampaignLibraryClassification | undefined,
     search: q.search,
     includeArchived: q.includeArchived === 'true',

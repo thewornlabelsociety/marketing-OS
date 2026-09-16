@@ -59,6 +59,7 @@ export function mapPostgresCampaignRow(row: Record<string, unknown>): CampaignRo
     completed_at: row.completed_at == null ? null : normalizeTimestamp(row.completed_at),
     created_at: normalizeTimestamp(row.created_at),
     updated_at: normalizeTimestamp(row.updated_at),
+    recommendation_id: row.recommendation_id == null ? null : String(row.recommendation_id),
     objective_name: row.objective_name == null ? undefined : String(row.objective_name),
     objective_primary_kpi: row.objective_primary_kpi == null ? undefined : String(row.objective_primary_kpi),
   };

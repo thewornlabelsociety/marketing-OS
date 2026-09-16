@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import type { MarketingChannel } from '../../types/channels';
 import type {
   AttributionResult,
@@ -136,8 +137,8 @@ function mapConversionRow(row: ConversionRow): ConversionEvent {
 }
 
 export class PerformanceIngestionService {
-  createObservation(input: CreateObservationInput): { observation?: PerformanceObservation; error?: string; code?: string } {
-    const campaign = db.prepare('SELECT workspace_id FROM campaigns WHERE id = ?').get(input.campaignId) as { workspace_id: string } | undefined;
+  async createObservation(input: CreateObservationInput): Promise<{ observation?: PerformanceObservation; error?: string; code?: string }> {
+    const campaign = await getCoreRepositories().campaign.findById(input.campaignId);
     if (!campaign) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (campaign.workspace_id !== input.workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
@@ -178,8 +179,8 @@ export class PerformanceIngestionService {
     return { observation: mapObservationRow(row) };
   }
 
-  listObservations(campaignId: string, workspaceId: string): PerformanceObservation[] | { error: string; code: string } {
-    const campaign = db.prepare('SELECT workspace_id FROM campaigns WHERE id = ?').get(campaignId) as { workspace_id: string } | undefined;
+  async listObservations(campaignId: string, workspaceId: string): Promise<PerformanceObservation[] | { error: string; code: string }> {
+    const campaign = await getCoreRepositories().campaign.findById(campaignId);
     if (!campaign) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
@@ -189,8 +190,8 @@ export class PerformanceIngestionService {
     return rows.map(mapObservationRow);
   }
 
-  createConversion(input: CreateConversionInput): { conversion?: ConversionEvent; error?: string; code?: string } {
-    const campaign = db.prepare('SELECT workspace_id FROM campaigns WHERE id = ?').get(input.campaignId) as { workspace_id: string } | undefined;
+  async createConversion(input: CreateConversionInput): Promise<{ conversion?: ConversionEvent; error?: string; code?: string }> {
+    const campaign = await getCoreRepositories().campaign.findById(input.campaignId);
     if (!campaign) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (campaign.workspace_id !== input.workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
@@ -233,8 +234,8 @@ export class PerformanceIngestionService {
     return { conversion: mapConversionRow(row) };
   }
 
-  listConversions(campaignId: string, workspaceId: string): ConversionEvent[] | { error: string; code: string } {
-    const campaign = db.prepare('SELECT workspace_id FROM campaigns WHERE id = ?').get(campaignId) as { workspace_id: string } | undefined;
+  async listConversions(campaignId: string, workspaceId: string): Promise<ConversionEvent[] | { error: string; code: string }> {
+    const campaign = await getCoreRepositories().campaign.findById(campaignId);
     if (!campaign) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 

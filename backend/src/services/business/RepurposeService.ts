@@ -4,6 +4,7 @@ import { aiOrchestrator } from '../intelligence/AIOrchestrator';
 import { aiEnv } from '../../config/aiEnvironment';
 import { CREATIVE_DESTINATIONS } from '../../types/studioDestinations';
 import type { MarketingScope } from '../../types/marketing';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,25 +31,6 @@ export interface RepurposeResult {
   sourceArtifactId: string;
   status: 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'IN_PROGRESS';
   results: DestinationResult[];
-}
-
-interface ArtifactRow {
-  id: string;
-  workspace_id: string;
-  campaign_id: string;
-  source_content_plan_id: string;
-  source_content_plan_version: number;
-  content_key: string;
-  deliverable_id: string;
-  version: number;
-  channel: string;
-  content_type: string;
-  format: string;
-  title: string | null;
-  content: string;
-  quality: string;
-  status: string;
-  marketing_scope: string | null;
 }
 
 interface RepurposeRequestRow {
@@ -82,10 +64,13 @@ function contentKeyAbbrev(channel: string, contentType: string): string {
   return map[`${channel}/${contentType}`] ?? `${channel.toLowerCase()}-${contentType.toLowerCase()}`;
 }
 
-function resolveScopes(sourceArtifact: ArtifactRow): MarketingScope[] {
-  const campaign = db.prepare('SELECT recommendation_id FROM campaigns WHERE id = ?').get(sourceArtifact.campaign_id) as { recommendation_id: string | null } | undefined;
-  if (campaign?.recommendation_id) {
-    const rec = db.prepare('SELECT marketing_scopes_json FROM marketing_recommendations WHERE id = ?').get(campaign.recommendation_id) as { marketing_scopes_json: string } | undefined;
+// Accepts pre-fetched recommendationId and artifact's marketing scope
+function resolveScopes(
+  recommendationId: string | null | undefined,
+  artifactMarketingScope: string | null | undefined,
+): MarketingScope[] {
+  if (recommendationId) {
+    const rec = db.prepare('SELECT marketing_scopes_json FROM marketing_recommendations WHERE id = ?').get(recommendationId) as { marketing_scopes_json: string } | undefined;
     if (rec?.marketing_scopes_json) {
       try {
         const parsed = JSON.parse(rec.marketing_scopes_json) as string[];
@@ -93,7 +78,7 @@ function resolveScopes(sourceArtifact: ArtifactRow): MarketingScope[] {
       } catch { /* ignore */ }
     }
   }
-  if (sourceArtifact.marketing_scope) return [sourceArtifact.marketing_scope as MarketingScope];
+  if (artifactMarketingScope) return [artifactMarketingScope as MarketingScope];
   return [];
 }
 
@@ -109,20 +94,23 @@ interface BoundedSummary {
   cta: string | null;
 }
 
-function buildBoundedSummary(artifact: ArtifactRow): BoundedSummary {
+// Accepts pre-fetched campaignName and content as string
+function buildBoundedSummary(
+  channel: string,
+  contentType: string,
+  contentJson: string,
+  campaignName: string,
+): BoundedSummary {
   const channelLabel: Record<string, string> = {
     INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook', EMAIL: 'Email', TIKTOK: 'TikTok',
   };
   const typeLabel: Record<string, string> = {
     STATIC_POST: 'Post', CAROUSEL: 'Carousel', STORY: 'Story', EMAIL: 'Email', TALKING_POINTS: 'Concept',
   };
-  const sourceLabel = `${channelLabel[artifact.channel] ?? artifact.channel} ${typeLabel[artifact.content_type] ?? artifact.content_type}`;
-
-  const campaign = db.prepare('SELECT name FROM campaigns WHERE id = ?').get(artifact.campaign_id) as { name: string } | undefined;
-  const campaignName = campaign?.name ?? 'Unknown Campaign';
+  const sourceLabel = `${channelLabel[channel] ?? channel} ${typeLabel[contentType] ?? contentType}`;
 
   let parsed: Record<string, unknown>;
-  try { parsed = JSON.parse(artifact.content) as Record<string, unknown>; }
+  try { parsed = JSON.parse(contentJson) as Record<string, unknown>; }
   catch { return { sourceLabel, campaignName, hook: null, caption: null, headline: null, contentElements: [], cta: null }; }
 
   const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
@@ -237,20 +225,6 @@ function validateContent(parsed: unknown, contentType: string): string | null {
   }
 }
 
-// ─── Child artifact lookup ────────────────────────────────────────────────────
-
-function getExistingChildren(requestId: string): Map<string, { artifactId: string; contentKey: string; contentType: string; channel: string }> {
-  const rows = db.prepare(
-    'SELECT id, content_key, content_type, channel FROM creative_artifacts WHERE repurpose_request_id = ?'
-  ).all(requestId) as Array<{ id: string; content_key: string; content_type: string; channel: string }>;
-  const map = new Map<string, { artifactId: string; contentKey: string; contentType: string; channel: string }>();
-  for (const row of rows) {
-    const dest = CREATIVE_DESTINATIONS.find(d => d.channel === row.channel && d.contentType === row.content_type);
-    if (dest) map.set(dest.label, { artifactId: row.id, contentKey: row.content_key, contentType: row.content_type, channel: row.channel });
-  }
-  return map;
-}
-
 // ─── RepurposeService ─────────────────────────────────────────────────────────
 
 class RepurposeService {
@@ -270,17 +244,22 @@ class RepurposeService {
     const invalidLabels = destinations.filter((_, i) => !resolvedDests[i]);
     if (invalidLabels.length) return { error: `Unknown destination labels: ${invalidLabels.join(', ')}`, code: 'BAD_REQUEST' };
 
-    // Fetch source artifact
-    const sourceArtifact = db.prepare(
-      'SELECT * FROM creative_artifacts WHERE id = ? AND workspace_id = ?'
-    ).get(sourceArtifactId, workspaceId) as ArtifactRow | undefined;
+    const repos = getCoreRepositories();
+
+    // Fetch source artifact via repository
+    const sourceArtifact = await repos.creative.artifact.findByIdForWorkspace(sourceArtifactId, workspaceId);
     if (!sourceArtifact) return { error: 'Source artifact not found', code: 'NOT_FOUND' };
+
+    // Fetch campaign for recommendation_id and name
+    const campaign = await repos.campaign.findById(sourceArtifact.campaignId);
+    const campaignName = campaign?.name ?? 'Unknown Campaign';
+    const recommendationId = campaign?.recommendation_id ?? null;
 
     const requestHash = buildRequestHash(sourceArtifactId, destinations);
     const now = new Date().toISOString();
     const requestId = `rpr_${randomUUID()}`;
 
-    // Atomic reservation — claim before any AI work
+    // Atomic reservation — claim before any AI work (repurpose_requests is non-core)
     const insertStmt = db.prepare(`
       INSERT OR IGNORE INTO repurpose_requests
         (id, workspace_id, source_artifact_id, idempotency_key, request_hash, status, created_at, updated_at)
@@ -305,10 +284,15 @@ class RepurposeService {
         return { requestId: existing.id, sourceArtifactId, status: 'IN_PROGRESS', results: [] };
       }
 
-      // COMPLETED or PARTIAL — return existing children
-      const children = getExistingChildren(existing.id);
+      // COMPLETED or PARTIAL — return existing children via repository
+      const childRows = await repos.creative.artifact.findByRepurposeRequestId(existing.id);
+      const childMap = new Map<string, { artifactId: string; contentKey: string }>();
+      for (const row of childRows) {
+        const dest = CREATIVE_DESTINATIONS.find(d => d.channel === row.channel && d.contentType === row.contentType);
+        if (dest) childMap.set(dest.label, { artifactId: row.id, contentKey: row.contentKey });
+      }
       const results: DestinationResult[] = destinations.map(label => {
-        const child = children.get(label);
+        const child = childMap.get(label);
         if (child) return { destination: label, status: 'ALREADY_COMPLETED', artifactId: child.artifactId, contentKey: child.contentKey };
         return { destination: label, status: 'AI_FAILED', error: 'Destination failed in original request' };
       });
@@ -316,8 +300,9 @@ class RepurposeService {
     }
 
     // We are the claimant — proceed with generation
-    const scopes = resolveScopes(sourceArtifact);
-    const summary = buildBoundedSummary(sourceArtifact);
+    const scopes = resolveScopes(recommendationId, sourceArtifact.marketingScope);
+    const contentJson = JSON.stringify(sourceArtifact.content);
+    const summary = buildBoundedSummary(sourceArtifact.channel, sourceArtifact.contentType, contentJson, campaignName);
     const results: DestinationResult[] = [];
 
     for (const dest of resolvedDests) {
@@ -336,7 +321,7 @@ class RepurposeService {
           knowledgeDomains: ['BRAND_CORE', 'VOICE'],
           systemPrompt: REPURPOSE_SYSTEM,
           userPrompt: buildRepurposePrompt(summary, dest.channel, dest.contentType),
-          campaignId: sourceArtifact.campaign_id,
+          campaignId: sourceArtifact.campaignId,
           // artifactId omitted — child artifact is not yet persisted when this call is made;
           // passing childId here would cause a FK violation in the usage ledger.
         });
@@ -363,52 +348,33 @@ class RepurposeService {
         continue;
       }
 
-      // Persist artifact + derivation + source_links
+      // Persist via repository
       try {
         const childNow = new Date().toISOString();
         const quality = JSON.stringify({ passed: true, checks: [], warnings: [] });
-        // All artifacts that reach this point were generated by AI — the catch block above
-        // handles AI failures before we ever get here.
         const usedProvider = aiEnv.provider ?? null;
         const usedModel = aiEnv.campaignModel || null;
 
-        db.prepare(`
-          INSERT INTO creative_artifacts
-            (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
-             content_key, deliverable_id, version, channel, content_type, format, title,
-             content, quality, status, is_current, repurpose_request_id, marketing_scopes_json,
-             ai_generated, ai_provider, ai_model, ai_task_type,
-             created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'READY_FOR_REVIEW', 1, ?, ?, 1, ?, ?, 'CONTENT_REPURPOSE', ?, ?)
-        `).run(
-          childId, workspaceId, sourceArtifact.campaign_id,
-          sourceArtifact.source_content_plan_id, sourceArtifact.source_content_plan_version,
-          contentKey, deliverableId,
-          dest.channel, dest.contentType, dest.format,
-          dest.label,
-          JSON.stringify(parsed), quality,
-          requestId,
-          scopes.length ? JSON.stringify(scopes) : null,
-          usedProvider, usedModel,
-          childNow, childNow,
-        );
+        await repos.creative.artifact.insert({
+          id: childId, workspaceId, campaignId: sourceArtifact.campaignId,
+          sourceContentPlanId: sourceArtifact.sourceContentPlanId,
+          sourceContentPlanVersion: sourceArtifact.sourceContentPlanVersion,
+          contentKey, deliverableId, version: 1, status: 'READY_FOR_REVIEW',
+          channel: dest.channel, contentType: dest.contentType, format: dest.format,
+          title: dest.label,
+          content: JSON.stringify(parsed), quality,
+          repurposeRequestId: requestId,
+          marketingScopesJson: scopes.length ? JSON.stringify(scopes) : null,
+          aiGenerated: true,
+          aiProvider: usedProvider,
+          aiModel: usedModel,
+          aiTaskType: 'CONTENT_REPURPOSE',
+          createdAt: childNow, updatedAt: childNow,
+        });
 
-        // Record derivation lineage
-        db.prepare(`
-          INSERT INTO creative_derivations (parent_artifact_id, child_artifact_id, relationship, created_at)
-          VALUES (?, ?, 'REPURPOSED_FROM', ?)
-        `).run(sourceArtifact.id, childId, childNow);
+        await repos.creative.derivation.insert(sourceArtifact.id, childId, 'REPURPOSED_FROM', childNow);
 
-        // Copy source record links from parent to child
-        const parentLinks = db.prepare(
-          'SELECT source_record_id, position FROM creative_source_links WHERE creative_artifact_id = ?'
-        ).all(sourceArtifact.id) as Array<{ source_record_id: string; position: number }>;
-        for (const link of parentLinks) {
-          db.prepare(`
-            INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at)
-            VALUES (?, ?, ?, ?)
-          `).run(childId, link.source_record_id, link.position, childNow);
-        }
+        await repos.creative.sourceLink.copyFromParent(sourceArtifact.id, childId, childNow);
 
         results.push({ destination: dest.label, status: 'SUCCEEDED', artifactId: childId, contentKey });
       } catch (err) {
@@ -416,7 +382,7 @@ class RepurposeService {
       }
     }
 
-    // Determine overall status and update reservation
+    // Determine overall status and update reservation (repurpose_requests is non-core)
     const succeeded = results.filter(r => r.status === 'SUCCEEDED').length;
     const failed = results.filter(r => r.status !== 'SUCCEEDED').length;
     const overallStatus: RepurposeResult['status'] =
@@ -430,12 +396,18 @@ class RepurposeService {
     return { requestId, sourceArtifactId, status: overallStatus, results };
   }
 
-  getSourceSummary(workspaceId: string, artifactId: string): { artifact: ArtifactRow; summary: BoundedSummary } | { error: string; code: string } {
-    const artifact = db.prepare(
-      'SELECT * FROM creative_artifacts WHERE id = ? AND workspace_id = ?'
-    ).get(artifactId, workspaceId) as ArtifactRow | undefined;
+  async getSourceSummary(workspaceId: string, artifactId: string): Promise<{ artifact: { id: string; channel: string; contentType: string; content: unknown }; summary: BoundedSummary } | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const artifact = await repos.creative.artifact.findByIdForWorkspace(artifactId, workspaceId);
     if (!artifact) return { error: 'Artifact not found', code: 'NOT_FOUND' };
-    return { artifact, summary: buildBoundedSummary(artifact) };
+    const campaign = await repos.campaign.findById(artifact.campaignId);
+    const campaignName = campaign?.name ?? 'Unknown Campaign';
+    const contentJson = JSON.stringify(artifact.content);
+    const summary = buildBoundedSummary(artifact.channel, artifact.contentType, contentJson, campaignName);
+    return {
+      artifact: { id: artifact.id, channel: artifact.channel, contentType: artifact.contentType, content: artifact.content },
+      summary,
+    };
   }
 }
 

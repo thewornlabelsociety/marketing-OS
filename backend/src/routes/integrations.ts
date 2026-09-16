@@ -28,13 +28,13 @@ integrationsRouter.get('/meta/status', (req: Request, res: Response) => {
   });
 });
 
-integrationsRouter.post('/meta/connect', (req: Request, res: Response) => {
+integrationsRouter.post('/meta/connect', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  const result = integrationConnectionService.getMetaConnectUrl(workspaceId);
+  const result = await integrationConnectionService.getMetaConnectUrl(workspaceId);
   if ('error' in result) {
     res.status(400).json(result);
     return;

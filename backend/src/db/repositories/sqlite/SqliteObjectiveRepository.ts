@@ -30,6 +30,20 @@ export class SqliteObjectiveRepository implements ObjectiveRepository {
     return row ?? null;
   }
 
+  async findDefaultByType(objectiveType: string, workspaceId: string): Promise<ObjectiveRow | null> {
+    const row = db
+      .prepare('SELECT * FROM objectives WHERE objective_type = ? AND (workspace_id IS NULL OR workspace_id = ?) AND is_active = 1 LIMIT 1')
+      .get(objectiveType, workspaceId) as ObjectiveRow | undefined;
+    return row ?? null;
+  }
+
+  async findSystemDefault(): Promise<ObjectiveRow | null> {
+    const row = db
+      .prepare('SELECT * FROM objectives WHERE workspace_id IS NULL AND is_active = 1 ORDER BY name ASC LIMIT 1')
+      .get() as ObjectiveRow | undefined;
+    return row ?? null;
+  }
+
   async create(input: ObjectiveCreateInput): Promise<ObjectiveRow> {
     db.prepare(
       `INSERT INTO objectives

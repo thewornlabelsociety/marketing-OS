@@ -21,13 +21,13 @@ repurposeRouter.get('/destinations', (req, res) => {
 });
 
 // GET /api/repurpose/source/:artifactId
-repurposeRouter.get('/source/:artifactId', (req, res) => {
+repurposeRouter.get('/source/:artifactId', async (req, res) => {
   const { workspaceId } = req.query as { workspaceId?: string };
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  const result = repurposeService.getSourceSummary(workspaceId, req.params.artifactId);
+  const result = await repurposeService.getSourceSummary(workspaceId, req.params.artifactId);
   if ('error' in result) {
     res.status(result.code === 'NOT_FOUND' ? 404 : 400).json({ error: result.error });
     return;
@@ -35,12 +35,9 @@ repurposeRouter.get('/source/:artifactId', (req, res) => {
   const { artifact, summary } = result;
   res.json({
     id: artifact.id,
-    campaignId: artifact.campaign_id,
     channel: artifact.channel,
-    contentType: artifact.content_type,
-    format: artifact.format,
-    title: artifact.title,
-    status: artifact.status,
+    contentType: artifact.contentType,
+    content: artifact.content,
     summary,
   });
 });

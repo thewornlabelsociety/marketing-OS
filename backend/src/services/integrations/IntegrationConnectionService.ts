@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import type {
   IntegrationConnectionRecord,
   IntegrationConnectionStatus,
@@ -81,9 +82,9 @@ export class IntegrationConnectionService {
     return row ? publicConnection(row) : null;
   }
 
-  getMetaConnectUrl(workspaceId: string): { authUrl: string; state: string } | { error: string; code: string } {
-    const workspace = db.prepare('SELECT id FROM entities WHERE id = ?').get(workspaceId);
-    if (!workspace) return { error: 'Workspace not found', code: 'NOT_FOUND' };
+  async getMetaConnectUrl(workspaceId: string): Promise<{ authUrl: string; state: string } | { error: string; code: string }> {
+    const exists = await getCoreRepositories().workspace.exists(workspaceId);
+    if (!exists) return { error: 'Workspace not found', code: 'NOT_FOUND' };
 
     const state = oauthStateService.create(workspaceId, 'meta');
     if (isMetaMockMode()) {

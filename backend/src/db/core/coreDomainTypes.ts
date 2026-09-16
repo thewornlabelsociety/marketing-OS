@@ -56,6 +56,7 @@ export interface CampaignCreateInput {
   channels: string[];
   createdAt: string;
   updatedAt: string;
+  recommendationId?: string | null;
 }
 
 export interface CampaignPatchInput {
@@ -80,6 +81,8 @@ import type { CreativeRepositories } from './creativeDomainTypes';
 export interface CampaignListFilters {
   workspaceId?: string;
   status?: string;
+  statusIn?: string[];
+  statusNotIn?: string[];
 }
 
 export interface CampaignStatusUpdateOptions {
@@ -106,6 +109,8 @@ export interface ObjectiveRepository {
   listForWorkspace(workspaceId: string): Promise<ObjectiveRow[]>;
   findById(id: string): Promise<ObjectiveRow | null>;
   findForCampaignValidation(id: string): Promise<ObjectiveRow | null>;
+  findDefaultByType(objectiveType: string, workspaceId: string): Promise<ObjectiveRow | null>;
+  findSystemDefault(): Promise<ObjectiveRow | null>;
   create(input: ObjectiveCreateInput): Promise<ObjectiveRow>;
   patch(id: string, patch: ObjectivePatchInput, updatedAt: string): Promise<ObjectiveRow | null>;
   deleteById(id: string): Promise<boolean>;
@@ -116,6 +121,7 @@ export interface CampaignRepository {
   findByIdWithObjective(id: string): Promise<CampaignRow | null>;
   findById(id: string): Promise<CampaignRow | null>;
   findByIdForWorkspace(id: string, workspaceId: string): Promise<CampaignRow | null>;
+  countActive(workspaceId: string, excludeStatuses: string[]): Promise<number>;
   create(input: CampaignCreateInput): Promise<CampaignRow>;
   patch(id: string, patch: CampaignPatchInput, updatedAt: string): Promise<CampaignRow | null>;
   updateStatus(

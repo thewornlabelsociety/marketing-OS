@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
-import type { CampaignRow } from '../../types';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import type {
   CampaignLibraryClassification,
   CampaignLibraryRecord,
@@ -62,9 +62,10 @@ export class CampaignLibraryService {
     return mapRow(db.prepare('SELECT * FROM campaign_library_records WHERE campaign_id = ?').get(campaignId) as LibraryRow);
   }
 
-  syncClassifications(campaignId: string, workspaceId: string): CampaignLibraryRecord {
+  async syncClassifications(campaignId: string, workspaceId: string): Promise<CampaignLibraryRecord> {
     const record = this.ensureRecord(campaignId, workspaceId);
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId) as CampaignRow | undefined;
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign || campaign.workspace_id !== workspaceId) return record;
 
     const classifications = new Set<CampaignLibraryClassification>(record.classifications);
@@ -86,7 +87,7 @@ export class CampaignLibraryService {
       }
     }
 
-    const perfSummary = campaignPerformanceService.getSummary(campaignId, workspaceId);
+    const perfSummary = await campaignPerformanceService.getSummary(campaignId, workspaceId);
     let blueprintCandidate = false;
     if (!('error' in perfSummary)) {
       blueprintCandidate = Boolean(
@@ -108,43 +109,41 @@ export class CampaignLibraryService {
     return mapRow(db.prepare('SELECT * FROM campaign_library_records WHERE campaign_id = ?').get(campaignId) as LibraryRow);
   }
 
-  list(workspaceId: string, filters?: {
+  async list(workspaceId: string, filters?: {
     classification?: CampaignLibraryClassification;
     search?: string;
     includeArchived?: boolean;
     sort?: 'newest' | 'oldest' | 'best';
-  }): LibraryCampaignSummary[] {
-    const campaigns = db.prepare(`
-      SELECT c.*, o.name as objective_name, o.objective_type, o.primary_kpi
-      FROM campaigns c
-      JOIN objectives o ON o.id = c.objective_id
-      WHERE c.workspace_id = ?
-        AND c.status IN ('COMPLETE', 'CANCELLED', 'ARCHIVED', 'PUBLISHED', 'MEASURING')
-      ORDER BY c.updated_at DESC
-    `).all(workspaceId) as Array<CampaignRow & { objective_name: string; objective_type: string; primary_kpi: string }>;
+  }): Promise<LibraryCampaignSummary[]> {
+    const repos = getCoreRepositories();
+    const campaigns = await repos.campaign.list({
+      workspaceId,
+      statusIn: ['COMPLETE', 'CANCELLED', 'ARCHIVED', 'PUBLISHED', 'MEASURING'],
+    });
 
     const results: LibraryCampaignSummary[] = [];
 
     for (const c of campaigns) {
-      const record = this.syncClassifications(c.id, workspaceId);
+      const record = await this.syncClassifications(c.id, workspaceId);
       if (!filters?.includeArchived && record.archivedAt) continue;
-
       if (filters?.classification && !record.classifications.includes(filters.classification)) continue;
+
+      const objective = await repos.objective.findById(c.objective_id);
 
       const search = filters?.search?.toLowerCase();
       if (search) {
-        const haystack = `${c.name} ${c.source_title} ${c.objective_name} ${record.notes ?? ''}`.toLowerCase();
+        const haystack = `${c.name} ${c.source_title ?? ''} ${objective?.name ?? ''} ${record.notes ?? ''}`.toLowerCase();
         if (!haystack.includes(search)) continue;
       }
 
-      const perf = campaignPerformanceService.getSummary(c.id, workspaceId);
+      const perf = await campaignPerformanceService.getSummary(c.id, workspaceId);
       results.push({
         libraryRecord: record,
         campaignId: c.id,
         campaignName: c.name,
-        objectiveType: c.objective_type,
-        objectiveName: c.objective_name,
-        primaryKpi: c.primary_kpi,
+        objectiveType: objective?.objective_type ?? '',
+        objectiveName: objective?.name ?? '',
+        primaryKpi: objective?.primary_kpi ?? '',
         lifecycleStatus: c.status,
         primaryKpiValue: !('error' in perf) ? perf.primaryKpiValue : null,
         performanceClassification: !('error' in perf) ? perf.classification : undefined,
@@ -166,23 +165,22 @@ export class CampaignLibraryService {
     return results;
   }
 
-  get(campaignId: string, workspaceId: string): LibraryCampaignSummary | { error: string; code: string } {
-    const c = db.prepare(`
-      SELECT c.*, o.name as objective_name, o.objective_type, o.primary_kpi
-      FROM campaigns c JOIN objectives o ON o.id = c.objective_id WHERE c.id = ?
-    `).get(campaignId) as (CampaignRow & { objective_name: string; objective_type: string; primary_kpi: string }) | undefined;
+  async get(campaignId: string, workspaceId: string): Promise<LibraryCampaignSummary | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const c = await repos.campaign.findById(campaignId);
     if (!c) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (c.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
-    const record = this.syncClassifications(campaignId, workspaceId);
-    const perf = campaignPerformanceService.getSummary(campaignId, workspaceId);
+    const objective = await repos.objective.findById(c.objective_id);
+    const record = await this.syncClassifications(campaignId, workspaceId);
+    const perf = await campaignPerformanceService.getSummary(campaignId, workspaceId);
     return {
       libraryRecord: record,
       campaignId: c.id,
       campaignName: c.name,
-      objectiveType: c.objective_type,
-      objectiveName: c.objective_name,
-      primaryKpi: c.primary_kpi,
+      objectiveType: objective?.objective_type ?? '',
+      objectiveName: objective?.name ?? '',
+      primaryKpi: objective?.primary_kpi ?? '',
       lifecycleStatus: c.status,
       primaryKpiValue: !('error' in perf) ? perf.primaryKpiValue : null,
       performanceClassification: !('error' in perf) ? perf.classification : undefined,
@@ -193,8 +191,9 @@ export class CampaignLibraryService {
     };
   }
 
-  archive(campaignId: string, workspaceId: string): CampaignLibraryRecord | { error: string; code: string } {
-    const campaign = db.prepare('SELECT workspace_id FROM campaigns WHERE id = ?').get(campaignId) as { workspace_id: string } | undefined;
+  async archive(campaignId: string, workspaceId: string): Promise<CampaignLibraryRecord | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign || campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
     this.ensureRecord(campaignId, workspaceId);
@@ -209,8 +208,9 @@ export class CampaignLibraryService {
     return mapRow(db.prepare('SELECT * FROM campaign_library_records WHERE campaign_id = ?').get(campaignId) as LibraryRow);
   }
 
-  restore(campaignId: string, workspaceId: string): CampaignLibraryRecord | { error: string; code: string } {
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId) as CampaignRow | undefined;
+  async restore(campaignId: string, workspaceId: string): Promise<CampaignLibraryRecord | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign || campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
     const record = this.ensureRecord(campaignId, workspaceId);
@@ -223,11 +223,12 @@ export class CampaignLibraryService {
     const restoreStatus = classifications.includes('CANCELLED') ? 'CANCELLED' : 'COMPLETE';
     db.prepare('UPDATE campaigns SET status = ?, updated_at = ? WHERE id = ?').run(restoreStatus, now, campaignId);
 
-    return this.syncClassifications(campaignId, workspaceId);
+    return await this.syncClassifications(campaignId, workspaceId);
   }
 
-  markEvergreen(campaignId: string, workspaceId: string, notes?: string): CampaignLibraryRecord | { error: string; code: string } {
-    const campaign = db.prepare('SELECT workspace_id FROM campaigns WHERE id = ?').get(campaignId) as { workspace_id: string } | undefined;
+  async markEvergreen(campaignId: string, workspaceId: string, notes?: string): Promise<CampaignLibraryRecord | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign || campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
     const record = this.ensureRecord(campaignId, workspaceId);
@@ -242,8 +243,9 @@ export class CampaignLibraryService {
     return mapRow(db.prepare('SELECT * FROM campaign_library_records WHERE campaign_id = ?').get(campaignId) as LibraryRow);
   }
 
-  markSeasonal(campaignId: string, workspaceId: string, seasonal: SeasonalMetadata): CampaignLibraryRecord | { error: string; code: string } {
-    const campaign = db.prepare('SELECT workspace_id FROM campaigns WHERE id = ?').get(campaignId) as { workspace_id: string } | undefined;
+  async markSeasonal(campaignId: string, workspaceId: string, seasonal: SeasonalMetadata): Promise<CampaignLibraryRecord | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign || campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
     const record = this.ensureRecord(campaignId, workspaceId);
@@ -258,12 +260,13 @@ export class CampaignLibraryService {
     return mapRow(db.prepare('SELECT * FROM campaign_library_records WHERE campaign_id = ?').get(campaignId) as LibraryRow);
   }
 
-  setCancellationMetadata(
+  async setCancellationMetadata(
     campaignId: string,
     workspaceId: string,
     input: { reasonType: string; notes?: string }
-  ): CampaignLibraryRecord | { error: string; code: string } {
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId) as CampaignRow | undefined;
+  ): Promise<CampaignLibraryRecord | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign || campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
     this.ensureRecord(campaignId, workspaceId);
@@ -277,11 +280,11 @@ export class CampaignLibraryService {
       WHERE campaign_id = ?
     `).run(input.reasonType, input.notes ?? null, now, campaignId);
 
-    return this.syncClassifications(campaignId, workspaceId);
+    return await this.syncClassifications(campaignId, workspaceId);
   }
 
-  getSummary(workspaceId: string): LibrarySummary {
-    const items = this.list(workspaceId, { includeArchived: true });
+  async getSummary(workspaceId: string): Promise<LibrarySummary> {
+    const items = await this.list(workspaceId, { includeArchived: true });
     return {
       total: items.length,
       highPerforming: items.filter((i) => i.libraryRecord.classifications.includes('HIGH_PERFORMING')).length,

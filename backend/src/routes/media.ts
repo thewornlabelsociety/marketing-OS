@@ -3,6 +3,7 @@ import { MediaDimensionAdapter } from '../services/MediaDimensionAdapter';
 import { mediaDeliveryService } from '../services/media/MediaDeliveryService';
 import { mediaAssetService } from '../services/media/MediaAssetService';
 import { db } from '../db/database';
+import { getCoreRepositories } from '../db/core/createCoreRepositories';
 
 export const mediaRouter = Router();
 
@@ -18,7 +19,7 @@ mediaRouter.get('/hosted/:token', (req, res) => {
   res.sendFile(resolved.absolutePath);
 });
 
-mediaRouter.post('/assets', (req: Request, res: Response) => {
+mediaRouter.post('/assets', async (req: Request, res: Response) => {
   const body = req.body as {
     workspaceId?: string;
     fileBase64?: string;
@@ -34,8 +35,8 @@ mediaRouter.post('/assets', (req: Request, res: Response) => {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  const workspace = db.prepare('SELECT id FROM entities WHERE id = ?').get(workspaceId);
-  if (!workspace) {
+  const exists = await getCoreRepositories().workspace.exists(workspaceId);
+  if (!exists) {
     res.status(404).json({ error: 'Workspace not found' });
     return;
   }

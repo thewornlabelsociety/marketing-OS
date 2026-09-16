@@ -12,21 +12,26 @@ import { schedulingService } from '../publishing/SchedulingService';
 import { campaignPerformanceService } from '../performance/CampaignPerformanceService';
 import { objectiveEvaluationService } from '../performance/ObjectiveEvaluationService';
 import { experimentAnalysisService } from '../experiments/ExperimentAnalysisService';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 
 const RECENT_DAYS = 30;
 const UPCOMING_DAYS = 7;
 
 export class DashboardService {
   async getDashboard(workspaceId: string): Promise<DashboardSnapshot> {
+    const repos = getCoreRepositories();
     const openSignals = await attentionSignalService.reconcile(workspaceId);
     const ranked = attentionSignalService.rank(openSignals);
 
     const needsAttention = ranked.filter((s) => attentionSignalService.isNeedsAttention(s));
     const readyForYou = ranked.filter((s) => attentionSignalService.isReadyForYou(s) && !attentionSignalService.isNeedsAttention(s));
 
-    const upcoming = await this.buildUpcoming(workspaceId);
-    const performance = this.buildPerformance(workspaceId);
-    const experiments = this.buildExperiments(workspaceId, openSignals);
+    const [upcoming, performance, experiments, activeCampaignCount] = await Promise.all([
+      this.buildUpcoming(workspaceId),
+      this.buildPerformance(workspaceId),
+      this.buildExperiments(workspaceId, openSignals),
+      repos.campaign.countActive(workspaceId, ['ARCHIVED', 'CANCELLED']),
+    ]);
     const opportunities = this.buildOpportunities(openSignals);
 
     const counts: DashboardCounts = {
@@ -36,10 +41,6 @@ export class DashboardService {
       underperforming: openSignals.filter((s) => s.signalType === 'PERFORMANCE_UNDERPERFORMING').length,
       experimentsAwaitingDecision: openSignals.filter((s) => s.signalType === 'EXPERIMENT_DECISION_AVAILABLE').length,
     };
-
-    const campaignCount = db.prepare(
-      'SELECT COUNT(*) as c FROM campaigns WHERE workspace_id = ? AND status NOT IN (\'ARCHIVED\', \'CANCELLED\')'
-    ).get(workspaceId) as { c: number };
 
     return {
       workspaceId,
@@ -51,11 +52,12 @@ export class DashboardService {
       performance,
       experiments,
       opportunities,
-      empty: campaignCount.c === 0,
+      empty: activeCampaignCount === 0,
     };
   }
 
   private async buildUpcoming(workspaceId: string): Promise<DashboardUpcomingItem[]> {
+    const repos = getCoreRepositories();
     const now = Date.now();
     const end = now + UPCOMING_DAYS * 24 * 60 * 60 * 1000;
     const schedules = (await schedulingService.listForWorkspace(workspaceId))
@@ -66,10 +68,11 @@ export class DashboardService {
       })
       .sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
 
-    return schedules.slice(0, 20).map((s) => {
-      const campaign = db.prepare('SELECT name FROM campaigns WHERE id = ?').get(s.campaignId) as { name: string } | undefined;
+    const items: DashboardUpcomingItem[] = [];
+    for (const s of schedules.slice(0, 20)) {
+      const campaign = await repos.campaign.findById(s.campaignId);
       const { localDayLabel, localTimeLabel } = formatScheduleLocal(s.scheduledFor, s.timezone);
-      return {
+      items.push({
         scheduleId: s.id,
         campaignId: s.campaignId,
         campaignName: campaign?.name ?? s.campaignId,
@@ -80,17 +83,15 @@ export class DashboardService {
         localDayLabel,
         localTimeLabel,
         status: s.status,
-      };
-    });
+      });
+    }
+    return items;
   }
 
-  private buildPerformance(workspaceId: string): DashboardSnapshot['performance'] {
+  private async buildPerformance(workspaceId: string): Promise<DashboardSnapshot['performance']> {
+    const repos = getCoreRepositories();
     const cutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000;
-    const campaigns = db.prepare(`
-      SELECT id, name, status, updated_at FROM campaigns
-      WHERE workspace_id = ? AND status IN ('PUBLISHED', 'MEASURING', 'COMPLETE')
-      ORDER BY updated_at DESC
-    `).all(workspaceId) as Array<{ id: string; name: string; status: string; updated_at: string }>;
+    const campaigns = await repos.campaign.list({ workspaceId, statusIn: ['PUBLISHED', 'MEASURING', 'COMPLETE'] });
 
     const highPerforming: DashboardPerformanceItem[] = [];
     const underperforming: DashboardPerformanceItem[] = [];
@@ -98,7 +99,7 @@ export class DashboardService {
 
     for (const campaign of campaigns) {
       if (new Date(campaign.updated_at).getTime() < cutoff && campaign.status === 'COMPLETE') continue;
-      const summary = campaignPerformanceService.getSummary(campaign.id, workspaceId);
+      const summary = await campaignPerformanceService.getSummary(campaign.id, workspaceId);
       if ('error' in summary) continue;
       const latest = objectiveEvaluationService.getLatestEvaluation(campaign.id);
       const item: DashboardPerformanceItem = {
@@ -131,7 +132,8 @@ export class DashboardService {
     };
   }
 
-  private buildExperiments(workspaceId: string, openSignals: ReturnType<typeof attentionSignalService.list>): DashboardExperimentItem[] {
+  private async buildExperiments(workspaceId: string, openSignals: ReturnType<typeof attentionSignalService.list>): Promise<DashboardExperimentItem[]> {
+    const repos = getCoreRepositories();
     const experimentSignals = openSignals.filter((s) => s.entityType === 'EXPERIMENT');
     const items: DashboardExperimentItem[] = [];
 
@@ -140,7 +142,7 @@ export class DashboardService {
         id: string; campaign_id: string; name: string; mode: string; primary_kpi: string;
       } | undefined;
       if (!expRow) continue;
-      const campaign = db.prepare('SELECT name FROM campaigns WHERE id = ?').get(expRow.campaign_id) as { name: string } | undefined;
+      const campaign = await repos.campaign.findById(expRow.campaign_id);
       const analyses = experimentAnalysisService.listAnalyses(expRow.id, workspaceId);
       const latest = analyses[analyses.length - 1];
       items.push({

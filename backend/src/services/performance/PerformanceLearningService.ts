@@ -1,31 +1,32 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import type { PerformanceClassification } from '../../types/performance';
 import { learningService } from './LearningService';
 
 export class PerformanceLearningService {
-  extractFromCampaign(
+  async extractFromCampaign(
     campaignId: string,
     workspaceId: string,
     classification: PerformanceClassification
-  ): void {
+  ): Promise<void> {
     if (classification !== 'HIGH_PERFORMING' && classification !== 'EXCEPTIONAL' && classification !== 'ABOVE_AVERAGE') {
       return;
     }
 
-    const campaign = db.prepare(`
-      SELECT c.*, o.objective_type, o.primary_kpi
-      FROM campaigns c
-      JOIN objectives o ON o.id = c.objective_id
-      WHERE c.id = ?
-    `).get(campaignId) as {
-      id: string;
-      workspace_id: string;
-      objective_type: string;
-      primary_kpi: string;
-    } | undefined;
+    const repos = getCoreRepositories();
+    const campaignRow = await repos.campaign.findById(campaignId);
+    if (!campaignRow || campaignRow.workspace_id !== workspaceId) return;
 
-    if (!campaign || campaign.workspace_id !== workspaceId) return;
+    const objective = await repos.objective.findById(campaignRow.objective_id);
+    if (!objective) return;
+
+    const campaign = {
+      id: campaignRow.id,
+      workspace_id: campaignRow.workspace_id,
+      objective_type: objective.objective_type,
+      primary_kpi: objective.primary_kpi,
+    };
 
     const contentRows = db.prepare(`
       SELECT content_key, source_creative_artifact_id, channel,
@@ -45,8 +46,7 @@ export class PerformanceLearningService {
     const comparableCampaigns = db.prepare(`
       SELECT DISTINCT pe.campaign_id
       FROM performance_evaluations pe
-      JOIN campaigns c ON c.id = pe.campaign_id
-      WHERE c.workspace_id = ?
+      WHERE pe.workspace_id = ?
         AND pe.objective_type = ?
         AND pe.classification IN ('HIGH_PERFORMING', 'EXCEPTIONAL', 'ABOVE_AVERAGE')
     `).all(workspaceId, campaign.objective_type) as Array<{ campaign_id: string }>;

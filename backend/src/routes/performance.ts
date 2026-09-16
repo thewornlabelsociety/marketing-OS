@@ -9,13 +9,13 @@ import { queryEntityId } from '../utils/params';
 
 export const performanceRouter = Router();
 
-performanceRouter.get('/summary', (req, res) => {
+performanceRouter.get('/summary', async (req, res) => {
   const workspaceId = (req.query.workspaceId as string | undefined) ?? queryEntityId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  res.json(campaignPerformanceService.getWorkspaceSummary(workspaceId));
+  res.json(await campaignPerformanceService.getWorkspaceSummary(workspaceId));
 });
 
 performanceRouter.get('/', (req, res) => {
@@ -68,13 +68,13 @@ performanceRouter.post('/', (req, res) => {
   res.json(mapPerformanceRow(row));
 });
 
-performanceRouter.post('/sync-vault', (req, res) => {
+performanceRouter.post('/sync-vault', async (req, res) => {
   const body = req.body as Record<string, unknown>;
   const entity_id = (body.entity_id ?? body.entityId) as string | undefined;
   const singleHook = body.hook as string | undefined;
 
   if (singleHook && entity_id) {
-    const updated = BrandMemoryService.syncHookToVault(entity_id, singleHook);
+    const updated = await BrandMemoryService.syncHookToVault(entity_id, singleHook);
     res.json({ synced: updated ? 1 : 0, entities: updated ? [entity_id] : [] });
     return;
   }
@@ -93,7 +93,7 @@ performanceRouter.post('/sync-vault', (req, res) => {
 
   let synced = 0;
   for (const row of rows) {
-    if (BrandMemoryService.syncHookToVault(entity_id, row.hook)) {
+    if (await BrandMemoryService.syncHookToVault(entity_id, row.hook)) {
       synced += 1;
     }
   }

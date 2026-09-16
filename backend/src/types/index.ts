@@ -163,6 +163,7 @@ export interface CampaignRow {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  recommendation_id?: string | null;
   // joined
   objective_name?: string;
   objective_primary_kpi?: string;

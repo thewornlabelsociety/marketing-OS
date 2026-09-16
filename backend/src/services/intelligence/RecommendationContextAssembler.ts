@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import { marketingKnowledgeService } from './MarketingKnowledgeService';
 import { channelStrategyService } from './ChannelStrategyService';
 import { campaignPerformanceService } from '../performance/CampaignPerformanceService';
@@ -74,32 +75,26 @@ function bucketFromOccurredAt(occurredAt: string | null): 'NEW' | 'CURRENT' | 'S
   return ageDays < 7 ? 'NEW' : ageDays < 28 ? 'CURRENT' : 'SALE';
 }
 
-function resolveActiveObjective(workspaceId: string): ObjectiveRow | null {
+async function resolveActiveObjective(workspaceId: string): Promise<ObjectiveRow | null> {
+  const repos = getCoreRepositories();
+
   // 1. Custom workspace objective (most recently created)
-  const custom = db.prepare(`
-    SELECT id, name, objective_type, primary_kpi FROM objectives
-    WHERE workspace_id = ? AND is_active = 1
-    ORDER BY created_at DESC LIMIT 1
-  `).get(workspaceId) as ObjectiveRow | undefined;
+  const workspaceObjectives = await repos.objective.listForWorkspace(workspaceId);
+  const custom = workspaceObjectives
+    .filter((o) => o.is_active === 1)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
   if (custom) return custom;
 
   // 2. Most recently used in a campaign for this workspace
-  const fromCampaign = db.prepare(`
-    SELECT o.id, o.name, o.objective_type, o.primary_kpi
-    FROM objectives o
-    JOIN campaigns c ON c.objective_id = o.id
-    WHERE c.workspace_id = ? AND o.is_active = 1
-    ORDER BY c.created_at DESC LIMIT 1
-  `).get(workspaceId) as ObjectiveRow | undefined;
-  if (fromCampaign) return fromCampaign;
+  const campaigns = await repos.campaign.list({ workspaceId });
+  const sortedCampaigns = campaigns.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  for (const c of sortedCampaigns) {
+    const obj = await repos.objective.findById(c.objective_id);
+    if (obj && obj.is_active === 1) return obj;
+  }
 
   // 3. Any active system objective
-  const system = db.prepare(`
-    SELECT id, name, objective_type, primary_kpi FROM objectives
-    WHERE workspace_id IS NULL AND is_active = 1
-    ORDER BY name ASC LIMIT 1
-  `).get() as ObjectiveRow | undefined;
-  return system ?? null;
+  return await repos.objective.findSystemDefault();
 }
 
 function listInventory(workspaceId: string, filter: string, limit: number): RecommendationInventoryItem[] {
@@ -143,18 +138,19 @@ function listInventory(workspaceId: string, filter: string, limit: number): Reco
 }
 
 class RecommendationContextAssembler {
-  assemble(workspaceId: string): RecommendationContext {
-    const entity = db.prepare('SELECT id, name FROM entities WHERE id = ?').get(workspaceId) as EntityRow | undefined;
+  async assemble(workspaceId: string): Promise<RecommendationContext> {
+    const repos = getCoreRepositories();
+    const entity = await repos.workspace.findById(workspaceId);
     const workspaceName = entity?.name ?? workspaceId;
 
     // Brand knowledge (selective domains)
-    const brandKnowledge = marketingKnowledgeService.read(workspaceId, [
+    const brandKnowledge = await marketingKnowledgeService.read(workspaceId, [
       'BRAND_CORE', 'AUDIENCE', 'POSITIONING', 'VOICE',
       'CONTENT_PILLARS', 'MARKETING_RULES', 'CHANNEL_STRATEGY', 'CREATIVE_PREFERENCES',
     ]);
 
     // Active objective
-    const objRow = resolveActiveObjective(workspaceId);
+    const objRow = await resolveActiveObjective(workspaceId);
     const activeObjective = objRow
       ? { id: objRow.id, name: objRow.name, objectiveType: objRow.objective_type, primaryKpi: objRow.primary_kpi }
       : null;
@@ -219,10 +215,9 @@ class RecommendationContextAssembler {
     const recentArtifacts = db.prepare(`
       SELECT ca.id, ca.marketing_scope, ca.content_type, ca.created_at,
         COALESCE(json_group_array(csl.source_record_id), '[]') AS source_record_ids
-      FROM campaigns c
-      JOIN creative_artifacts ca ON ca.campaign_id = c.id AND ca.workspace_id = c.workspace_id
+      FROM creative_artifacts ca
       LEFT JOIN creative_source_links csl ON csl.creative_artifact_id = ca.id
-      WHERE c.workspace_id = ?
+      WHERE ca.workspace_id = ?
         AND ca.created_at >= datetime('now', '-14 days')
       GROUP BY ca.id
       ORDER BY ca.created_at DESC LIMIT 20
@@ -258,15 +253,12 @@ class RecommendationContextAssembler {
     let highPerformingCampaign: RecommendationContext['highPerformingCampaign'] = null;
     let recentUnderperformingCampaign = false;
 
-    const recentCampaigns = db.prepare(`
-      SELECT id FROM campaigns
-      WHERE workspace_id = ? AND status NOT IN ('CANCELLED','ARCHIVED','DRAFTING')
-      ORDER BY created_at DESC LIMIT 2
-    `).all(workspaceId) as PerfCampaignRow[];
+    const allCampaigns = await repos.campaign.list({ workspaceId, statusNotIn: ['CANCELLED', 'ARCHIVED', 'DRAFTING'] });
+    const recentCampaigns = allCampaigns.slice(0, 2);
 
     for (const { id } of recentCampaigns) {
       try {
-        const perf = campaignPerformanceService.getSummary(id, workspaceId);
+        const perf = await campaignPerformanceService.getSummary(id, workspaceId);
         if ('error' in perf) continue;
         if (perf.classification === 'HIGH_PERFORMING' && !highPerformingCampaign) {
           highPerformingCampaign = { id, kpi: perf.primaryKpi ?? 'engagement' };

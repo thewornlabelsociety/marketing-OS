@@ -165,6 +165,7 @@ export interface CreativeArtifact {
   status: CreativeArtifactStatus;
   isCurrent: boolean;
   mediaAssetId?: string;
+  marketingScope?: string | null;
   createdAt: string;
   updatedAt: string;
 }

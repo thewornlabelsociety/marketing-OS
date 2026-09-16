@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import { businessCredentialVault } from './BusinessCredentialVault';
 import { businessConnectorRegistry } from '../../integrations/business/BusinessConnectorRegistry';
 import { WornLabelConnector } from '../../integrations/business/WornLabelConnector';
@@ -33,16 +34,16 @@ export class BusinessIntegrationService {
   // When a source target (baseUrl) changes, retire source records from the previous target.
   // Records with downstream creative references are preserved as historical provenance.
   // Records with no references are removed transactionally — they are orphaned by the switch.
-  private retireObsoleteSourceRecords(integrationId: string, workspaceId: string): void {
+  private async retireObsoleteSourceRecords(integrationId: string, workspaceId: string): Promise<void> {
+    const repos = getCoreRepositories();
     const all = db.prepare('SELECT id FROM source_records WHERE integration_id = ? AND workspace_id = ?')
       .all(integrationId, workspaceId) as { id: string }[];
     if (all.length === 0) return;
     const orphaned: string[] = [];
     let retained = 0;
     for (const record of all) {
-      const refs = db.prepare('SELECT COUNT(*) as c FROM creative_source_links WHERE source_record_id = ?')
-        .get(record.id) as { c: number };
-      if (refs.c === 0) orphaned.push(record.id);
+      const count = await repos.creative.sourceLink.countBySourceRecordId(record.id);
+      if (count === 0) orphaned.push(record.id);
       else retained++;
     }
     if (orphaned.length > 0) {
@@ -54,11 +55,12 @@ export class BusinessIntegrationService {
     }
   }
 
-  connectWornLabelFromEnvironment(workspaceId: string) {
+  async connectWornLabelFromEnvironment(workspaceId: string) {
     const baseUrl = process.env.WORN_LABEL_API_BASE_URL?.trim();
     const serviceToken = process.env.WORN_LABEL_SERVICE_TOKEN?.trim();
     if (!baseUrl || !serviceToken) throw new Error('Worn Label server connection is not configured');
-    if (!db.prepare('SELECT id FROM entities WHERE id = ?').get(workspaceId)) throw new Error('Workspace not found');
+    const workspaceExists = await getCoreRepositories().workspace.exists(workspaceId);
+    if (!workspaceExists) throw new Error('Workspace not found');
     const existing = db.prepare("SELECT * FROM business_integrations WHERE workspace_id = ? AND integration_type = 'WORN_LABEL'").get(workspaceId) as IntegrationRow | undefined;
     const connector = businessConnectorRegistry.get('WORN_LABEL')!;
     const now = new Date().toISOString();
@@ -68,7 +70,7 @@ export class BusinessIntegrationService {
       const baseUrlChanged = prevConfig.baseUrl !== baseUrl;
       db.prepare(`UPDATE business_integrations SET display_name = 'Worn Label', status = 'CONNECTED', capabilities = ?, config = ?, last_error_summary = NULL${baseUrlChanged ? ', sync_checkpoint = NULL' : ''}, updated_at = ? WHERE id = ? AND workspace_id = ?`)
         .run(JSON.stringify(connector.capabilities), JSON.stringify({ baseUrl }), now, id, workspaceId);
-      if (baseUrlChanged) this.retireObsoleteSourceRecords(id, workspaceId);
+      if (baseUrlChanged) await this.retireObsoleteSourceRecords(id, workspaceId);
     } else {
       db.prepare("INSERT INTO business_integrations (id, workspace_id, integration_type, display_name, status, capabilities, config, created_at, updated_at) VALUES (?, ?, 'WORN_LABEL', 'Worn Label', 'CONNECTED', ?, ?, ?, ?)")
         .run(id, workspaceId, JSON.stringify(connector.capabilities), JSON.stringify({ baseUrl }), now, now);

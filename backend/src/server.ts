@@ -39,7 +39,15 @@ import { plannerRouter } from './routes/planner';
 import { repurposeRouter } from './routes/repurpose';
 
 const app = express();
-app.use(cors({ origin: /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/, credentials: true }));
+// In production (single-server) there is no cross-origin request so CORS
+// does not apply. In local dev the Vite proxy rewrites the origin to
+// localhost — allow that. On Replit the frontend is served by this same
+// Express process so same-origin applies and CORS is irrelevant, but we
+// also permit any *.replit.app or *.repl.co origin for the dev webview.
+const CORS_ORIGIN = process.env.REPL_SLUG
+  ? [/^https?:\/\/.*\.replit\.app$/, /^https?:\/\/.*\.repl\.co$/, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/]
+  : /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '100mb' }));
 
 initDatabase();
@@ -97,14 +105,15 @@ app.listen(PORT, () => {
   const wornLabelEnv = resolveWornLabelIntegrationEnvironment();
   console.log(`[business-sync] ${wornLabelEnv.diagnostic}`);
   if (wornLabelEnv.enabled && wornLabelEnv.workspaceId) {
-    try {
-      const integration = businessIntegrationService.connectWornLabelFromEnvironment(wornLabelEnv.workspaceId);
-      const syncWornLabel = () => void businessIntegrationService.sync(integration.id, wornLabelEnv.workspaceId!)
-        .catch((error) => console.error('[business-sync] Worn Label sync failed:', (error as Error).message));
-      syncWornLabel();
-      setInterval(syncWornLabel, wornLabelEnv.syncIntervalMinutes * 60_000).unref();
-    } catch (error) {
-      console.error('[business-sync] Worn Label configuration failed:', (error as Error).message);
-    }
+    businessIntegrationService.connectWornLabelFromEnvironment(wornLabelEnv.workspaceId)
+      .then((integration) => {
+        const syncWornLabel = () => void businessIntegrationService.sync(integration.id, wornLabelEnv.workspaceId!)
+          .catch((error) => console.error('[business-sync] Worn Label sync failed:', (error as Error).message));
+        syncWornLabel();
+        setInterval(syncWornLabel, wornLabelEnv.syncIntervalMinutes * 60_000).unref();
+      })
+      .catch((error: Error) => {
+        console.error('[business-sync] Worn Label configuration failed:', error.message);
+      });
   }
 });

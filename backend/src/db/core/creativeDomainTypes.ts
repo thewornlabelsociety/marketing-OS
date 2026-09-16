@@ -18,6 +18,32 @@ export interface CreativeArtifactInsert {
   quality: string;
   createdAt: string;
   updatedAt: string;
+  // optional extended fields
+  creativeDirection?: string | null;
+  aiProvider?: string | null;
+  aiModel?: string | null;
+  aiGenerated?: boolean;
+  aiTaskType?: string | null;
+  repurposeRequestId?: string | null;
+  marketingScopesJson?: string | null;
+  marketingScope?: string | null;
+  mediaAssetId?: string | null;
+}
+
+export interface CreativeSourceLinkRow {
+  sourceRecordId: string;
+  position: number;
+}
+
+export interface CreativeSourceLinkRepository {
+  insert(artifactId: string, sourceRecordId: string, position: number, createdAt: string): Promise<void>;
+  listByArtifactId(artifactId: string): Promise<CreativeSourceLinkRow[]>;
+  copyFromParent(parentArtifactId: string, childArtifactId: string, createdAt: string): Promise<void>;
+  countBySourceRecordId(sourceRecordId: string): Promise<number>;
+}
+
+export interface CreativeDerivationRepository {
+  insert(parentArtifactId: string, childArtifactId: string, relationship: string, createdAt: string): Promise<void>;
 }
 
 export interface CreativeRevisionInsert {
@@ -59,6 +85,8 @@ export interface ApprovedCurrentCreativeRow {
 export interface CreativeArtifactRepository {
   findCurrentByCampaignAndKey(campaignId: string, contentKey: string): Promise<CreativeArtifact | null>;
   findById(id: string, campaignId: string): Promise<CreativeArtifact | null>;
+  findByIdForWorkspace(id: string, workspaceId: string): Promise<CreativeArtifact | null>;
+  findByRepurposeRequestId(requestId: string): Promise<Array<{ id: string; contentKey: string; contentType: string; channel: string }>>;
   listByCampaignAndKey(campaignId: string, contentKey: string): Promise<CreativeArtifact[]>;
   maxVersionForCampaignAndKey(campaignId: string, contentKey: string): Promise<number>;
   clearCurrentForCampaignAndContentKey(campaignId: string, contentKey: string): Promise<void>;
@@ -88,4 +116,6 @@ export interface CreativeRepositories {
   artifact: CreativeArtifactRepository;
   revision: CreativeRevisionRepository;
   approval: CreativeApprovalRepository;
+  sourceLink: CreativeSourceLinkRepository;
+  derivation: CreativeDerivationRepository;
 }

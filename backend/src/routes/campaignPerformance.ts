@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db/database';
+import { getCoreRepositories } from '../db/core/createCoreRepositories';
 import { AttributionService } from '../services/performance/AttributionService';
 import { campaignPerformanceService } from '../services/performance/CampaignPerformanceService';
 import { objectiveEvaluationService } from '../services/performance/ObjectiveEvaluationService';
@@ -16,12 +16,12 @@ function resolveWorkspaceId(req: Request): string | undefined {
   return query.workspaceId || body?.workspaceId;
 }
 
-function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): CampaignRecord | null {
+async function resolveCampaign(campaignId: string, workspaceId: string | undefined, res: Response): Promise<CampaignRecord | null> {
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return null;
   }
-  const campaign = db.prepare('SELECT id, workspace_id FROM campaigns WHERE id = ?').get(campaignId) as CampaignRecord | undefined;
+  const campaign = await getCoreRepositories().campaign.findById(campaignId);
   if (!campaign) {
     res.status(404).json({ error: 'Campaign not found' });
     return null;
@@ -30,7 +30,7 @@ function resolveCampaign(campaignId: string, workspaceId: string | undefined, re
     res.status(403).json({ error: 'Campaign does not belong to the specified workspace' });
     return null;
   }
-  return campaign;
+  return { id: campaign.id, workspace_id: campaign.workspace_id };
 }
 
 function statusFor(code?: string): number {
@@ -46,11 +46,11 @@ function statusFor(code?: string): number {
 
 export const campaignPerformanceRouter = Router({ mergeParams: true });
 
-campaignPerformanceRouter.get('/', (req: PerfReq, res: Response) => {
+campaignPerformanceRouter.get('/', async (req: PerfReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
   const window = (req.query.measurementWindow as MeasurementWindow | undefined) ?? '7_DAYS';
-  const summary = campaignPerformanceService.getSummary(campaignId, resolveWorkspaceId(req)!, window);
+  const summary = await campaignPerformanceService.getSummary(campaignId, resolveWorkspaceId(req)!, window);
   if ('error' in summary) {
     res.status(statusFor(summary.code)).json({ error: summary.error, code: summary.code });
     return;
@@ -58,17 +58,17 @@ campaignPerformanceRouter.get('/', (req: PerfReq, res: Response) => {
   res.json(summary);
 });
 
-campaignPerformanceRouter.get('/content/:contentKey', (req: PerfReq, res: Response) => {
+campaignPerformanceRouter.get('/content/:contentKey', async (req: PerfReq, res: Response) => {
   const { campaignId, contentKey } = req.params;
   const workspaceId = resolveWorkspaceId(req);
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
-  const observations = performanceIngestionService.listObservations(campaignId, workspaceId!);
+  const observations = await performanceIngestionService.listObservations(campaignId, workspaceId!);
   if ('error' in observations) {
     res.status(statusFor(observations.code)).json(observations);
     return;
   }
-  const conversions = performanceIngestionService.listConversions(campaignId, workspaceId!);
+  const conversions = await performanceIngestionService.listConversions(campaignId, workspaceId!);
   if ('error' in conversions) {
     res.status(statusFor(conversions.code)).json(conversions);
     return;
@@ -79,12 +79,12 @@ campaignPerformanceRouter.get('/content/:contentKey', (req: PerfReq, res: Respon
   res.json({ contentKey, observations: filtered, conversions: contentConversions });
 });
 
-campaignPerformanceRouter.get('/channels', (req: PerfReq, res: Response) => {
+campaignPerformanceRouter.get('/channels', async (req: PerfReq, res: Response) => {
   const { campaignId } = req.params;
   const workspaceId = resolveWorkspaceId(req);
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
-  const summary = campaignPerformanceService.getSummary(campaignId, workspaceId!);
+  const summary = await campaignPerformanceService.getSummary(campaignId, workspaceId!);
   if ('error' in summary) {
     res.status(statusFor(summary.code)).json({ error: summary.error, code: summary.code });
     return;
@@ -92,13 +92,13 @@ campaignPerformanceRouter.get('/channels', (req: PerfReq, res: Response) => {
   res.json(summary.channelPerformance);
 });
 
-campaignPerformanceRouter.post('/observations', (req: PerfReq, res: Response) => {
+campaignPerformanceRouter.post('/observations', async (req: PerfReq, res: Response) => {
   const { campaignId } = req.params;
   const workspaceId = resolveWorkspaceId(req);
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
   const body = req.body as Record<string, unknown>;
-  const result = performanceIngestionService.createObservation({
+  const result = await performanceIngestionService.createObservation({
     workspaceId: workspaceId!,
     campaignId,
     scheduleId: body.scheduleId as string | undefined,
@@ -126,7 +126,7 @@ campaignPerformanceRouter.post('/observations', (req: PerfReq, res: Response) =>
 campaignPerformanceRouter.post('/refresh', async (req: PerfReq, res: Response) => {
   const { campaignId } = req.params;
   const workspaceId = resolveWorkspaceId(req);
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
   const body = req.body as { providerKey?: string };
   const result = await campaignPerformanceService.refreshFromProvider(
@@ -142,13 +142,13 @@ campaignPerformanceRouter.post('/refresh', async (req: PerfReq, res: Response) =
   res.json(result);
 });
 
-campaignPerformanceRouter.post('/evaluate', (req: PerfReq, res: Response) => {
+campaignPerformanceRouter.post('/evaluate', async (req: PerfReq, res: Response) => {
   const { campaignId } = req.params;
   const workspaceId = resolveWorkspaceId(req);
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
   const body = req.body as { measurementWindow?: MeasurementWindow };
-  const result = campaignPerformanceService.evaluate(
+  const result = await campaignPerformanceService.evaluate(
     campaignId,
     workspaceId!,
     body.measurementWindow ?? '7_DAYS'
@@ -161,21 +161,21 @@ campaignPerformanceRouter.post('/evaluate', (req: PerfReq, res: Response) => {
   res.json(result);
 });
 
-campaignPerformanceRouter.get('/evaluations', (req: PerfReq, res: Response) => {
+campaignPerformanceRouter.get('/evaluations', async (req: PerfReq, res: Response) => {
   const { campaignId } = req.params;
-  if (!resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
+  if (!await resolveCampaign(campaignId, resolveWorkspaceId(req), res)) return;
   res.json(objectiveEvaluationService.listEvaluations(campaignId));
 });
 
-campaignPerformanceRouter.post('/conversions', (req: PerfReq, res: Response) => {
+campaignPerformanceRouter.post('/conversions', async (req: PerfReq, res: Response) => {
   const { campaignId } = req.params;
   const workspaceId = resolveWorkspaceId(req);
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
   const body = req.body as Record<string, unknown>;
   const attributionModel = (body.attributionModel ?? body.model ?? 'MANUAL') as import('../types/performance').AttributionResult['model'];
 
-  const result = performanceIngestionService.createConversion({
+  const result = await performanceIngestionService.createConversion({
     workspaceId: workspaceId!,
     campaignId,
     contentKey: body.contentKey as string | undefined,
@@ -203,12 +203,12 @@ campaignPerformanceRouter.post('/conversions', (req: PerfReq, res: Response) => 
   res.status(201).json(result.conversion);
 });
 
-campaignPerformanceRouter.get('/conversions', (req: PerfReq, res: Response) => {
+campaignPerformanceRouter.get('/conversions', async (req: PerfReq, res: Response) => {
   const { campaignId } = req.params;
   const workspaceId = resolveWorkspaceId(req);
-  if (!resolveCampaign(campaignId, workspaceId, res)) return;
+  if (!await resolveCampaign(campaignId, workspaceId, res)) return;
 
-  const result = performanceIngestionService.listConversions(campaignId, workspaceId!);
+  const result = await performanceIngestionService.listConversions(campaignId, workspaceId!);
   if ('error' in result) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
     return;

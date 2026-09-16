@@ -1,22 +1,18 @@
-import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 
 export class BrandMemoryService {
-  public static syncHookToVault(entityId: string, hook: string): boolean {
-    const row = db.prepare('SELECT brand_kit FROM entities WHERE id = ?').get(entityId) as
-      | { brand_kit: string }
-      | undefined;
-    if (!row) return false;
+  public static async syncHookToVault(entityId: string, hook: string): Promise<boolean> {
+    const repos = getCoreRepositories();
+    const brandKitJson = await repos.workspace.findBrandKit(entityId);
+    if (brandKitJson === null) return false;
 
-    const kit = JSON.parse(row.brand_kit);
+    const kit = JSON.parse(brandKitJson) as Record<string, unknown> & { memoryVault?: { topPerformingHooks: string[] } };
     if (!kit.memoryVault) kit.memoryVault = { topPerformingHooks: [] };
     if (!kit.memoryVault.topPerformingHooks) kit.memoryVault.topPerformingHooks = [];
 
     if (!kit.memoryVault.topPerformingHooks.includes(hook)) {
       kit.memoryVault.topPerformingHooks.unshift(hook);
-      db.prepare('UPDATE entities SET brand_kit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
-        JSON.stringify(kit),
-        entityId
-      );
+      await repos.workspace.patchBrandKit(entityId, JSON.stringify(kit));
       return true;
     }
     return false;

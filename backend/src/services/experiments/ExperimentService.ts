@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import type { CampaignRow } from '../../types';
 import type { MeasurementWindow } from '../../types/performance';
 import type {
@@ -91,8 +92,8 @@ function formatHypothesis(structured?: StructuredHypothesis): string {
 }
 
 export class ExperimentService {
-  list(campaignId: string, workspaceId: string): Experiment[] | { error: string; code: string } {
-    const campaign = this.getCampaign(campaignId, workspaceId);
+  async list(campaignId: string, workspaceId: string): Promise<Experiment[] | { error: string; code: string }> {
+    const campaign = await this.getCampaign(campaignId, workspaceId);
     if ('error' in campaign) return campaign;
 
     const rows = db.prepare(`
@@ -110,7 +111,7 @@ export class ExperimentService {
     return this.loadExperiment(row);
   }
 
-  create(
+  async create(
     campaignId: string,
     workspaceId: string,
     input: {
@@ -128,13 +129,12 @@ export class ExperimentService {
       minimumMeaningfulLift?: number;
       description?: string;
     },
-  ): Experiment | { error: string; code: string } {
-    const campaign = this.getCampaign(campaignId, workspaceId);
+  ): Promise<Experiment | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const campaign = await this.getCampaign(campaignId, workspaceId);
     if ('error' in campaign) return campaign;
 
-    const objective = db.prepare('SELECT * FROM objectives WHERE id = ?').get(campaign.objective_id) as {
-      id: string; primary_kpi: string;
-    } | undefined;
+    const objective = await repos.objective.findById(campaign.objective_id);
     if (!objective) return { error: 'Objective not found', code: 'OBJECTIVE_NOT_FOUND' };
 
     const id = randomUUID();
@@ -387,15 +387,15 @@ export class ExperimentService {
     return this.get(experimentId, campaignId, workspaceId) as Experiment;
   }
 
-  analyze(
+  async analyze(
     experimentId: string,
     campaignId: string,
     workspaceId: string,
     measurementWindow: MeasurementWindow = '7_DAYS',
-  ): ExperimentAnalysis | { error: string; code: string } {
+  ): Promise<ExperimentAnalysis | { error: string; code: string }> {
     const exp = this.get(experimentId, campaignId, workspaceId);
     if ('error' in exp) return exp;
-    return experimentAnalysisService.analyze(exp, workspaceId, measurementWindow);
+    return await experimentAnalysisService.analyze(exp, workspaceId, measurementWindow);
   }
 
   listAnalyses(experimentId: string, campaignId: string, workspaceId: string): ExperimentAnalysis[] | { error: string; code: string } {
@@ -404,19 +404,19 @@ export class ExperimentService {
     return experimentAnalysisService.listAnalyses(experimentId, workspaceId);
   }
 
-  complete(
+  async complete(
     experimentId: string,
     campaignId: string,
     workspaceId: string,
     measurementWindow: MeasurementWindow = '7_DAYS',
-  ): Experiment | { error: string; code: string } {
+  ): Promise<Experiment | { error: string; code: string }> {
     const exp = this.get(experimentId, campaignId, workspaceId);
     if ('error' in exp) return exp;
     if (!['RUNNING', 'PAUSED'].includes(exp.status)) {
       return { error: 'Experiment must be running or paused to complete', code: 'INVALID_STATE' };
     }
 
-    const analysis = experimentAnalysisService.analyze(exp, workspaceId, measurementWindow);
+    const analysis = await experimentAnalysisService.analyze(exp, workspaceId, measurementWindow);
     if ('error' in analysis) return analysis;
 
     const now = new Date().toISOString();
@@ -462,8 +462,8 @@ export class ExperimentService {
     });
   }
 
-  private getCampaign(campaignId: string, workspaceId: string): CampaignRow | { error: string; code: string } {
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId) as CampaignRow | undefined;
+  private async getCampaign(campaignId: string, workspaceId: string): Promise<CampaignRow | { error: string; code: string }> {
+    const campaign = await getCoreRepositories().campaign.findById(campaignId);
     if (!campaign) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
     return campaign;

@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import type { ObjectiveRow } from '../../types';
 import type { CampaignBlueprint, BlueprintStatus, BlueprintUsage } from '../../types/blueprint';
 import { blueprintExtractionService } from './BlueprintExtractionService';
@@ -82,8 +83,8 @@ export class BlueprintService {
     });
   }
 
-  createFromCampaign(sourceCampaignId: string, workspaceId: string, name?: string): CampaignBlueprint | { error: string; code: string } {
-    const extracted = blueprintExtractionService.extract(sourceCampaignId, workspaceId);
+  async createFromCampaign(sourceCampaignId: string, workspaceId: string, name?: string): Promise<CampaignBlueprint | { error: string; code: string }> {
+    const extracted = await blueprintExtractionService.extract(sourceCampaignId, workspaceId);
     if ('error' in extracted) return extracted;
 
     const gate = blueprintQualityGate.validate({
@@ -96,7 +97,7 @@ export class BlueprintService {
     });
     if (!gate.valid) return { error: gate.errors.join('; '), code: 'BLUEPRINT_VALIDATION_FAILED' };
 
-    const perf = campaignLibraryService.syncClassifications(sourceCampaignId, workspaceId);
+    const perf = await campaignLibraryService.syncClassifications(sourceCampaignId, workspaceId);
     if (!perf.blueprintCandidate && !perf.classifications.includes('HIGH_PERFORMING')) {
       // Allow manual create from high performer even if candidate flag not set yet
       const evaluation = extracted.evidenceSummary.classification;
@@ -217,7 +218,7 @@ export class BlueprintService {
     return this.get(blueprintId, workspaceId)! as CampaignBlueprint;
   }
 
-  use(
+  async use(
     blueprintId: string,
     workspaceId: string,
     input: {
@@ -227,21 +228,20 @@ export class BlueprintService {
       objectiveId?: string;
       name?: string;
     }
-  ): { campaignId: string; usageId: string } | { error: string; code: string } {
+  ): Promise<{ campaignId: string; usageId: string } | { error: string; code: string }> {
+    const repos = getCoreRepositories();
     const bp = this.get(blueprintId, workspaceId);
     if ('error' in bp) return bp;
     if (bp.status !== 'ACTIVE') return { error: 'Blueprint must be ACTIVE to use', code: 'BLUEPRINT_NOT_ACTIVE' };
 
     let objectiveId = input.objectiveId;
     if (!objectiveId) {
-      const obj = db.prepare(`
-        SELECT id FROM objectives WHERE objective_type = ? AND (workspace_id IS NULL OR workspace_id = ?) AND is_active = 1 LIMIT 1
-      `).get(bp.objectiveType, workspaceId) as { id: string } | undefined;
-      if (!obj) return { error: 'No matching objective found', code: 'OBJECTIVE_NOT_FOUND' };
-      objectiveId = obj.id;
+      const defaultObj = await repos.objective.findDefaultByType(bp.objectiveType, workspaceId);
+      if (!defaultObj) return { error: 'No matching objective found', code: 'OBJECTIVE_NOT_FOUND' };
+      objectiveId = defaultObj.id;
     }
 
-    const objective = db.prepare('SELECT * FROM objectives WHERE id = ?').get(objectiveId) as ObjectiveRow | undefined;
+    const objective = await repos.objective.findById(objectiveId);
     if (!objective) return { error: 'Objective not found', code: 'OBJECTIVE_NOT_FOUND' };
     if (objective.is_system !== 1 && objective.workspace_id !== workspaceId) {
       return { error: 'Objective workspace mismatch', code: 'FORBIDDEN' };

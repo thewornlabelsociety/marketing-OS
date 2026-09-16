@@ -21,10 +21,26 @@ export class SqliteCampaignRepository implements CampaignRepository {
       conditions.push('c.status = ?');
       params.push(filters.status);
     }
+    if (filters.statusIn?.length) {
+      conditions.push(`c.status IN (${filters.statusIn.map(() => '?').join(', ')})`);
+      params.push(...filters.statusIn);
+    }
+    if (filters.statusNotIn?.length) {
+      conditions.push(`c.status NOT IN (${filters.statusNotIn.map(() => '?').join(', ')})`);
+      params.push(...filters.statusNotIn);
+    }
 
     return db
       .prepare(`${JOIN_SQL} WHERE ${conditions.join(' AND ')} ORDER BY c.created_at DESC`)
       .all(...params) as CampaignRow[];
+  }
+
+  async countActive(workspaceId: string, excludeStatuses: string[]): Promise<number> {
+    const placeholders = excludeStatuses.map(() => '?').join(', ');
+    const row = db.prepare(
+      `SELECT COUNT(*) as c FROM campaigns WHERE workspace_id = ? AND status NOT IN (${placeholders})`
+    ).get(workspaceId, ...excludeStatuses) as { c: number };
+    return row.c;
   }
 
   async findByIdWithObjective(id: string): Promise<CampaignRow | null> {
@@ -49,13 +65,14 @@ export class SqliteCampaignRepository implements CampaignRepository {
   async create(input: CampaignCreateInput): Promise<CampaignRow> {
     db.prepare(
       `INSERT INTO campaigns
-         (id, workspace_id, objective_id, name, status, source_type, source_id,
+         (id, workspace_id, objective_id, recommendation_id, name, status, source_type, source_id,
           source_title, source_description, source_metadata, brief, channels, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'DRAFTING', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 'DRAFTING', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       input.id,
       input.workspaceId,
       input.objectiveId,
+      input.recommendationId ?? null,
       input.name,
       input.sourceType,
       input.sourceId,

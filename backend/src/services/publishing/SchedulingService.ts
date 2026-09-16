@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import { DEFAULT_SCHEDULE_TIMEZONE } from './publishingUtils';
 import type { MarketingChannel } from '../../types/channels';
 import type {
@@ -377,7 +378,8 @@ export class SchedulingService {
     if (!schedule) return { error: 'Schedule not found.', code: 'NOT_FOUND' };
     const artifact = await creativeGeneratorService.getById(schedule.sourceCreativeArtifactId, campaignId);
     if (!artifact) return { error: 'Source creative not found.', code: 'NOT_FOUND' };
-    const campaign = db.prepare('SELECT id, name FROM campaigns WHERE id = ?').get(campaignId) as { id: string; name: string };
+    const campaign = await getCoreRepositories().campaign.findById(campaignId);
+    if (!campaign) return { error: 'Campaign not found.', code: 'NOT_FOUND' };
 
     return {
       campaign: { id: campaign.id, name: campaign.name },

@@ -6,8 +6,11 @@ import type {
   CreativeArtifactRepository,
   CreativeApprovalRepository,
   CreativeApprovalUpsert,
+  CreativeDerivationRepository,
   CreativeRevisionInsert,
   CreativeRevisionRepository,
+  CreativeSourceLinkRepository,
+  CreativeSourceLinkRow,
 } from '../../core/creativeDomainTypes';
 import type { CreativeApproval } from '../../../types/creativeArtifact';
 import {
@@ -42,6 +45,25 @@ export class PostgresCreativeArtifactRepository implements CreativeArtifactRepos
     return row ? mapCreativeArtifactRow(row) : null;
   }
 
+  async findByIdForWorkspace(id: string, workspaceId: string) {
+    const result = await this.db.query(
+      'SELECT * FROM creative_artifacts WHERE id = $1 AND workspace_id = $2',
+      [id, workspaceId],
+    );
+    const row = result.rows[0] as CreativeArtifactRow | undefined;
+    return row ? mapCreativeArtifactRow(row) : null;
+  }
+
+  async findByRepurposeRequestId(requestId: string) {
+    const result = await this.db.query(
+      'SELECT id, content_key, content_type, channel FROM creative_artifacts WHERE repurpose_request_id = $1',
+      [requestId],
+    );
+    return (result.rows as Array<{ id: string; content_key: string; content_type: string; channel: string }>).map(
+      (r) => ({ id: r.id, contentKey: r.content_key, contentType: r.content_type, channel: r.channel }),
+    );
+  }
+
   async listByCampaignAndKey(campaignId: string, contentKey: string) {
     const result = await this.db.query(
       'SELECT * FROM creative_artifacts WHERE campaign_id = $1 AND content_key = $2 ORDER BY version DESC',
@@ -72,14 +94,27 @@ export class PostgresCreativeArtifactRepository implements CreativeArtifactRepos
       INSERT INTO creative_artifacts
         (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
          content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-         title, content, quality, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $11, $12, $13, $14, $15, $16, $17)
+         title, content, quality,
+         creative_direction, ai_provider, ai_model, ai_generated, ai_task_type,
+         repurpose_request_id, marketing_scopes_json, marketing_scope, media_asset_id,
+         created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $11, $12, $13, $14, $15,
+              $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
     `, [
       input.id, input.workspaceId, input.campaignId,
       input.sourceContentPlanId, input.sourceContentPlanVersion,
       input.contentKey, input.deliverableId, input.version, input.status,
       input.channel, input.contentType, input.format,
       input.title, input.content, input.quality,
+      input.creativeDirection ?? null,
+      input.aiProvider ?? null,
+      input.aiModel ?? null,
+      input.aiGenerated ? 1 : 0,
+      input.aiTaskType ?? null,
+      input.repurposeRequestId ?? null,
+      input.marketingScopesJson ?? null,
+      input.marketingScope ?? null,
+      input.mediaAssetId ?? null,
       input.createdAt, input.updatedAt,
     ]);
     maybeInjectCreativeFailure('generate_after_insert');
@@ -251,10 +286,74 @@ export class PostgresCreativeApprovalRepository implements CreativeApprovalRepos
   }
 }
 
+export class PostgresCreativeSourceLinkRepository implements CreativeSourceLinkRepository {
+  private readonly db: PostgresQueryable;
+
+  constructor(client?: PoolClient) {
+    this.db = new PostgresQueryable(client);
+  }
+
+  async insert(artifactId: string, sourceRecordId: string, position: number, createdAt: string) {
+    await this.db.query(`
+      INSERT INTO creative_source_links
+        (creative_artifact_id, source_record_id, position, created_at)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (creative_artifact_id, source_record_id) DO NOTHING
+    `, [artifactId, sourceRecordId, position, createdAt]);
+  }
+
+  async listByArtifactId(artifactId: string): Promise<CreativeSourceLinkRow[]> {
+    const result = await this.db.query(
+      'SELECT source_record_id, position FROM creative_source_links WHERE creative_artifact_id = $1 ORDER BY position ASC',
+      [artifactId],
+    );
+    return (result.rows as Array<{ source_record_id: string; position: number }>).map(
+      (r) => ({ sourceRecordId: r.source_record_id, position: r.position }),
+    );
+  }
+
+  async copyFromParent(parentArtifactId: string, childArtifactId: string, createdAt: string) {
+    await this.db.query(`
+      INSERT INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at)
+      SELECT $2, source_record_id, position, $3
+      FROM creative_source_links
+      WHERE creative_artifact_id = $1
+      ON CONFLICT (creative_artifact_id, source_record_id) DO NOTHING
+    `, [parentArtifactId, childArtifactId, createdAt]);
+  }
+
+  async countBySourceRecordId(sourceRecordId: string): Promise<number> {
+    const result = await this.db.query(
+      'SELECT COUNT(*) as c FROM creative_source_links WHERE source_record_id = $1',
+      [sourceRecordId],
+    );
+    return parseInt((result.rows[0] as { c: string }).c, 10);
+  }
+}
+
+export class PostgresCreativeDerivationRepository implements CreativeDerivationRepository {
+  private readonly db: PostgresQueryable;
+
+  constructor(client?: PoolClient) {
+    this.db = new PostgresQueryable(client);
+  }
+
+  async insert(parentArtifactId: string, childArtifactId: string, relationship: string, createdAt: string) {
+    await this.db.query(`
+      INSERT INTO creative_derivations
+        (parent_artifact_id, child_artifact_id, relationship, created_at)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (child_artifact_id) DO NOTHING
+    `, [parentArtifactId, childArtifactId, relationship, createdAt]);
+  }
+}
+
 export function createPostgresCreativeRepositories(client?: PoolClient) {
   return {
     artifact: new PostgresCreativeArtifactRepository(client),
     revision: new PostgresCreativeRevisionRepository(client),
     approval: new PostgresCreativeApprovalRepository(client),
+    sourceLink: new PostgresCreativeSourceLinkRepository(client),
+    derivation: new PostgresCreativeDerivationRepository(client),
   };
 }

@@ -17,8 +17,9 @@ calendarScheduleRouter.get('/', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  const workspace = db.prepare('SELECT id FROM entities WHERE id = ?').get(workspaceId);
-  if (!workspace) {
+  const repos = getCoreRepositories();
+  const exists = await repos.workspace.exists(workspaceId);
+  if (!exists) {
     res.status(404).json({ error: 'Workspace not found' });
     return;
   }

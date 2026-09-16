@@ -44,11 +44,11 @@ blueprintsRouter.get('/:blueprintId', (req: Request, res: Response) => {
   res.json(result);
 });
 
-blueprintsRouter.post('/', (req: Request, res: Response) => {
+blueprintsRouter.post('/', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as { sourceCampaignId: string; name?: string };
-  const result = blueprintService.createFromCampaign(body.sourceCampaignId, workspaceId, body.name);
+  const result = await blueprintService.createFromCampaign(body.sourceCampaignId, workspaceId, body.name);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.status(201).json(result);
 });
@@ -85,7 +85,7 @@ blueprintsRouter.post('/:blueprintId/archive', (req: Request, res: Response) => 
   res.json(result);
 });
 
-blueprintsRouter.post('/:blueprintId/use', (req: Request, res: Response) => {
+blueprintsRouter.post('/:blueprintId/use', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as {
@@ -99,7 +99,7 @@ blueprintsRouter.post('/:blueprintId/use', (req: Request, res: Response) => {
     res.status(400).json({ error: 'sourceType and sourceTitle are required' });
     return;
   }
-  const result = blueprintService.use(req.params.blueprintId, workspaceId, body);
+  const result = await blueprintService.use(req.params.blueprintId, workspaceId, body);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.status(201).json(result);
 });

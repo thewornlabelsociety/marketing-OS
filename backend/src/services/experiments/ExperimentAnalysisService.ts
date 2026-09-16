@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import type { ConversionEvent, MeasurementWindow, PerformanceObservation } from '../../types/performance';
 import type {
   EvidenceCompleteness,
@@ -16,19 +17,17 @@ import { performanceAggregationService } from '../performance/PerformanceAggrega
 import { deriveRates, getPrimaryKpiValue, pickLatestCumulativeMetrics } from '../performance/metricsUtils';
 
 export class ExperimentAnalysisService {
-  analyze(
+  async analyze(
     experiment: Experiment,
     workspaceId: string,
     measurementWindow: MeasurementWindow,
-  ): ExperimentAnalysis | { error: string; code: string } {
+  ): Promise<ExperimentAnalysis | { error: string; code: string }> {
     if (experiment.variants.length < 2) {
       return { error: 'Experiment requires two variants', code: 'INSUFFICIENT_VARIANTS' };
     }
 
-    const campaign = db.prepare(`
-      SELECT c.*, o.objective_type, o.primary_kpi as objective_primary_kpi
-      FROM campaigns c JOIN objectives o ON o.id = c.objective_id WHERE c.id = ?
-    `).get(experiment.campaignId) as Record<string, unknown> | undefined;
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(experiment.campaignId);
     if (!campaign || campaign.workspace_id !== workspaceId) {
       return { error: 'Campaign not found', code: 'NOT_FOUND' };
     }
@@ -37,8 +36,8 @@ export class ExperimentAnalysisService {
     const campaignObjectiveKpi = experiment.primaryKpi;
     const policy = experiment.minimumEvidencePolicy;
 
-    const obsResult = performanceIngestionService.listObservations(experiment.campaignId, workspaceId);
-    const convResult = performanceIngestionService.listConversions(experiment.campaignId, workspaceId);
+    const obsResult = await performanceIngestionService.listObservations(experiment.campaignId, workspaceId);
+    const convResult = await performanceIngestionService.listConversions(experiment.campaignId, workspaceId);
     if ('error' in obsResult || 'error' in convResult) {
       return { error: 'Failed to load performance evidence', code: 'PERFORMANCE_ERROR' };
     }

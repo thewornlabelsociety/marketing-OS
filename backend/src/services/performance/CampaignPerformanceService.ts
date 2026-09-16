@@ -1,4 +1,5 @@
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import { PerformanceProviderRegistry } from '../../integrations/adapters/PerformanceProviderRegistry';
 import type { CampaignRow, ObjectiveRow } from '../../types';
 import type {
@@ -24,22 +25,23 @@ interface ScheduleRow {
 }
 
 export class CampaignPerformanceService {
-  getSummary(
+  async getSummary(
     campaignId: string,
     workspaceId: string,
     measurementWindow: MeasurementWindow = '7_DAYS'
-  ): CampaignPerformanceSummary | { error: string; code: string } {
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId) as CampaignRow | undefined;
+  ): Promise<CampaignPerformanceSummary | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
-    const objective = db.prepare('SELECT * FROM objectives WHERE id = ?').get(campaign.objective_id) as ObjectiveRow | undefined;
+    const objective = await repos.objective.findById(campaign.objective_id);
     if (!objective) return { error: 'Objective not found', code: 'NOT_FOUND' };
 
-    const observationsResult = performanceIngestionService.listObservations(campaignId, workspaceId);
+    const observationsResult = await performanceIngestionService.listObservations(campaignId, workspaceId);
     if ('error' in observationsResult) return observationsResult;
 
-    const conversionsResult = performanceIngestionService.listConversions(campaignId, workspaceId);
+    const conversionsResult = await performanceIngestionService.listConversions(campaignId, workspaceId);
     if ('error' in conversionsResult) return conversionsResult;
 
     const metrics = deriveRates(performanceAggregationService.aggregateCampaignMetrics(observationsResult));
@@ -103,21 +105,22 @@ export class CampaignPerformanceService {
     };
   }
 
-  evaluate(
+  async evaluate(
     campaignId: string,
     workspaceId: string,
     measurementWindow: MeasurementWindow = '7_DAYS'
-  ): ReturnType<typeof objectiveEvaluationService.evaluate> | { error: string; code: string } {
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId) as CampaignRow | undefined;
+  ): Promise<ReturnType<typeof objectiveEvaluationService.evaluate> | { error: string; code: string }> {
+    const repos = getCoreRepositories();
+    const campaign = await repos.campaign.findById(campaignId);
     if (!campaign) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
-    const objective = db.prepare('SELECT * FROM objectives WHERE id = ?').get(campaign.objective_id) as ObjectiveRow | undefined;
+    const objective = await repos.objective.findById(campaign.objective_id);
     if (!objective) return { error: 'Objective not found', code: 'NOT_FOUND' };
 
-    const observationsResult = performanceIngestionService.listObservations(campaignId, workspaceId);
+    const observationsResult = await performanceIngestionService.listObservations(campaignId, workspaceId);
     if ('error' in observationsResult) return observationsResult;
-    const conversionsResult = performanceIngestionService.listConversions(campaignId, workspaceId);
+    const conversionsResult = await performanceIngestionService.listConversions(campaignId, workspaceId);
     if ('error' in conversionsResult) return conversionsResult;
 
     const evaluation = objectiveEvaluationService.evaluate({
@@ -130,7 +133,7 @@ export class CampaignPerformanceService {
     });
 
     objectiveEvaluationService.persistEvaluation(workspaceId, evaluation);
-    performanceLearningService.extractFromCampaign(campaignId, workspaceId, evaluation.classification);
+    await performanceLearningService.extractFromCampaign(campaignId, workspaceId, evaluation.classification);
 
     return evaluation;
   }
@@ -140,7 +143,7 @@ export class CampaignPerformanceService {
     workspaceId: string,
     providerKey?: string
   ): Promise<{ ingested: number } | { error: string; code: string }> {
-    const campaign = db.prepare('SELECT workspace_id FROM campaigns WHERE id = ?').get(campaignId) as { workspace_id: string } | undefined;
+    const campaign = await getCoreRepositories().campaign.findById(campaignId);
     if (!campaign) return { error: 'Campaign not found', code: 'NOT_FOUND' };
     if (campaign.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
 
@@ -176,7 +179,7 @@ export class CampaignPerformanceService {
           mediaAssetId = assets[0]?.id;
         }
       }
-      const created = performanceIngestionService.createObservation({
+      const created = await performanceIngestionService.createObservation({
         workspaceId,
         campaignId,
         scheduleId: item.scheduleId,
@@ -200,7 +203,7 @@ export class CampaignPerformanceService {
     return { ingested };
   }
 
-  getWorkspaceSummary(workspaceId: string): {
+  async getWorkspaceSummary(workspaceId: string): Promise<{
     campaignsMeasured: number;
     attributedConversions: number;
     attributedRevenue: number;
@@ -216,10 +219,8 @@ export class CampaignPerformanceService {
       revenue?: number;
       status: string;
     }>;
-  } {
-    const campaigns = db.prepare(
-      'SELECT * FROM campaigns WHERE workspace_id = ? ORDER BY updated_at DESC'
-    ).all(workspaceId) as CampaignRow[];
+  }> {
+    const campaigns = await getCoreRepositories().campaign.list({ workspaceId });
 
     let attributedConversions = 0;
     let attributedRevenue = 0;
@@ -237,11 +238,11 @@ export class CampaignPerformanceService {
     }> = [];
 
     for (const campaign of campaigns) {
-      const obs = performanceIngestionService.listObservations(campaign.id, workspaceId);
+      const obs = await performanceIngestionService.listObservations(campaign.id, workspaceId);
       if ('error' in obs || obs.length === 0) continue;
       campaignsMeasured += 1;
 
-      const summary = this.getSummary(campaign.id, workspaceId);
+      const summary = await this.getSummary(campaign.id, workspaceId);
       if ('error' in summary) continue;
 
       attributedConversions += summary.conversions.purchases + summary.conversions.qualifiedLeads;

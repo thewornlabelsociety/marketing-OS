@@ -8,6 +8,7 @@ import type {
   AttentionSignalType,
 } from '../../types/attention';
 import type { CampaignRow } from '../../types';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import { creativeGeneratorService } from '../creative/CreativeGeneratorService';
 import { schedulingService } from '../publishing/SchedulingService';
 import { publishingService } from '../publishing/PublishingService';
@@ -276,23 +277,19 @@ export class AttentionSignalService {
   }
 
   private async deriveSignals(workspaceId: string): Promise<DerivedSignal[]> {
+    const repos = getCoreRepositories();
     const signals: DerivedSignal[] = [];
-    const campaigns = db.prepare(`
-      SELECT c.*, o.name as objective_name, o.objective_type, o.primary_kpi
-      FROM campaigns c
-      LEFT JOIN objectives o ON o.id = c.objective_id
-      WHERE c.workspace_id = ? AND c.status NOT IN ('ARCHIVED', 'CANCELLED')
-    `).all(workspaceId) as Array<CampaignRow & { objective_name?: string; objective_type?: string; primary_kpi?: string }>;
+    const campaigns = await repos.campaign.list({ workspaceId, statusNotIn: ['ARCHIVED', 'CANCELLED'] });
 
     for (const campaign of campaigns) {
-      this.deriveCampaignSignals(workspaceId, campaign, signals);
+      await this.deriveCampaignSignals(workspaceId, campaign, signals);
       await this.deriveCreativeSignals(workspaceId, campaign, signals);
       await this.deriveScheduleSignals(workspaceId, campaign, signals);
-      this.derivePerformanceSignals(workspaceId, campaign, signals);
-      this.deriveExperimentSignals(workspaceId, campaign, signals);
+      await this.derivePerformanceSignals(workspaceId, campaign, signals);
+      await this.deriveExperimentSignals(workspaceId, campaign, signals);
     }
 
-    this.deriveBlueprintSignals(workspaceId, signals);
+    await this.deriveBlueprintSignals(workspaceId, signals);
     this.deriveLearningSignals(workspaceId, signals);
     this.deriveIntegrationSignals(workspaceId, signals);
 
@@ -319,11 +316,12 @@ export class AttentionSignalService {
     });
   }
 
-  private deriveCampaignSignals(
+  private async deriveCampaignSignals(
     workspaceId: string,
     campaign: CampaignRow & { objective_name?: string },
     signals: DerivedSignal[],
-  ): void {
+  ): Promise<void> {
+    const repos = getCoreRepositories();
     const base = {
       entityType: 'CAMPAIGN' as AttentionEntityType,
       entityId: campaign.id,
@@ -369,9 +367,7 @@ export class AttentionSignalService {
       });
     }
 
-    const contentPlan = db.prepare(`
-      SELECT status, version FROM content_plans WHERE campaign_id = ? AND is_current = 1
-    `).get(campaign.id) as { status: string; version: number } | undefined;
+    const contentPlan = await repos.contentPlanning.plan.findCurrentByCampaignId(campaign.id);
     if (contentPlan?.status === 'READY_FOR_REVIEW') {
       this.push(workspaceId, signals, {
         signalType: 'CONTENT_READY_FOR_REVIEW',
@@ -501,15 +497,15 @@ export class AttentionSignalService {
     }
   }
 
-  private derivePerformanceSignals(
+  private async derivePerformanceSignals(
     workspaceId: string,
-    campaign: CampaignRow & { objective_type?: string; primary_kpi?: string; objective_name?: string },
+    campaign: CampaignRow,
     signals: DerivedSignal[],
-  ): void {
+  ): Promise<void> {
     if (!['PUBLISHED', 'MEASURING', 'COMPLETE'].includes(campaign.status)) return;
 
     const latest = objectiveEvaluationService.getLatestEvaluation(campaign.id);
-    const summary = campaignPerformanceService.getSummary(campaign.id, workspaceId);
+    const summary = await campaignPerformanceService.getSummary(campaign.id, workspaceId);
     if ('error' in summary) return;
 
     const classification = latest?.classification ?? summary.classification;
@@ -559,12 +555,12 @@ export class AttentionSignalService {
     }
   }
 
-  private deriveExperimentSignals(
+  private async deriveExperimentSignals(
     workspaceId: string,
     campaign: CampaignRow,
     signals: DerivedSignal[],
-  ): void {
-    const experiments = experimentService.list(campaign.id, workspaceId);
+  ): Promise<void> {
+    const experiments = await experimentService.list(campaign.id, workspaceId);
     if ('error' in experiments) return;
 
     for (const exp of experiments) {
@@ -648,16 +644,18 @@ export class AttentionSignalService {
     }
   }
 
-  private deriveBlueprintSignals(workspaceId: string, signals: DerivedSignal[]): void {
+  private async deriveBlueprintSignals(workspaceId: string, signals: DerivedSignal[]): Promise<void> {
+    const repos = getCoreRepositories();
     const rows = db.prepare(`
-      SELECT clr.*, c.name as campaign_name
-      FROM campaign_library_records clr
-      JOIN campaigns c ON c.id = clr.campaign_id
-      WHERE clr.workspace_id = ? AND clr.blueprint_candidate = 1 AND (clr.blueprint_id IS NULL OR clr.blueprint_id = '')
-    `).all(workspaceId) as Array<{ campaign_id: string; campaign_name: string; updated_at: string }>;
+      SELECT campaign_id, updated_at
+      FROM campaign_library_records
+      WHERE workspace_id = ? AND blueprint_candidate = 1 AND (blueprint_id IS NULL OR blueprint_id = '')
+    `).all(workspaceId) as Array<{ campaign_id: string; updated_at: string }>;
 
     for (const row of rows) {
-      const perf = campaignPerformanceService.getSummary(row.campaign_id, workspaceId);
+      const campaign = await repos.campaign.findById(row.campaign_id);
+      if (!campaign) continue;
+      const perf = await campaignPerformanceService.getSummary(row.campaign_id, workspaceId);
       if ('error' in perf || !perf.blueprintCandidate) continue;
       this.push(workspaceId, signals, {
         signalType: 'BLUEPRINT_CANDIDATE',
@@ -668,7 +666,7 @@ export class AttentionSignalService {
         sourceType: 'library_record',
         sourceId: row.campaign_id,
         sourceVersion: row.updated_at,
-        title: `${row.campaign_name} — blueprint candidate`,
+        title: `${campaign.name} — blueprint candidate`,
         summary: `${perf.classification.replace(/_/g, ' ').toLowerCase()} · ${perf.objective.type}`,
         actionLabel: 'Create Blueprint',
         actionTarget: `library:${row.campaign_id}:blueprint`,

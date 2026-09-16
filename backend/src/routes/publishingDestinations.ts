@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db/database';
+import { getCoreRepositories } from '../db/core/createCoreRepositories';
 import { integrationConnectionService } from '../services/integrations/IntegrationConnectionService';
 
 export const publishingDestinationsRouter = Router();
@@ -9,14 +9,15 @@ function resolveWorkspaceId(req: Request): string | undefined {
   return query.workspaceId;
 }
 
-publishingDestinationsRouter.get('/', (req: Request, res: Response) => {
+publishingDestinationsRouter.get('/', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  const workspace = db.prepare('SELECT id FROM entities WHERE id = ?').get(workspaceId);
-  if (!workspace) {
+  const repos = getCoreRepositories();
+  const exists = await repos.workspace.exists(workspaceId);
+  if (!exists) {
     res.status(404).json({ error: 'Workspace not found' });
     return;
   }

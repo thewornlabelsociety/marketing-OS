@@ -128,6 +128,23 @@ export class PostgresObjectiveRepository implements ObjectiveRepository {
     return row ? mapPostgresObjectiveRow(row) : null;
   }
 
+  async findDefaultByType(objectiveType: string, workspaceId: string): Promise<ObjectiveRow | null> {
+    const result = await getPostgresPool().query(
+      'SELECT * FROM objectives WHERE objective_type = $1 AND (workspace_id IS NULL OR workspace_id = $2) AND is_active = 1 LIMIT 1',
+      [objectiveType, workspaceId],
+    );
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? mapPostgresObjectiveRow(row) : null;
+  }
+
+  async findSystemDefault(): Promise<ObjectiveRow | null> {
+    const result = await getPostgresPool().query(
+      'SELECT * FROM objectives WHERE workspace_id IS NULL AND is_active = 1 ORDER BY name ASC LIMIT 1',
+    );
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? mapPostgresObjectiveRow(row) : null;
+  }
+
   async create(input: ObjectiveCreateInput): Promise<ObjectiveRow> {
     await getPostgresPool().query(
       `INSERT INTO objectives
@@ -213,12 +230,31 @@ export class PostgresCampaignRepository implements CampaignRepository {
       conditions.push(`c.status = $${idx++}`);
       params.push(filters.status);
     }
+    if (filters.statusIn?.length) {
+      const placeholders = filters.statusIn.map(() => `$${idx++}`).join(', ');
+      conditions.push(`c.status IN (${placeholders})`);
+      params.push(...filters.statusIn);
+    }
+    if (filters.statusNotIn?.length) {
+      const placeholders = filters.statusNotIn.map(() => `$${idx++}`).join(', ');
+      conditions.push(`c.status NOT IN (${placeholders})`);
+      params.push(...filters.statusNotIn);
+    }
 
     const result = await this.db.query(
       `${JOIN_SQL} WHERE ${conditions.join(' AND ')} ORDER BY c.created_at DESC`,
       params,
     );
     return result.rows.map((r) => mapPostgresCampaignRow(r as Record<string, unknown>));
+  }
+
+  async countActive(workspaceId: string, excludeStatuses: string[]): Promise<number> {
+    const placeholders = excludeStatuses.map((_, i) => `$${i + 2}`).join(', ');
+    const result = await this.db.query(
+      `SELECT COUNT(*) AS c FROM campaigns WHERE workspace_id = $1 AND status NOT IN (${placeholders})`,
+      [workspaceId, ...excludeStatuses],
+    );
+    return parseInt((result.rows[0] as { c: string }).c, 10);
   }
 
   async findByIdWithObjective(id: string): Promise<CampaignRow | null> {
@@ -245,13 +281,14 @@ export class PostgresCampaignRepository implements CampaignRepository {
   async create(input: CampaignCreateInput): Promise<CampaignRow> {
     await this.db.query(
       `INSERT INTO campaigns
-         (id, workspace_id, objective_id, name, status, source_type, source_id,
+         (id, workspace_id, objective_id, recommendation_id, name, status, source_type, source_id,
           source_title, source_description, source_metadata, brief, channels, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'DRAFTING', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+       VALUES ($1, $2, $3, $4, $5, 'DRAFTING', $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         input.id,
         input.workspaceId,
         input.objectiveId,
+        input.recommendationId ?? null,
         input.name,
         input.sourceType,
         input.sourceId,

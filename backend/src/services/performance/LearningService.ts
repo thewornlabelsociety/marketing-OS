@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import type { LearningConfidence, LearningStatus, LearningType, WorkspaceLearning } from '../../types/performance';
 
 interface LearningRow {
@@ -58,23 +59,23 @@ export class LearningService {
     return { ...mapLearning(row), evidence };
   }
 
-  activate(id: string, workspaceId: string): WorkspaceLearning | { error: string; code: string } {
+  async activate(id: string, workspaceId: string): Promise<WorkspaceLearning | { error: string; code: string }> {
     const row = db.prepare('SELECT * FROM workspace_learnings WHERE id = ?').get(id) as LearningRow | undefined;
     if (!row) return { error: 'Learning not found', code: 'NOT_FOUND' };
     if (row.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
     const now = new Date().toISOString();
     db.prepare('UPDATE workspace_learnings SET status = ?, updated_at = ? WHERE id = ?').run('ACTIVE', now, id);
-    this.syncToBrandBrain(workspaceId);
+    await this.syncToBrandBrain(workspaceId);
     return mapLearning(db.prepare('SELECT * FROM workspace_learnings WHERE id = ?').get(id) as LearningRow);
   }
 
-  dismiss(id: string, workspaceId: string): WorkspaceLearning | { error: string; code: string } {
+  async dismiss(id: string, workspaceId: string): Promise<WorkspaceLearning | { error: string; code: string }> {
     const row = db.prepare('SELECT * FROM workspace_learnings WHERE id = ?').get(id) as LearningRow | undefined;
     if (!row) return { error: 'Learning not found', code: 'NOT_FOUND' };
     if (row.workspace_id !== workspaceId) return { error: 'Workspace mismatch', code: 'FORBIDDEN' };
     const now = new Date().toISOString();
     db.prepare('UPDATE workspace_learnings SET status = ?, updated_at = ? WHERE id = ?').run('DISMISSED', now, id);
-    this.syncToBrandBrain(workspaceId);
+    await this.syncToBrandBrain(workspaceId);
     return mapLearning(db.prepare('SELECT * FROM workspace_learnings WHERE id = ?').get(id) as LearningRow);
   }
 
@@ -201,12 +202,13 @@ export class LearningService {
     return { marketPerformance, userPreferences };
   }
 
-  private syncToBrandBrain(workspaceId: string): void {
-    const entity = db.prepare('SELECT brand_kit FROM entities WHERE id = ?').get(workspaceId) as { brand_kit: string } | undefined;
-    if (!entity) return;
+  private async syncToBrandBrain(workspaceId: string): Promise<void> {
+    const repos = getCoreRepositories();
+    const brandKitJson = await repos.workspace.findBrandKit(workspaceId);
+    if (brandKitJson === null) return;
 
     let brandKit: Record<string, unknown> = {};
-    try { brandKit = JSON.parse(entity.brand_kit) as Record<string, unknown>; } catch { brandKit = {}; }
+    try { brandKit = JSON.parse(brandKitJson) as Record<string, unknown>; } catch { brandKit = {}; }
 
     const active = this.getActiveForContext(workspaceId);
     const bb = (brandKit.brandBrain ?? {}) as Record<string, unknown>;
@@ -217,7 +219,7 @@ export class LearningService {
     };
     brandKit.brandBrain = bb;
 
-    db.prepare('UPDATE entities SET brand_kit = ? WHERE id = ?').run(JSON.stringify(brandKit), workspaceId);
+    await repos.workspace.patchBrandKit(workspaceId, JSON.stringify(brandKit));
   }
 }
 

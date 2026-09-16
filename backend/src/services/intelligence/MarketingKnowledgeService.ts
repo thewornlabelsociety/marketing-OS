@@ -1,10 +1,6 @@
-import { db } from '../../db/database';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 import { KNOWLEDGE_DOMAIN_PATHS } from '../../types/marketing';
 import type { KnowledgeDomain } from '../../types/marketing';
-
-interface EntityRow {
-  brand_kit: string;
-}
 
 /**
  * Reads and writes marketing knowledge from the workspace's brand_kit JSON blob.
@@ -12,10 +8,10 @@ interface EntityRow {
  * and all other marketing intelligence for a workspace.
  */
 export class MarketingKnowledgeService {
-  private getBrandKit(workspaceId: string): Record<string, unknown> {
-    const row = db.prepare('SELECT brand_kit FROM entities WHERE id = ?').get(workspaceId) as EntityRow | undefined;
-    if (!row) return {};
-    try { return JSON.parse(row.brand_kit || '{}'); }
+  private async getBrandKit(workspaceId: string): Promise<Record<string, unknown>> {
+    const json = await getCoreRepositories().workspace.findBrandKit(workspaceId);
+    if (json === null) return {};
+    try { return JSON.parse(json || '{}') as Record<string, unknown>; }
     catch { return {}; }
   }
 
@@ -27,8 +23,8 @@ export class MarketingKnowledgeService {
   }
 
   /** Read one or more knowledge domains for a workspace. Returns a merged object. */
-  read(workspaceId: string, domains: KnowledgeDomain[]): Record<string, unknown> {
-    const kit = this.getBrandKit(workspaceId);
+  async read(workspaceId: string, domains: KnowledgeDomain[]): Promise<Record<string, unknown>> {
+    const kit = await this.getBrandKit(workspaceId);
     const result: Record<string, unknown> = {};
     for (const domain of domains) {
       const paths = KNOWLEDGE_DOMAIN_PATHS[domain];
@@ -43,24 +39,25 @@ export class MarketingKnowledgeService {
   }
 
   /** Read the full brand_kit for a workspace. */
-  readAll(workspaceId: string): Record<string, unknown> {
+  async readAll(workspaceId: string): Promise<Record<string, unknown>> {
     return this.getBrandKit(workspaceId);
   }
 
   /** Deep-merge updates into the brand_kit for a workspace. */
-  update(workspaceId: string, updates: Record<string, unknown>): void {
-    const current = this.getBrandKit(workspaceId);
+  async update(workspaceId: string, updates: Record<string, unknown>): Promise<void> {
+    const repos = getCoreRepositories();
+    const current = await this.getBrandKit(workspaceId);
     const merged = deepMerge(current, updates);
-    db.prepare('UPDATE entities SET brand_kit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(JSON.stringify(merged), workspaceId);
+    await repos.workspace.patchBrandKit(workspaceId, JSON.stringify(merged));
   }
 
   /**
    * Apply a structured knowledge seed to a workspace's brand_kit.
    * Only writes keys that are missing — does not overwrite existing knowledge.
    */
-  seedIfEmpty(workspaceId: string, seed: Record<string, unknown>): { applied: boolean; skippedKeys: string[] } {
-    const current = this.getBrandKit(workspaceId);
+  async seedIfEmpty(workspaceId: string, seed: Record<string, unknown>): Promise<{ applied: boolean; skippedKeys: string[] }> {
+    const repos = getCoreRepositories();
+    const current = await this.getBrandKit(workspaceId);
     const skippedKeys: string[] = [];
     const toApply: Record<string, unknown> = {};
 
@@ -77,15 +74,14 @@ export class MarketingKnowledgeService {
     }
 
     const merged = deepMerge(current, toApply);
-    db.prepare('UPDATE entities SET brand_kit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(JSON.stringify(merged), workspaceId);
+    await repos.workspace.patchBrandKit(workspaceId, JSON.stringify(merged));
 
     return { applied: true, skippedKeys };
   }
 
   /** Format knowledge domains as a compact string for inclusion in AI prompts. */
-  formatForPrompt(workspaceId: string, domains: KnowledgeDomain[]): string {
-    const knowledge = this.read(workspaceId, domains);
+  async formatForPrompt(workspaceId: string, domains: KnowledgeDomain[]): Promise<string> {
+    const knowledge = await this.read(workspaceId, domains);
     if (Object.keys(knowledge).length === 0) return '';
     return JSON.stringify(knowledge, null, 2);
   }

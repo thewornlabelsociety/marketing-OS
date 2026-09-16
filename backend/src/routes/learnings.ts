@@ -39,13 +39,13 @@ learningsRouter.get('/:id', (req: Request, res: Response) => {
   res.json(learning);
 });
 
-learningsRouter.post('/:id/activate', (req: Request, res: Response) => {
+learningsRouter.post('/:id/activate', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  const result = learningService.activate(req.params.id, workspaceId);
+  const result = await learningService.activate(req.params.id, workspaceId);
   if ('error' in result) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
     return;
@@ -53,13 +53,13 @@ learningsRouter.post('/:id/activate', (req: Request, res: Response) => {
   res.json(result);
 });
 
-learningsRouter.post('/:id/dismiss', (req: Request, res: Response) => {
+learningsRouter.post('/:id/dismiss', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' });
     return;
   }
-  const result = learningService.dismiss(req.params.id, workspaceId);
+  const result = await learningService.dismiss(req.params.id, workspaceId);
   if ('error' in result) {
     res.status(statusFor(result.code)).json({ error: result.error, code: result.code });
     return;

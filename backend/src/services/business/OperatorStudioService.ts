@@ -4,6 +4,7 @@ import { aiEnv } from '../../config/aiEnvironment';
 import { aiOrchestrator } from '../intelligence/AIOrchestrator';
 import type { MarketingRecommendationRow } from '../../types/marketingRecommendations';
 import { findDestination } from '../../types/studioDestinations';
+import { getCoreRepositories } from '../../db/core/createCoreRepositories';
 
 export type StudioFormat = 'POST' | 'CAROUSEL' | 'STORY' | 'EMAIL' | 'WHOLE_SET';
 export type CreativeDirection = 'EDITORIAL' | 'PRODUCT_LED' | 'MINIMAL';
@@ -281,8 +282,9 @@ class OperatorStudioService {
     if (sourceProductIds.length > 6) return { error: 'Select up to 6 products at a time', code: 'BAD_REQUEST' };
     if (!FORMAT_META[format]) return { error: `Invalid format. Use: ${SINGLE_FORMATS.join(', ')}`, code: 'BAD_REQUEST' };
 
-    const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
-      | { id: string; name: string; brand_kit: string } | undefined;
+    const repos = getCoreRepositories();
+
+    const entity = await repos.workspace.findById(workspaceId);
     if (!entity) return { error: 'Workspace not found', code: 'NOT_FOUND' };
 
     const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown>; identity?: { market?: string } };
@@ -297,16 +299,18 @@ class OperatorStudioService {
       if (!recRow) return { error: 'Recommendation not found', code: 'NOT_FOUND' };
       if (recRow.status !== 'NEW') return { error: 'Recommendation is no longer available', code: 'CONFLICT' };
       if (recRow.objective_id) {
-        const validObjective = db.prepare(`SELECT id FROM objectives WHERE id = ? AND is_active = 1 AND (workspace_id = ? OR workspace_id IS NULL)`).get(recRow.objective_id, workspaceId) as { id: string } | undefined;
-        if (!validObjective) return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+        const validObjective = await repos.objective.findForCampaignValidation(recRow.objective_id);
+        if (!validObjective || (validObjective.workspace_id !== null && validObjective.workspace_id !== workspaceId)) {
+          return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+        }
         objectiveId = recRow.objective_id;
       } else {
-        const sysObj = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+        const sysObj = await repos.objective.findForCampaignValidation('obj_sys_sales');
         if (!sysObj) return { error: 'System sales objective not found', code: 'NOT_FOUND' };
         objectiveId = sysObj.id;
       }
     } else {
-      const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+      const objective = await repos.objective.findForCampaignValidation('obj_sys_sales');
       if (!objective) return { error: 'System sales objective not found. Database may need seeding.', code: 'NOT_FOUND' };
       objectiveId = objective.id;
     }
@@ -406,90 +410,93 @@ class OperatorStudioService {
 
     const quality = JSON.stringify({ passed: true, checks: [], warnings: [] });
 
-    db.transaction(() => {
-      db.prepare(`
-        INSERT INTO campaigns (id, workspace_id, objective_id, recommendation_id, name, status, source_type, source_title, channels, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
-      `).run(campaignId, workspaceId, objectiveId, recommendationId ?? null, campaignName, campaignName, JSON.stringify([meta.channel]), now, now);
+    // Core writes via repository — no longer in a single transaction.
+    // TRANSACTION BOUNDARY: marketing_recommendations update (below) is non-atomic with these core writes.
+    await repos.campaign.create({
+      id: campaignId, workspaceId, objectiveId, recommendationId,
+      name: campaignName, sourceType: 'INVENTORY_BATCH', sourceId: null,
+      sourceTitle: campaignName, sourceDescription: null, sourceMetadata: {},
+      brief: null, channels: [meta.channel], createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`
-        INSERT INTO campaign_plans
-          (id, campaign_id, workspace_id, version, status, is_current,
-           strategy_campaign_angle, strategy_core_message, strategy_proposition, strategy_audience_focus,
-           hooks, proof_points, cta_primary, cta_alternatives,
-           channels, content_mix, cadence_summary, cadence_duration,
-           creative_visual_direction, creative_copy_direction,
-           measurement_objective, measurement_primary_kpi, measurement_supporting_kpis,
-           rationale_summary, created_at, updated_at)
-        VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
-      `).run(
-        planId, campaignId, workspaceId,
-        'New Arrivals showcase', 'Fresh curated finds ready to market',
-        'Curated pre-loved fashion', 'Fashion-conscious shoppers',
-        JSON.stringify({ primary: `Shop ${campaignName}`, supporting: [] }),
-        `Shop ${campaignName}`, 'Immediate publishing',
-        creativeDirection ? `${creativeDirection} direction — ${meta.channel}` : 'Editorial, clean product focus',
-        'Brand-authentic, product-specific', 'Sales', 'conversions',
-        `Operator-selected new arrivals for immediate publishing`,
-        now, now,
-      );
+    await repos.planning.plan.insert({
+      id: planId, campaignId, workspaceId, version: 1, status: 'APPROVED', isCurrent: true,
+      data: {
+        strategy: {
+          campaignAngle: 'New Arrivals showcase',
+          coreMessage: 'Fresh curated finds ready to market',
+          proposition: 'Curated pre-loved fashion',
+          audienceFocus: 'Fashion-conscious shoppers',
+        },
+        hooks: { primary: `Shop ${campaignName}`, supporting: [] },
+        proofPoints: [],
+        callToAction: { primary: `Shop ${campaignName}`, alternatives: [] },
+        channels: [],
+        contentMix: [],
+        cadence: { summary: 'Immediate publishing', duration: null },
+        creativeDirection: {
+          visualDirection: creativeDirection ? `${creativeDirection} direction — ${meta.channel}` : 'Editorial, clean product focus',
+          copyDirection: 'Brand-authentic, product-specific',
+        },
+        measurement: { objective: 'Sales', primaryKpi: 'conversions', supportingKpis: [] },
+        rationale: { summary: 'Operator-selected new arrivals for immediate publishing' },
+      },
+      createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
-        .run(planApprovalId, campaignId, workspaceId, planId, now, now);
+    await repos.planning.approval.upsertByCampaignId({
+      id: planApprovalId, campaignId, workspaceId,
+      approvedPlanId: planId, approvedVersion: 1,
+      approvedAt: now, createdAt: now,
+    });
 
-      db.prepare(`INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)`)
-        .run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
+    await repos.contentPlanning.plan.insert({
+      id: contentPlanId, workspaceId, campaignId,
+      sourcePlanId: planId, sourcePlanVersion: 1,
+      version: 1, status: 'APPROVED', body: contentPlanBody,
+      createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
-        .run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
+    await repos.contentPlanning.approval.upsertByCampaignId({
+      id: contentPlanApprovalId, campaignId, workspaceId,
+      contentPlanId, contentPlanVersion: 1,
+      approvedAt: now, createdAt: now,
+    });
 
-      db.prepare(`
-        INSERT INTO creative_artifacts
-          (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
-           content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-           title, content, quality, creative_direction, ai_provider, ai_model, ai_generated, ai_task_type, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        artifactId, workspaceId, campaignId, contentPlanId,
-        contentKey, deliverableId,
-        meta.channel, meta.contentType, meta.format,
-        meta.title, JSON.stringify(content), quality, creativeDirection ?? null,
-        aiGenerated ? (aiEnv.provider ?? null) : null,
-        aiGenerated ? (aiEnv.revisionModel ?? null) : null,
-        aiGenerated ? 1 : 0,
-        aiGenerated ? 'CREATIVE_COPY' : null,
-        now, now,
-      );
+    const artifact = await repos.creative.artifact.insert({
+      id: artifactId, workspaceId, campaignId,
+      sourceContentPlanId: contentPlanId, sourceContentPlanVersion: 1,
+      contentKey, deliverableId, version: 1, status: 'READY_FOR_REVIEW',
+      channel: meta.channel, contentType: meta.contentType, format: meta.format,
+      title: meta.title, content: JSON.stringify(content), quality,
+      creativeDirection: creativeDirection ?? null,
+      aiProvider: aiGenerated ? (aiEnv.provider ?? null) : null,
+      aiModel: aiGenerated ? (aiEnv.revisionModel ?? null) : null,
+      aiGenerated,
+      aiTaskType: aiGenerated ? 'CREATIVE_COPY' : null,
+      createdAt: now, updatedAt: now,
+    });
 
-      sourceRows.forEach((row, position) => {
-        db.prepare(`INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at) VALUES (?, ?, ?, ?)`)
-          .run(artifactId, row.id, position, now);
-      });
+    for (let position = 0; position < sourceRows.length; position++) {
+      await repos.creative.sourceLink.insert(artifactId, sourceRows[position].id, position, now);
+    }
 
-      // Atomically accept recommendation
-      if (recommendationId) {
-        db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
-          .run(campaignId, artifactId, now, now, recommendationId, workspaceId);
-      }
-    })();
-
-    const artifactRow = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
-      id: string; workspace_id: string; campaign_id: string; source_content_plan_id: string;
-      source_content_plan_version: number; content_key: string; deliverable_id: string; version: number;
-      status: string; is_current: number; channel: string; content_type: string; format: string;
-      title: string | null; content: string; quality: string; created_at: string; updated_at: string;
-    };
+    // Non-core write: update marketing_recommendations (non-atomic with core writes above)
+    if (recommendationId) {
+      db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
+        .run(campaignId, artifactId, now, now, recommendationId, workspaceId);
+    }
 
     return {
       campaignId, campaignName, contentKey,
       artifact: {
-        id: artifactRow.id, workspaceId: artifactRow.workspace_id, campaignId: artifactRow.campaign_id,
-        sourceContentPlanId: artifactRow.source_content_plan_id, sourceContentPlanVersion: artifactRow.source_content_plan_version,
-        contentKey: artifactRow.content_key, deliverableId: artifactRow.deliverable_id, version: artifactRow.version,
-        channel: artifactRow.channel, contentType: artifactRow.content_type, format: artifactRow.format,
-        title: artifactRow.title, content: JSON.parse(artifactRow.content) as unknown, quality: JSON.parse(artifactRow.quality) as unknown,
-        status: artifactRow.status, isCurrent: artifactRow.is_current === 1,
-        createdAt: artifactRow.created_at, updatedAt: artifactRow.updated_at,
+        id: artifact.id, workspaceId: artifact.workspaceId, campaignId: artifact.campaignId,
+        sourceContentPlanId: artifact.sourceContentPlanId, sourceContentPlanVersion: artifact.sourceContentPlanVersion,
+        contentKey: artifact.contentKey, deliverableId: artifact.deliverableId, version: artifact.version,
+        channel: artifact.channel, contentType: artifact.contentType, format: artifact.format,
+        title: artifact.title ?? null, content: artifact.content, quality: artifact.quality,
+        status: artifact.status, isCurrent: artifact.isCurrent,
+        createdAt: artifact.createdAt, updatedAt: artifact.updatedAt,
       },
       products,
       aiGenerated,
@@ -509,8 +516,9 @@ class OperatorStudioService {
     if (!sourceProductIds?.length) return { error: 'At least one product must be selected', code: 'BAD_REQUEST' };
     if (sourceProductIds.length > 6) return { error: 'Select up to 6 products at a time', code: 'BAD_REQUEST' };
 
-    const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
-      | { id: string; name: string; brand_kit: string } | undefined;
+    const repos = getCoreRepositories();
+
+    const entity = await repos.workspace.findById(workspaceId);
     if (!entity) return { error: 'Workspace not found', code: 'NOT_FOUND' };
 
     const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown> };
@@ -525,16 +533,18 @@ class OperatorStudioService {
       if (!recRowWS) return { error: 'Recommendation not found', code: 'NOT_FOUND' };
       if (recRowWS.status !== 'NEW') return { error: 'Recommendation is no longer available', code: 'CONFLICT' };
       if (recRowWS.objective_id) {
-        const validObj = db.prepare(`SELECT id FROM objectives WHERE id = ? AND is_active = 1 AND (workspace_id = ? OR workspace_id IS NULL)`).get(recRowWS.objective_id, workspaceId) as { id: string } | undefined;
-        if (!validObj) return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+        const validObj = await repos.objective.findForCampaignValidation(recRowWS.objective_id);
+        if (!validObj || (validObj.workspace_id !== null && validObj.workspace_id !== workspaceId)) {
+          return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+        }
         objectiveIdWS = recRowWS.objective_id;
       } else {
-        const sysObj = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+        const sysObj = await repos.objective.findForCampaignValidation('obj_sys_sales');
         if (!sysObj) return { error: 'System sales objective not found', code: 'NOT_FOUND' };
         objectiveIdWS = sysObj.id;
       }
     } else {
-      const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+      const objective = await repos.objective.findForCampaignValidation('obj_sys_sales');
       if (!objective) return { error: 'System sales objective not found.', code: 'NOT_FOUND' };
       objectiveIdWS = objective.id;
     }
@@ -639,98 +649,107 @@ class OperatorStudioService {
       cadence: { phases: [] },
     });
 
-    db.transaction(() => {
-      db.prepare(`
-        INSERT INTO campaigns (id, workspace_id, objective_id, recommendation_id, name, status, source_type, source_title, channels, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'DRAFTING', 'INVENTORY_BATCH', ?, ?, ?, ?)
-      `).run(campaignId, workspaceId, objectiveIdWS, recommendationId ?? null, campaignName, campaignName, JSON.stringify(['INSTAGRAM', 'EMAIL']), now, now);
-
-      db.prepare(`
-        INSERT INTO campaign_plans
-          (id, campaign_id, workspace_id, version, status, is_current,
-           strategy_campaign_angle, strategy_core_message, strategy_proposition, strategy_audience_focus,
-           hooks, proof_points, cta_primary, cta_alternatives,
-           channels, content_mix, cadence_summary, cadence_duration,
-           creative_visual_direction, creative_copy_direction,
-           measurement_objective, measurement_primary_kpi, measurement_supporting_kpis,
-           rationale_summary, created_at, updated_at)
-        VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
-      `).run(
-        planId, campaignId, workspaceId,
-        'New Arrivals full-set showcase', 'Fresh curated finds — full channel set',
-        'Curated pre-loved fashion', 'Fashion-conscious shoppers',
-        JSON.stringify({ primary: `Shop ${campaignName}`, supporting: [] }),
-        `Shop ${campaignName}`, 'Immediate publishing across all channels',
-        creativeDirection ? `${creativeDirection} direction` : 'Editorial, clean product focus',
-        'Brand-authentic, product-specific', 'Sales', 'conversions',
-        `Full-set new arrivals for immediate publishing`,
-        now, now,
-      );
-
-      db.prepare(`INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
-        .run(planApprovalId, campaignId, workspaceId, planId, now, now);
-
-      db.prepare(`INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)`)
-        .run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
-
-      db.prepare(`INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
-        .run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
-
-      for (const { fmt, deliverableId, artifactId } of formatIds) {
-        const meta = FORMAT_META[fmt];
-        db.prepare(`
-          INSERT INTO creative_artifacts
-            (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
-             content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-             title, content, quality, creative_direction, ai_provider, ai_model, ai_generated, ai_task_type, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          artifactId, workspaceId, campaignId, contentPlanId,
-          meta.contentKey, deliverableId,
-          meta.channel, meta.contentType, meta.format,
-          meta.title, JSON.stringify(formatContents[fmt]), quality, creativeDirection ?? null,
-          aiGenerated ? (aiEnv.provider ?? null) : null,
-          aiGenerated ? (aiEnv.revisionModel ?? null) : null,
-          aiGenerated ? 1 : 0,
-          aiGenerated ? 'CREATIVE_WHOLE_SET' : null,
-          now, now,
-        );
-
-        sourceRows.forEach((row, position) => {
-          db.prepare(`INSERT OR IGNORE INTO creative_source_links (creative_artifact_id, source_record_id, position, created_at) VALUES (?, ?, ?, ?)`)
-            .run(artifactId, row.id, position, now);
-        });
-      }
-
-      // Atomically accept recommendation (use first artifact as the accepted artifact)
-      if (recommendationId) {
-        const firstArtifactId = formatIds[0]?.artifactId ?? null;
-        db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
-          .run(campaignId, firstArtifactId, now, now, recommendationId, workspaceId);
-      }
-    })();
-
-    const formats: WholeSetFormatResult[] = formatIds.map(({ fmt, artifactId }) => {
-      const row = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
-        id: string; workspace_id: string; campaign_id: string; source_content_plan_id: string;
-        source_content_plan_version: number; content_key: string; deliverable_id: string; version: number;
-        status: string; is_current: number; channel: string; content_type: string; format: string;
-        title: string | null; content: string; quality: string; created_at: string; updated_at: string;
-      };
-      return {
-        format: fmt,
-        contentKey: row.content_key,
-        artifact: {
-          id: row.id, workspaceId: row.workspace_id, campaignId: row.campaign_id,
-          sourceContentPlanId: row.source_content_plan_id, sourceContentPlanVersion: row.source_content_plan_version,
-          contentKey: row.content_key, deliverableId: row.deliverable_id, version: row.version,
-          channel: row.channel, contentType: row.content_type, format: row.format,
-          title: row.title, content: JSON.parse(row.content) as unknown, quality: JSON.parse(row.quality) as unknown,
-          status: row.status, isCurrent: row.is_current === 1,
-          createdAt: row.created_at, updatedAt: row.updated_at,
-        },
-      };
+    // Core writes via repository — no longer in a single transaction.
+    // TRANSACTION BOUNDARY: marketing_recommendations update (below) is non-atomic with these core writes.
+    await repos.campaign.create({
+      id: campaignId, workspaceId, objectiveId: objectiveIdWS, recommendationId,
+      name: campaignName, sourceType: 'INVENTORY_BATCH', sourceId: null,
+      sourceTitle: campaignName, sourceDescription: null, sourceMetadata: {},
+      brief: null, channels: ['INSTAGRAM', 'EMAIL'], createdAt: now, updatedAt: now,
     });
+
+    await repos.planning.plan.insert({
+      id: planId, campaignId, workspaceId, version: 1, status: 'APPROVED', isCurrent: true,
+      data: {
+        strategy: {
+          campaignAngle: 'New Arrivals full-set showcase',
+          coreMessage: 'Fresh curated finds — full channel set',
+          proposition: 'Curated pre-loved fashion',
+          audienceFocus: 'Fashion-conscious shoppers',
+        },
+        hooks: { primary: `Shop ${campaignName}`, supporting: [] },
+        proofPoints: [],
+        callToAction: { primary: `Shop ${campaignName}`, alternatives: [] },
+        channels: [],
+        contentMix: [],
+        cadence: { summary: 'Immediate publishing across all channels', duration: null },
+        creativeDirection: {
+          visualDirection: creativeDirection ? `${creativeDirection} direction` : 'Editorial, clean product focus',
+          copyDirection: 'Brand-authentic, product-specific',
+        },
+        measurement: { objective: 'Sales', primaryKpi: 'conversions', supportingKpis: [] },
+        rationale: { summary: 'Full-set new arrivals for immediate publishing' },
+      },
+      createdAt: now, updatedAt: now,
+    });
+
+    await repos.planning.approval.upsertByCampaignId({
+      id: planApprovalId, campaignId, workspaceId,
+      approvedPlanId: planId, approvedVersion: 1,
+      approvedAt: now, createdAt: now,
+    });
+
+    await repos.contentPlanning.plan.insert({
+      id: contentPlanId, workspaceId, campaignId,
+      sourcePlanId: planId, sourcePlanVersion: 1,
+      version: 1, status: 'APPROVED', body: contentPlanBody,
+      createdAt: now, updatedAt: now,
+    });
+
+    await repos.contentPlanning.approval.upsertByCampaignId({
+      id: contentPlanApprovalId, campaignId, workspaceId,
+      contentPlanId, contentPlanVersion: 1,
+      approvedAt: now, createdAt: now,
+    });
+
+    const insertedArtifacts: Array<{ fmt: SingleFormat; contentKey: string; artifact: StudioSetupResult['artifact'] }> = [];
+    for (const { fmt, deliverableId, artifactId } of formatIds) {
+      const meta = FORMAT_META[fmt];
+      const artifact = await repos.creative.artifact.insert({
+        id: artifactId, workspaceId, campaignId,
+        sourceContentPlanId: contentPlanId, sourceContentPlanVersion: 1,
+        contentKey: meta.contentKey, deliverableId, version: 1, status: 'READY_FOR_REVIEW',
+        channel: meta.channel, contentType: meta.contentType, format: meta.format,
+        title: meta.title, content: JSON.stringify(formatContents[fmt]), quality,
+        creativeDirection: creativeDirection ?? null,
+        aiProvider: aiGenerated ? (aiEnv.provider ?? null) : null,
+        aiModel: aiGenerated ? (aiEnv.revisionModel ?? null) : null,
+        aiGenerated,
+        aiTaskType: aiGenerated ? 'CREATIVE_WHOLE_SET' : null,
+        createdAt: now, updatedAt: now,
+      });
+
+      for (let position = 0; position < sourceRows.length; position++) {
+        await repos.creative.sourceLink.insert(artifactId, sourceRows[position].id, position, now);
+      }
+
+      insertedArtifacts.push({
+        fmt,
+        contentKey: meta.contentKey,
+        artifact: {
+          id: artifact.id, workspaceId: artifact.workspaceId, campaignId: artifact.campaignId,
+          sourceContentPlanId: artifact.sourceContentPlanId, sourceContentPlanVersion: artifact.sourceContentPlanVersion,
+          contentKey: artifact.contentKey, deliverableId: artifact.deliverableId, version: artifact.version,
+          channel: artifact.channel, contentType: artifact.contentType, format: artifact.format,
+          title: artifact.title ?? null, content: artifact.content, quality: artifact.quality,
+          status: artifact.status, isCurrent: artifact.isCurrent,
+          createdAt: artifact.createdAt, updatedAt: artifact.updatedAt,
+        },
+      });
+    }
+
+    // Non-core write: update marketing_recommendations (non-atomic with core writes above)
+    if (recommendationId) {
+      const firstArtifactId = formatIds[0]?.artifactId ?? null;
+      db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
+        .run(campaignId, firstArtifactId, now, now, recommendationId, workspaceId);
+    }
+
+    const formats: WholeSetFormatResult[] = insertedArtifacts.map(({ fmt, contentKey, artifact }) => ({
+      format: fmt,
+      contentKey,
+      artifact,
+    }));
 
     return { campaignId, campaignName, formats, products, aiGenerated, creativeDirection };
   }
@@ -743,8 +762,9 @@ class OperatorStudioService {
     if (!workspaceId) return { error: 'workspaceId is required', code: 'BAD_REQUEST' };
     if (!recommendationId) return { error: 'recommendationId is required for founder content', code: 'BAD_REQUEST' };
 
-    const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
-      | { id: string; name: string; brand_kit: string } | undefined;
+    const repos = getCoreRepositories();
+
+    const entity = await repos.workspace.findById(workspaceId);
     if (!entity) return { error: 'Workspace not found', code: 'NOT_FOUND' };
 
     const recRow = db.prepare('SELECT * FROM marketing_recommendations WHERE id = ? AND workspace_id = ?').get(recommendationId, workspaceId) as MarketingRecommendationRow | null;
@@ -754,11 +774,13 @@ class OperatorStudioService {
     // Resolve objective from recommendation lineage
     let objectiveId: string;
     if (recRow.objective_id) {
-      const validObj = db.prepare(`SELECT id FROM objectives WHERE id = ? AND is_active = 1 AND (workspace_id = ? OR workspace_id IS NULL)`).get(recRow.objective_id, workspaceId) as { id: string } | undefined;
-      if (!validObj) return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+      const validObj = await repos.objective.findForCampaignValidation(recRow.objective_id);
+      if (!validObj || (validObj.workspace_id !== null && validObj.workspace_id !== workspaceId)) {
+        return { error: 'Recommendation objective is not valid for this workspace', code: 'BAD_REQUEST' };
+      }
       objectiveId = recRow.objective_id;
     } else {
-      const sysObj = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+      const sysObj = await repos.objective.findForCampaignValidation('obj_sys_sales');
       if (!sysObj) return { error: 'System sales objective not found', code: 'NOT_FOUND' };
       objectiveId = sysObj.id;
     }
@@ -855,88 +877,95 @@ Return JSON:
       cadence: { phases: [] },
     });
 
-    db.transaction(() => {
-      db.prepare(`
-        INSERT INTO campaigns (id, workspace_id, objective_id, recommendation_id, name, status, source_type, source_title, channels, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'DRAFTING', 'FOUNDER_CONTENT', ?, ?, ?, ?)
-      `).run(campaignId, workspaceId, objectiveId, recommendationId, campaignName, campaignName, JSON.stringify(['INSTAGRAM']), now, now);
+    // Core writes via repository — no longer in a single transaction.
+    // TRANSACTION BOUNDARY: marketing_recommendations update (below) is non-atomic with these core writes.
+    await repos.campaign.create({
+      id: campaignId, workspaceId, objectiveId, recommendationId,
+      name: campaignName, sourceType: 'FOUNDER_CONTENT', sourceId: null,
+      sourceTitle: campaignName, sourceDescription: null, sourceMetadata: {},
+      brief: null, channels: ['INSTAGRAM'], createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`
-        INSERT INTO campaign_plans
-          (id, campaign_id, workspace_id, version, status, is_current,
-           strategy_campaign_angle, strategy_core_message, strategy_proposition, strategy_audience_focus,
-           hooks, proof_points, cta_primary, cta_alternatives,
-           channels, content_mix, cadence_summary, cadence_duration,
-           creative_visual_direction, creative_copy_direction,
-           measurement_objective, measurement_primary_kpi, measurement_supporting_kpis,
-           rationale_summary, created_at, updated_at)
-        VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
-      `).run(
-        planId, campaignId, workspaceId,
-        'Founder content', recRow.hook ?? 'Personal connection',
-        'Founder brand voice', 'Existing and potential customers',
-        JSON.stringify({ primary: recRow.cta ?? 'Engage', supporting: [] }),
-        recRow.cta ?? 'Engage', 'Short-form video or story',
-        null, 'Authentic founder voice', 'Engagement', 'reach',
-        recRow.rationale,
-        now, now,
-      );
+    await repos.planning.plan.insert({
+      id: planId, campaignId, workspaceId, version: 1, status: 'APPROVED', isCurrent: true,
+      data: {
+        strategy: {
+          campaignAngle: 'Founder content',
+          coreMessage: recRow.hook ?? 'Personal connection',
+          proposition: 'Founder brand voice',
+          audienceFocus: 'Existing and potential customers',
+        },
+        hooks: { primary: recRow.cta ?? 'Engage', supporting: [] },
+        proofPoints: [],
+        callToAction: { primary: recRow.cta ?? 'Engage', alternatives: [] },
+        channels: [],
+        contentMix: [],
+        cadence: { summary: 'Short-form video or story', duration: null },
+        creativeDirection: {
+          visualDirection: 'Authentic founder voice',
+          copyDirection: 'Authentic founder voice',
+        },
+        measurement: { objective: 'Engagement', primaryKpi: 'reach', supportingKpis: [] },
+        rationale: { summary: recRow.rationale },
+      },
+      createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
-        .run(planApprovalId, campaignId, workspaceId, planId, now, now);
+    await repos.planning.approval.upsertByCampaignId({
+      id: planApprovalId, campaignId, workspaceId,
+      approvedPlanId: planId, approvedVersion: 1,
+      approvedAt: now, createdAt: now,
+    });
 
-      db.prepare(`INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)`)
-        .run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
+    await repos.contentPlanning.plan.insert({
+      id: contentPlanId, workspaceId, campaignId,
+      sourcePlanId: planId, sourcePlanVersion: 1,
+      version: 1, status: 'APPROVED', body: contentPlanBody,
+      createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
-        .run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
+    await repos.contentPlanning.approval.upsertByCampaignId({
+      id: contentPlanApprovalId, campaignId, workspaceId,
+      contentPlanId, contentPlanVersion: 1,
+      approvedAt: now, createdAt: now,
+    });
 
-      db.prepare(`
-        INSERT INTO creative_artifacts
-          (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
-           content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-           title, content, quality, marketing_scope, creative_direction, ai_provider, ai_model, ai_generated, ai_task_type, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, 'INSTAGRAM', 'TALKING_POINTS', 'VERTICAL_9_16', ?, ?, ?, 'FOUNDER', ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        artifactId, workspaceId, campaignId, contentPlanId,
-        contentKey, deliverableId,
-        campaignName, JSON.stringify(content), quality,
-        null,
-        aiGenerated ? (aiEnv.provider ?? null) : null,
-        aiGenerated ? (aiEnv.revisionModel ?? null) : null,
-        aiGenerated ? 1 : 0,
-        aiGenerated ? 'CREATIVE_COPY' : null,
-        now, now,
-      );
+    const artifact = await repos.creative.artifact.insert({
+      id: artifactId, workspaceId, campaignId,
+      sourceContentPlanId: contentPlanId, sourceContentPlanVersion: 1,
+      contentKey, deliverableId, version: 1, status: 'READY_FOR_REVIEW',
+      channel: 'INSTAGRAM', contentType: 'TALKING_POINTS', format: 'VERTICAL_9_16',
+      title: campaignName, content: JSON.stringify(content), quality,
+      marketingScope: 'FOUNDER',
+      creativeDirection: null,
+      aiProvider: aiGenerated ? (aiEnv.provider ?? null) : null,
+      aiModel: aiGenerated ? (aiEnv.revisionModel ?? null) : null,
+      aiGenerated,
+      aiTaskType: aiGenerated ? 'CREATIVE_COPY' : null,
+      createdAt: now, updatedAt: now,
+    });
 
-      // Atomically accept the recommendation
-      db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
-        .run(campaignId, artifactId, now, now, recommendationId, workspaceId);
-    })();
-
-    const artifactRow = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
-      id: string; workspace_id: string; campaign_id: string; source_content_plan_id: string;
-      source_content_plan_version: number; content_key: string; deliverable_id: string; version: number;
-      status: string; is_current: number; channel: string; content_type: string; format: string;
-      title: string | null; content: string; quality: string; created_at: string; updated_at: string;
-    };
+    // Non-core write: update marketing_recommendations (non-atomic with core writes above)
+    db.prepare(`UPDATE marketing_recommendations SET status = 'ACCEPTED', accepted_campaign_id = ?, accepted_artifact_id = ?, accepted_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'NEW'`)
+      .run(campaignId, artifactId, now, now, recommendationId, workspaceId);
 
     return {
       campaignId, campaignName, contentKey,
       artifact: {
-        id: artifactRow.id, workspaceId: artifactRow.workspace_id, campaignId: artifactRow.campaign_id,
-        sourceContentPlanId: artifactRow.source_content_plan_id, sourceContentPlanVersion: artifactRow.source_content_plan_version,
-        contentKey: artifactRow.content_key, deliverableId: artifactRow.deliverable_id, version: artifactRow.version,
-        channel: artifactRow.channel, contentType: artifactRow.content_type, format: artifactRow.format,
-        title: artifactRow.title, content: JSON.parse(artifactRow.content) as unknown, quality: JSON.parse(artifactRow.quality) as unknown,
-        status: artifactRow.status, isCurrent: artifactRow.is_current === 1,
-        createdAt: artifactRow.created_at, updatedAt: artifactRow.updated_at,
+        id: artifact.id, workspaceId: artifact.workspaceId, campaignId: artifact.campaignId,
+        sourceContentPlanId: artifact.sourceContentPlanId, sourceContentPlanVersion: artifact.sourceContentPlanVersion,
+        contentKey: artifact.contentKey, deliverableId: artifact.deliverableId, version: artifact.version,
+        channel: artifact.channel, contentType: artifact.contentType, format: artifact.format,
+        title: artifact.title ?? null, content: artifact.content, quality: artifact.quality,
+        status: artifact.status, isCurrent: artifact.isCurrent,
+        createdAt: artifact.createdAt, updatedAt: artifact.updatedAt,
       },
       products: [],
       aiGenerated,
       creativeDirection: null,
     };
   }
+
   async setupFromMedia(params: {
     workspaceId: string;
     mediaAssetId: string;
@@ -951,15 +980,16 @@ Return JSON:
     if (!brief?.trim()) return { error: 'brief is required', code: 'BAD_REQUEST' };
     if (!FORMAT_META[format]) return { error: `Invalid format. Use: ${SINGLE_FORMATS.join(', ')}`, code: 'BAD_REQUEST' };
 
-    const entity = db.prepare('SELECT id, name, brand_kit FROM entities WHERE id = ?').get(workspaceId) as
-      | { id: string; name: string; brand_kit: string } | undefined;
+    const repos = getCoreRepositories();
+
+    const entity = await repos.workspace.findById(workspaceId);
     if (!entity) return { error: 'Workspace not found', code: 'NOT_FOUND' };
 
     const asset = db.prepare("SELECT id FROM media_assets WHERE id = ? AND workspace_id = ? AND status = 'ACTIVE'").get(mediaAssetId, workspaceId) as
       | { id: string } | undefined;
     if (!asset) return { error: 'Media asset not found or inactive', code: 'NOT_FOUND' };
 
-    const objective = db.prepare("SELECT id FROM objectives WHERE id = 'obj_sys_sales' AND is_active = 1").get() as { id: string } | undefined;
+    const objective = await repos.objective.findForCampaignValidation('obj_sys_sales');
     if (!objective) return { error: 'System sales objective not found. Database may need seeding.', code: 'NOT_FOUND' };
 
     const brandKit = JSON.parse(entity.brand_kit || '{}') as { brandBrain?: Record<string, unknown> };
@@ -1073,79 +1103,83 @@ CRITICAL RULES:
       cadence: { phases: [] },
     });
 
-    db.transaction(() => {
-      db.prepare(`
-        INSERT INTO campaigns (id, workspace_id, objective_id, name, status, source_type, source_title, channels, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'DRAFTING', 'MEDIA_UPLOAD', ?, ?, ?, ?)
-      `).run(campaignId, workspaceId, objective.id, campaignName, campaignName, JSON.stringify([meta.channel]), now, now);
+    // Core writes via repository
+    await repos.campaign.create({
+      id: campaignId, workspaceId, objectiveId: objective.id, recommendationId: null,
+      name: campaignName, sourceType: 'MEDIA_UPLOAD', sourceId: null,
+      sourceTitle: campaignName, sourceDescription: null, sourceMetadata: {},
+      brief: null, channels: [meta.channel], createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`
-        INSERT INTO campaign_plans
-          (id, campaign_id, workspace_id, version, status, is_current,
-           strategy_campaign_angle, strategy_core_message, strategy_proposition, strategy_audience_focus,
-           hooks, proof_points, cta_primary, cta_alternatives, channels, content_mix, cadence_summary, cadence_duration,
-           creative_visual_direction, creative_copy_direction,
-           measurement_objective, measurement_primary_kpi, measurement_supporting_kpis,
-           rationale_summary, created_at, updated_at)
-        VALUES (?, ?, ?, 1, 'APPROVED', 1, ?, ?, ?, ?, ?, '[]', ?, '[]', '[]', '[]', ?, NULL, ?, ?, ?, ?, '[]', ?, ?, ?)
-      `).run(
-        planId, campaignId, workspaceId,
-        'Media-first content', brief.trim(),
-        'Brand-authentic content', 'Existing audience',
-        JSON.stringify({ primary: 'See more via link in bio', supporting: [] }),
-        'Immediate publishing',
-        creativeDirection ? `${creativeDirection} direction` : 'Brand-authentic visual',
-        'Brand voice, human copy', 'Engagement', 'engagement',
-        'Operator-selected image with AI copy',
-        now, now,
-      );
+    await repos.planning.plan.insert({
+      id: planId, campaignId, workspaceId, version: 1, status: 'APPROVED', isCurrent: true,
+      data: {
+        strategy: {
+          campaignAngle: 'Media-first content',
+          coreMessage: brief.trim(),
+          proposition: 'Brand-authentic content',
+          audienceFocus: 'Existing audience',
+        },
+        hooks: { primary: 'See more via link in bio', supporting: [] },
+        proofPoints: [],
+        callToAction: { primary: 'Immediate publishing', alternatives: [] },
+        channels: [],
+        contentMix: [],
+        cadence: { summary: 'Immediate publishing', duration: null },
+        creativeDirection: {
+          visualDirection: creativeDirection ? `${creativeDirection} direction` : 'Brand-authentic visual',
+          copyDirection: 'Brand voice, human copy',
+        },
+        measurement: { objective: 'Engagement', primaryKpi: 'engagement', supportingKpis: [] },
+        rationale: { summary: 'Operator-selected image with AI copy' },
+      },
+      createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`INSERT INTO plan_approvals (id, campaign_id, workspace_id, approved_plan_id, approved_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
-        .run(planApprovalId, campaignId, workspaceId, planId, now, now);
+    await repos.planning.approval.upsertByCampaignId({
+      id: planApprovalId, campaignId, workspaceId,
+      approvedPlanId: planId, approvedVersion: 1,
+      approvedAt: now, createdAt: now,
+    });
 
-      db.prepare(`INSERT INTO content_plans (id, workspace_id, campaign_id, source_plan_id, source_plan_version, version, status, is_current, body, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1, 'APPROVED', 1, ?, ?, ?)`)
-        .run(contentPlanId, workspaceId, campaignId, planId, contentPlanBody, now, now);
+    await repos.contentPlanning.plan.insert({
+      id: contentPlanId, workspaceId, campaignId,
+      sourcePlanId: planId, sourcePlanVersion: 1,
+      version: 1, status: 'APPROVED', body: contentPlanBody,
+      createdAt: now, updatedAt: now,
+    });
 
-      db.prepare(`INSERT INTO content_plan_approvals (id, campaign_id, workspace_id, content_plan_id, content_plan_version, approved_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
-        .run(contentPlanApprovalId, campaignId, workspaceId, contentPlanId, now, now);
+    await repos.contentPlanning.approval.upsertByCampaignId({
+      id: contentPlanApprovalId, campaignId, workspaceId,
+      contentPlanId, contentPlanVersion: 1,
+      approvedAt: now, createdAt: now,
+    });
 
-      db.prepare(`
-        INSERT INTO creative_artifacts
-          (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
-           content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-           title, content, quality, media_asset_id, creative_direction, ai_provider, ai_model, ai_generated, ai_task_type, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?, 1, 'READY_FOR_REVIEW', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        artifactId, workspaceId, campaignId, contentPlanId,
-        contentKey, deliverableId,
-        meta.channel, meta.contentType, meta.format,
-        campaignName, JSON.stringify(content), quality,
-        mediaAssetId, creativeDirection ?? null,
-        aiGenerated ? (aiEnv.provider ?? null) : null,
-        aiGenerated ? (aiEnv.revisionModel ?? null) : null,
-        aiGenerated ? 1 : 0,
-        aiGenerated ? 'CREATIVE_COPY' : null,
-        now, now,
-      );
-    })();
-
-    const artifactRow = db.prepare('SELECT * FROM creative_artifacts WHERE id = ?').get(artifactId) as {
-      id: string; workspace_id: string; campaign_id: string; source_content_plan_id: string;
-      source_content_plan_version: number; content_key: string; deliverable_id: string; version: number;
-      status: string; is_current: number; channel: string; content_type: string; format: string;
-      title: string | null; content: string; quality: string; created_at: string; updated_at: string;
-    };
+    const artifact = await repos.creative.artifact.insert({
+      id: artifactId, workspaceId, campaignId,
+      sourceContentPlanId: contentPlanId, sourceContentPlanVersion: 1,
+      contentKey, deliverableId, version: 1, status: 'READY_FOR_REVIEW',
+      channel: meta.channel, contentType: meta.contentType, format: meta.format,
+      title: campaignName, content: JSON.stringify(content), quality,
+      mediaAssetId,
+      creativeDirection: creativeDirection ?? null,
+      aiProvider: aiGenerated ? (aiEnv.provider ?? null) : null,
+      aiModel: aiGenerated ? (aiEnv.revisionModel ?? null) : null,
+      aiGenerated,
+      aiTaskType: aiGenerated ? 'CREATIVE_COPY' : null,
+      createdAt: now, updatedAt: now,
+    });
 
     return {
       campaignId, campaignName, contentKey,
       artifact: {
-        id: artifactRow.id, workspaceId: artifactRow.workspace_id, campaignId: artifactRow.campaign_id,
-        sourceContentPlanId: artifactRow.source_content_plan_id, sourceContentPlanVersion: artifactRow.source_content_plan_version,
-        contentKey: artifactRow.content_key, deliverableId: artifactRow.deliverable_id, version: artifactRow.version,
-        channel: artifactRow.channel, contentType: artifactRow.content_type, format: artifactRow.format,
-        title: artifactRow.title, content: JSON.parse(artifactRow.content) as unknown, quality: JSON.parse(artifactRow.quality) as unknown,
-        status: artifactRow.status, isCurrent: artifactRow.is_current === 1,
-        createdAt: artifactRow.created_at, updatedAt: artifactRow.updated_at,
+        id: artifact.id, workspaceId: artifact.workspaceId, campaignId: artifact.campaignId,
+        sourceContentPlanId: artifact.sourceContentPlanId, sourceContentPlanVersion: artifact.sourceContentPlanVersion,
+        contentKey: artifact.contentKey, deliverableId: artifact.deliverableId, version: artifact.version,
+        channel: artifact.channel, contentType: artifact.contentType, format: artifact.format,
+        title: artifact.title ?? null, content: artifact.content, quality: artifact.quality,
+        status: artifact.status, isCurrent: artifact.isCurrent,
+        createdAt: artifact.createdAt, updatedAt: artifact.updatedAt,
       },
       products: [],
       aiGenerated,

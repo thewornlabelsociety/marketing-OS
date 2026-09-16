@@ -18,18 +18,18 @@ function statusFor(code?: string): number {
 
 export const campaignExperimentsRouter = Router({ mergeParams: true });
 
-campaignExperimentsRouter.get('/', (req: Request, res: Response) => {
+campaignExperimentsRouter.get('/', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  const result = experimentService.list(req.params.campaignId, workspaceId);
+  const result = await experimentService.list(req.params.campaignId, workspaceId);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.json(result);
 });
 
-campaignExperimentsRouter.post('/', (req: Request, res: Response) => {
+campaignExperimentsRouter.post('/', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
-  const result = experimentService.create(req.params.campaignId, workspaceId, req.body);
+  const result = await experimentService.create(req.params.campaignId, workspaceId, req.body);
   if ('error' in result) { res.status(statusFor(result.code)).json(result); return; }
   res.status(201).json(result);
 });
@@ -91,11 +91,11 @@ campaignExperimentsRouter.post('/:experimentId/cancel', (req: Request, res: Resp
   res.json(result);
 });
 
-campaignExperimentsRouter.post('/:experimentId/analyze', (req: Request, res: Response) => {
+campaignExperimentsRouter.post('/:experimentId/analyze', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as { measurementWindow?: MeasurementWindow };
-  const result = experimentService.analyze(
+  const result = await experimentService.analyze(
     req.params.experimentId,
     req.params.campaignId,
     workspaceId,
@@ -113,11 +113,11 @@ campaignExperimentsRouter.get('/:experimentId/analyses', (req: Request, res: Res
   res.json(result);
 });
 
-campaignExperimentsRouter.post('/:experimentId/complete', (req: Request, res: Response) => {
+campaignExperimentsRouter.post('/:experimentId/complete', async (req: Request, res: Response) => {
   const workspaceId = resolveWorkspaceId(req);
   if (!workspaceId) { res.status(400).json({ error: 'workspaceId is required' }); return; }
   const body = req.body as { measurementWindow?: MeasurementWindow };
-  const result = experimentService.complete(
+  const result = await experimentService.complete(
     req.params.experimentId,
     req.params.campaignId,
     workspaceId,

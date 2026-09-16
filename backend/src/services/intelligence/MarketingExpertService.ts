@@ -562,7 +562,7 @@ class MarketingExpertService {
   /** Main generation entry point. */
   async generateRecommendations(workspaceId: string): Promise<RecommendationGenerationResult> {
     const expiredCount = this.expireStale(workspaceId);
-    const ctx = recommendationContextAssembler.assemble(workspaceId);
+    const ctx = await recommendationContextAssembler.assemble(workspaceId);
 
     // Check context signature for cache
     const budgetRow = db.prepare(`

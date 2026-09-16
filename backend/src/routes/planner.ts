@@ -1,12 +1,12 @@
 import { Router, type Request, type Response } from 'express';
-import { db } from '../db/database';
+import { getCoreRepositories } from '../db/core/createCoreRepositories';
 import { organicPlannerService } from '../services/intelligence/OrganicPlannerService';
 import { LOCAL_TENANT_ID } from '../config/constants';
 
 const router = Router();
 
 // GET /api/planner?workspaceId=...&channel=instagram&days=30
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   const { workspaceId, channel, days } = req.query as Record<string, string | undefined>;
 
   const wsId = workspaceId ?? LOCAL_TENANT_ID;
@@ -15,8 +15,9 @@ router.get('/', (req: Request, res: Response) => {
     return;
   }
 
-  const workspace = db.prepare('SELECT id FROM entities WHERE id = ?').get(wsId);
-  if (!workspace) {
+  const repos = getCoreRepositories();
+  const exists = await repos.workspace.exists(wsId);
+  if (!exists) {
     res.status(404).json({ error: 'Workspace not found' });
     return;
   }

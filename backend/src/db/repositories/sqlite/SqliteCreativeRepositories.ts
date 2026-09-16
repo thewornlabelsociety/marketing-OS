@@ -5,8 +5,11 @@ import type {
   CreativeArtifactRepository,
   CreativeApprovalRepository,
   CreativeApprovalUpsert,
+  CreativeDerivationRepository,
   CreativeRevisionInsert,
   CreativeRevisionRepository,
+  CreativeSourceLinkRepository,
+  CreativeSourceLinkRow,
 } from '../../core/creativeDomainTypes';
 import type { CreativeApproval } from '../../../types/creativeArtifact';
 import { mapCreativeArtifactRow, type CreativeArtifactRow } from '../../core/creativeMappers';
@@ -26,6 +29,20 @@ export class SqliteCreativeArtifactRepository implements CreativeArtifactReposit
       'SELECT * FROM creative_artifacts WHERE id = ? AND campaign_id = ?',
     ).get(id, campaignId) as CreativeArtifactRow | undefined;
     return row ? mapCreativeArtifactRow(row) : null;
+  }
+
+  async findByIdForWorkspace(id: string, workspaceId: string) {
+    const row = db.prepare(
+      'SELECT * FROM creative_artifacts WHERE id = ? AND workspace_id = ?',
+    ).get(id, workspaceId) as CreativeArtifactRow | undefined;
+    return row ? mapCreativeArtifactRow(row) : null;
+  }
+
+  async findByRepurposeRequestId(requestId: string) {
+    const rows = db.prepare(
+      'SELECT id, content_key, content_type, channel FROM creative_artifacts WHERE repurpose_request_id = ?'
+    ).all(requestId) as Array<{ id: string; content_key: string; content_type: string; channel: string }>;
+    return rows.map(r => ({ id: r.id, contentKey: r.content_key, contentType: r.content_type, channel: r.channel }));
   }
 
   async listByCampaignAndKey(campaignId: string, contentKey: string) {
@@ -56,14 +73,26 @@ export class SqliteCreativeArtifactRepository implements CreativeArtifactReposit
       INSERT INTO creative_artifacts
         (id, workspace_id, campaign_id, source_content_plan_id, source_content_plan_version,
          content_key, deliverable_id, version, status, is_current, channel, content_type, format,
-         title, content, quality, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+         title, content, quality,
+         creative_direction, ai_provider, ai_model, ai_generated, ai_task_type,
+         repurpose_request_id, marketing_scopes_json, marketing_scope, media_asset_id,
+         created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.id, input.workspaceId, input.campaignId,
       input.sourceContentPlanId, input.sourceContentPlanVersion,
       input.contentKey, input.deliverableId, input.version, input.status,
       input.channel, input.contentType, input.format,
       input.title, input.content, input.quality,
+      input.creativeDirection ?? null,
+      input.aiProvider ?? null,
+      input.aiModel ?? null,
+      input.aiGenerated ? 1 : 0,
+      input.aiTaskType ?? null,
+      input.repurposeRequestId ?? null,
+      input.marketingScopesJson ?? null,
+      input.marketingScope ?? null,
+      input.mediaAssetId ?? null,
       input.createdAt, input.updatedAt,
     );
     return (await this.findById(input.id, input.campaignId))!;
@@ -230,10 +259,59 @@ export class SqliteCreativeApprovalRepository implements CreativeApprovalReposit
   }
 }
 
+export class SqliteCreativeSourceLinkRepository implements CreativeSourceLinkRepository {
+  async insert(artifactId: string, sourceRecordId: string, position: number, createdAt: string) {
+    db.prepare(`
+      INSERT OR IGNORE INTO creative_source_links
+        (creative_artifact_id, source_record_id, position, created_at)
+      VALUES (?, ?, ?, ?)
+    `).run(artifactId, sourceRecordId, position, createdAt);
+  }
+
+  async listByArtifactId(artifactId: string): Promise<CreativeSourceLinkRow[]> {
+    const rows = db.prepare(
+      'SELECT source_record_id, position FROM creative_source_links WHERE creative_artifact_id = ? ORDER BY position ASC'
+    ).all(artifactId) as Array<{ source_record_id: string; position: number }>;
+    return rows.map(r => ({ sourceRecordId: r.source_record_id, position: r.position }));
+  }
+
+  async copyFromParent(parentArtifactId: string, childArtifactId: string, createdAt: string) {
+    const rows = db.prepare(
+      'SELECT source_record_id, position FROM creative_source_links WHERE creative_artifact_id = ? ORDER BY position ASC'
+    ).all(parentArtifactId) as Array<{ source_record_id: string; position: number }>;
+    const insertStmt = db.prepare(`
+      INSERT OR IGNORE INTO creative_source_links
+        (creative_artifact_id, source_record_id, position, created_at)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const row of rows) {
+      insertStmt.run(childArtifactId, row.source_record_id, row.position, createdAt);
+    }
+  }
+
+  async countBySourceRecordId(sourceRecordId: string): Promise<number> {
+    const row = db.prepare('SELECT COUNT(*) as c FROM creative_source_links WHERE source_record_id = ?')
+      .get(sourceRecordId) as { c: number };
+    return row.c;
+  }
+}
+
+export class SqliteCreativeDerivationRepository implements CreativeDerivationRepository {
+  async insert(parentArtifactId: string, childArtifactId: string, relationship: string, createdAt: string) {
+    db.prepare(`
+      INSERT OR IGNORE INTO creative_derivations
+        (parent_artifact_id, child_artifact_id, relationship, created_at)
+      VALUES (?, ?, ?, ?)
+    `).run(parentArtifactId, childArtifactId, relationship, createdAt);
+  }
+}
+
 export function createSqliteCreativeRepositories() {
   return {
     artifact: new SqliteCreativeArtifactRepository(),
     revision: new SqliteCreativeRevisionRepository(),
     approval: new SqliteCreativeApprovalRepository(),
+    sourceLink: new SqliteCreativeSourceLinkRepository(),
+    derivation: new SqliteCreativeDerivationRepository(),
   };
 }

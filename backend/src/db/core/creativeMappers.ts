@@ -18,6 +18,7 @@ export interface CreativeArtifactRow {
   content: string;
   quality: string;
   media_asset_id: string | null;
+  marketing_scope: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -45,6 +46,7 @@ export function mapCreativeArtifactRow(row: CreativeArtifactRow): CreativeArtifa
     status: row.status as CreativeArtifact['status'],
     isCurrent: row.is_current === 1,
     mediaAssetId: row.media_asset_id ?? undefined,
+    marketingScope: row.marketing_scope ?? null,
     createdAt: normalizeCreativeTimestamp(row.created_at),
     updatedAt: normalizeCreativeTimestamp(row.updated_at),
   };
